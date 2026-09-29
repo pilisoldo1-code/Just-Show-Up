@@ -3,31 +3,40 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>POC: Supabase + Python + Vercel</title>
+    <title>Just Show Up - Horarios</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
     <main>
-        <h1>POC: Supabase + Python + GitHub + Vercel</h1>
-        <p class="subtitle">Backend en FastAPI, datos en Supabase, desplegado desde GitHub a Vercel.</p>
+        <h1>Horarios disponibles</h1>
+        <p class="subtitle">Datos leídos en vivo desde Supabase (tabla <code>horario</code>).</p>
 
-        <form action="/items" method="post" class="item-form">
-            <input type="text" name="title" placeholder="Nuevo item..." required />
-            <button type="submit">Agregar</button>
-        </form>
-
-        <ul class="item-list">
-            {% for item in items %}
-            <li>
-                <span>{{ item.title }}</span>
-                <form action="/items/{{ item.id }}/delete" method="post">
-                    <button type="submit" class="delete-btn">Eliminar</button>
-                </form>
-            </li>
-            {% else %}
-            <li class="empty">No hay items todavía.</li>
-            {% endfor %}
-        </ul>
+        <table class="horario-table">
+            <thead>
+                <tr>
+                    <th>Día</th>
+                    <th>Hora inicio</th>
+                    <th>Duración</th>
+                    <th>Cupo máx.</th>
+                    <th>Precio</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for h in horarios %}
+                <tr>
+                    <td>{{ h.dia_semana | capitalize }}</td>
+                    <td>{{ h.hora_inicio[:5] }}</td>
+                    <td>{{ h.duracion }} min</td>
+                    <td>{{ h.cupo_max }}</td>
+                    <td>${{ h.precio }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="empty">No hay horarios activos.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </main>
 </body>
 </html>

@@ -1,7 +1,6 @@
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -9,34 +8,34 @@ from app.db import get_supabase
 
 BASE_DIR = Path(__file__).resolve().parent
 
-app = FastAPI(title="POC Supabase + FastAPI")
+app = FastAPI(title="Just Show Up - Horarios")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
-TABLE = "items"
+TABLE = "horario"
+DIAS_ORDEN = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+
+
+def _orden_horario(row: dict) -> tuple:
+    return (DIAS_ORDEN.index(row["dia_semana"]), row["hora_inicio"])
+
+
+def _get_horarios() -> list[dict]:
+    supabase = get_supabase()
+    result = supabase.table(TABLE).select("*").eq("activo", True).execute()
+    return sorted(result.data, key=_orden_horario)
 
 
 @app.get("/")
 def home(request: Request):
-    supabase = get_supabase()
-    result = supabase.table(TABLE).select("*").order("id", desc=True).execute()
     return templates.TemplateResponse(
-        "index.html", {"request": request, "items": result.data}
+        "index.html", {"request": request, "horarios": _get_horarios()}
     )
 
 
-@app.post("/items")
-def create_item(title: str = Form(...)):
-    supabase = get_supabase()
-    supabase.table(TABLE).insert({"title": title}).execute()
-    return RedirectResponse(url="/", status_code=303)
-
-
-@app.post("/items/{item_id}/delete")
-def delete_item(item_id: int):
-    supabase = get_supabase()
-    supabase.table(TABLE).delete().eq("id", item_id).execute()
-    return RedirectResponse(url="/", status_code=303)
+@app.get("/api/horario")
+def api_horario():
+    return _get_horarios()
 
 
 @app.get("/api/health")
