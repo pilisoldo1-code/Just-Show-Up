@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>POC: Supabase + Python + Vercel</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        <h1>POC: Supabase + Python + GitHub + Vercel</h1>
+        <p class="subtitle">Backend en FastAPI, datos en Supabase, desplegado desde GitHub a Vercel.</p>
+
+        <form action="/items" method="post" class="item-form">
+            <input type="text" name="title" placeholder="Nuevo item..." required />
+            <button type="submit">Agregar</button>
+        </form>
+
+        <ul class="item-list">
+            {% for item in items %}
+            <li>
+                <span>{{ item.title }}</span>
+                <form action="/items/{{ item.id }}/delete" method="post">
+                    <button type="submit" class="delete-btn">Eliminar</button>
+                </form>
+            </li>
+            {% else %}
+            <li class="empty">No hay items todavía.</li>
+            {% endfor %}
+        </ul>
+    </main>
+</body>
+</html>

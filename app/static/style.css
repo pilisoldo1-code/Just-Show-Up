@@ -1,0 +1,98 @@
+:root {
+    color-scheme: light dark;
+    --bg: #0f1115;
+    --card: #171a21;
+    --text: #e8eaed;
+    --muted: #9aa0a6;
+    --accent: #6ee7b7;
+    --danger: #f87171;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 48px 16px;
+}
+
+main {
+    width: 100%;
+    max-width: 520px;
+}
+
+h1 {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    color: var(--muted);
+    margin-top: 0;
+    margin-bottom: 24px;
+}
+
+.item-form {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.item-form input {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a2e37;
+    background: var(--card);
+    color: var(--text);
+}
+
+.item-form button,
+.delete-btn {
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.item-form button {
+    background: var(--accent);
+    color: #0f1115;
+}
+
+.delete-btn {
+    background: transparent;
+    color: var(--danger);
+    padding: 4px 10px;
+    font-size: 0.85rem;
+}
+
+.item-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.item-list li {
+    background: var(--card);
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.item-list li.empty {
+    color: var(--muted);
+    justify-content: center;
+}
