@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Panel de horarios</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        <div class="header-row">
+            <h1>Horarios fijos</h1>
+            <a class="btn" href="/profesora/horarios/nuevo">+ Nuevo horario</a>
+        </div>
+        <p class="subtitle">Panel de la profesora. <a href="/">Ver grilla de alumna</a></p>
+
+        <table class="horario-table">
+            <thead>
+                <tr>
+                    <th>Día</th>
+                    <th>Hora inicio</th>
+                    <th>Duración</th>
+                    <th>Cupo máx.</th>
+                    <th>Precio</th>
+                    <th>Estado</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for h in horarios %}
+                <tr>
+                    <td>{{ h.dia_semana | capitalize }}</td>
+                    <td>{{ h.hora_inicio[:5] }}</td>
+                    <td>{{ h.duracion }} min</td>
+                    <td>{{ h.cupo_max }}</td>
+                    <td>${{ h.precio }}</td>
+                    <td>
+                        <span class="badge {{ 'badge-on' if h.activo else 'badge-off' }}">
+                            {{ 'Activo' if h.activo else 'Inactivo' }}
+                        </span>
+                    </td>
+                    <td class="acciones">
+                        <a href="/profesora/horarios/{{ h.id }}/editar">Editar</a>
+                        <form action="/profesora/horarios/{{ h.id }}/toggle" method="post">
+                            <button type="submit" class="link-btn">
+                                {{ 'Desactivar' if h.activo else 'Activar' }}
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="empty">No hay horarios cargados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </main>
+</body>
+</html>

@@ -77,3 +77,103 @@ h1 {
     text-align: center;
     color: var(--muted);
 }
+
+.header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.subtitle a {
+    color: var(--accent);
+}
+
+.btn {
+    display: inline-block;
+    background: var(--accent);
+    color: #0f1115;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.badge {
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+}
+
+.badge-on {
+    background: rgba(110, 231, 183, 0.15);
+    color: var(--accent);
+}
+
+.badge-off {
+    background: rgba(154, 160, 166, 0.15);
+    color: var(--muted);
+}
+
+.acciones {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.acciones a {
+    color: var(--accent);
+}
+
+.link-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.horario-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: var(--card);
+    padding: 20px;
+    border-radius: 8px;
+}
+
+.horario-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+.horario-form input,
+.horario-form select {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a2e37;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.horario-form .checkbox-label {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.horario-form .checkbox-label input {
+    width: auto;
+}
+
+.horario-form .btn {
+    align-self: flex-start;
+}

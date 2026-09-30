@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Form, Request
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -41,3 +42,98 @@ def api_horario():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/profesora/horarios")
+def profesora_horarios(request: Request):
+    supabase = get_supabase()
+    result = supabase.table(TABLE).select("*").execute()
+    horarios = sorted(result.data, key=_orden_horario)
+    return templates.TemplateResponse(
+        "profesora_horarios.html", {"request": request, "horarios": horarios}
+    )
+
+
+@app.get("/profesora/horarios/nuevo")
+def nuevo_horario_form(request: Request):
+    return templates.TemplateResponse(
+        "profesora_horario_form.html",
+        {
+            "request": request,
+            "horario": None,
+            "dias": DIAS_ORDEN,
+            "accion": "/profesora/horarios/nuevo",
+        },
+    )
+
+
+@app.post("/profesora/horarios/nuevo")
+def crear_horario(
+    dia_semana: str = Form(...),
+    hora_inicio: str = Form(...),
+    duracion: int = Form(...),
+    cupo_max: int = Form(...),
+    precio: float = Form(...),
+    activo: bool = Form(False),
+):
+    supabase = get_supabase()
+    supabase.table(TABLE).insert(
+        {
+            "dia_semana": dia_semana,
+            "hora_inicio": hora_inicio,
+            "duracion": duracion,
+            "cupo_max": cupo_max,
+            "precio": precio,
+            "activo": activo,
+        }
+    ).execute()
+    return RedirectResponse(url="/profesora/horarios", status_code=303)
+
+
+@app.get("/profesora/horarios/{horario_id}/editar")
+def editar_horario_form(request: Request, horario_id: int):
+    supabase = get_supabase()
+    result = supabase.table(TABLE).select("*").eq("id", horario_id).single().execute()
+    return templates.TemplateResponse(
+        "profesora_horario_form.html",
+        {
+            "request": request,
+            "horario": result.data,
+            "dias": DIAS_ORDEN,
+            "accion": f"/profesora/horarios/{horario_id}/editar",
+        },
+    )
+
+
+@app.post("/profesora/horarios/{horario_id}/editar")
+def actualizar_horario(
+    horario_id: int,
+    dia_semana: str = Form(...),
+    hora_inicio: str = Form(...),
+    duracion: int = Form(...),
+    cupo_max: int = Form(...),
+    precio: float = Form(...),
+    activo: bool = Form(False),
+):
+    supabase = get_supabase()
+    supabase.table(TABLE).update(
+        {
+            "dia_semana": dia_semana,
+            "hora_inicio": hora_inicio,
+            "duracion": duracion,
+            "cupo_max": cupo_max,
+            "precio": precio,
+            "activo": activo,
+        }
+    ).eq("id", horario_id).execute()
+    return RedirectResponse(url="/profesora/horarios", status_code=303)
+
+
+@app.post("/profesora/horarios/{horario_id}/toggle")
+def toggle_horario(horario_id: int):
+    supabase = get_supabase()
+    actual = supabase.table(TABLE).select("activo").eq("id", horario_id).single().execute()
+    supabase.table(TABLE).update({"activo": not actual.data["activo"]}).eq(
+        "id", horario_id
+    ).execute()
+    return RedirectResponse(url="/profesora/horarios", status_code=303)

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - {{ 'Editar' if horario else 'Nuevo' }} horario</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        <h1>{{ 'Editar horario' if horario else 'Nuevo horario' }}</h1>
+        <p class="subtitle"><a href="/profesora/horarios">← Volver al listado</a></p>
+
+        <form action="{{ accion }}" method="post" class="horario-form">
+            <label>
+                Día de la semana
+                <select name="dia_semana" required>
+                    {% for dia in dias %}
+                    <option value="{{ dia }}" {{ 'selected' if horario and horario.dia_semana == dia else '' }}>
+                        {{ dia | capitalize }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label>
+                Hora de inicio
+                <input type="time" name="hora_inicio"
+                       value="{{ horario.hora_inicio[:5] if horario else '' }}" required />
+            </label>
+
+            <label>
+                Duración (minutos)
+                <input type="number" name="duracion" min="1"
+                       value="{{ horario.duracion if horario else 60 }}" required />
+            </label>
+
+            <label>
+                Cupo máximo
+                <input type="number" name="cupo_max" min="1"
+                       value="{{ horario.cupo_max if horario else '' }}" required />
+            </label>
+
+            <label>
+                Precio
+                <input type="number" name="precio" min="0" step="0.01"
+                       value="{{ horario.precio if horario else '' }}" required />
+            </label>
+
+            <label class="checkbox-label">
+                <input type="checkbox" name="activo" value="true"
+                       {{ 'checked' if (horario is none) or horario.activo else '' }} />
+                Activo
+            </label>
+
+            <button type="submit" class="btn">Guardar</button>
+        </form>
+    </main>
+</body>
+</html>
