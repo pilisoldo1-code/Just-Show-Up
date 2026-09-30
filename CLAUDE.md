@@ -162,6 +162,15 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **El deploy oficial (`just-show-up-theta.vercel.app`) NO auto-deploya al
+  pushear a `main`**, pese a figurar "conectado" a GitHub en el dashboard de
+  esa cuenta. Cada push hay que ir manualmente a Deployments → Redeploy para
+  que tome el código nuevo — confirmado varias veces (quedó una versión vieja
+  varios commits atrás hasta hacer Redeploy a mano). Pendiente de investigar
+  la causa de fondo (webhook roto, GitHub App con permisos parciales, etc.)
+  — no se pudo diagnosticar del todo porque esa cuenta de Vercel no es
+  accesible desde este CLI. Mientras tanto: **avisar siempre que se pusheó
+  algo y haga falta Redeploy manual para verlo reflejado**.
 - **Las rutas `/profesora/...` no tienen ningún control de acceso todavía**
   (no existe login). Cualquiera que entre a la URL puede usarlas, a propósito
   — se decidió no armar un login provisorio que después se tira. Se cierra
