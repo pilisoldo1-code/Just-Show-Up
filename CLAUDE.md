@@ -27,6 +27,9 @@ Estratégica"); resumen relevante más abajo.
 - **Hosting**: Vercel, deploy automático desde GitHub al pushear a `main`.
 - **Repo**: [pilisoldo1-code/Just-Show-Up](https://github.com/pilisoldo1-code/Just-Show-Up)
   (público).
+- **Integraciones planeadas (todavía no configuradas en el código)**: Resend
+  (emails), n8n (automatizaciones), Mercado Pago (pagos), Google Calendar API,
+  PostHog (analytics). Se van a ir sumando módulo por módulo, no de una.
 
 ## Estructura
 
@@ -45,7 +48,13 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 
 - Tabla `horario` creada y poblada (10 registros: lunes a viernes, bloques
   08:00 y 09:00, 60 min, cupo 7, $800).
-- Home page (`/`) muestra los horarios activos en vivo desde Supabase.
+- Home page (`/`) muestra los horarios **activos** en vivo desde Supabase
+  (vista de alumna, solo lectura).
+- Panel de profesora en `/profesora/horarios`: listado completo (activos e
+  inactivos), alta (`/profesora/horarios/nuevo`), edición
+  (`/profesora/horarios/{id}/editar`) y activar/desactivar
+  (`POST /profesora/horarios/{id}/toggle`). Probado en local end-to-end.
+  **Sin protección de acceso todavía** — ver Gotchas.
 - Deploy de referencia funcionando: https://just-show-up-amber.vercel.app
 - Existe un segundo deploy "oficial" conectado por GitHub a otra cuenta de
   Vercel (la de la dueña del repo) — ver Gotchas.
@@ -79,16 +88,26 @@ Somos **3 personas** implementando sobre el mismo repo. Para no pisarnos:
 Se definieron como módulos verticales: cada uno entrega algo visible/probable
 en la web, no solo cambios de esquema.
 
-1. **Autenticación y perfiles** — Supabase Auth, roles alumna/profesora.
-2. **Gestión de horarios y clases (Profesora)** — CRUD de horarios fijos +
-   generación automática de clases de la semana.
+1. **Autenticación y perfiles** — pendiente. Supabase Auth, roles alumna/profesora.
+2. **Gestión de horarios y clases (Profesora)** — **en progreso**, arrancado
+   antes que el 1 (decisión del usuario). Hecho: CRUD de horarios fijos
+   (alta/edición/activar-desactivar) y grilla de alumna mostrando horarios
+   activos. Pendiente dentro de este mismo módulo: tabla `Clase` (clase
+   concreta generada a partir de un horario para una fecha puntual) y la
+   generación automática de las clases de la semana a partir de los horarios
+   fijos — **no crear la tabla `Clase` sin confirmar antes con el usuario**.
 3. **Grilla y reservas (Alumna)** — ver horarios/cupos, reservar y cancelar.
+   Depende de que exista `Clase` (módulo 2) y de `Reserva`.
 4. **Lista de espera** — anotarse cuando está lleno, liberación de cupo.
 5. **Asistencia** — la profesora marca presente/ausente.
-6. **Resumen mensual y pagos** — cálculo automático + registro de pagos.
-7. **Suscripción y clases grabadas** — biblioteca de videos con gate de acceso.
-8. **Notificaciones y extras** — mails (confirmación, recordatorio 24hs),
-   integración con Google Calendar.
+6. **Resumen mensual y pagos** — cálculo automático + registro de pagos
+   (Mercado Pago para pagos, ver Stack).
+7. **Suscripción y clases grabadas** — biblioteca de videos con gate de
+   acceso. Modalidad (suscripción mensual vs. compra individual con vigencia)
+   **todavía no está decidida** — no implementar hasta que se defina.
+8. **Notificaciones y extras** — mails vía Resend (confirmación, recordatorio
+   24hs), integración con Google Calendar, automatizaciones con n8n,
+   analytics con PostHog.
 
 Actualizar esta lista (tachar/marcar) a medida que se completa cada módulo.
 
@@ -124,7 +143,29 @@ Supabase Auth (no se reinventa autenticación).
 - La suscripción a clases grabadas es independiente de asistir a clases
   presenciales, y da acceso solo mientras está activa.
 
+## Forma de trabajo por módulo (acordado con el usuario)
+
+Para cada módulo, en este orden:
+
+1. Inspeccionar el código y la base existente antes de escribir nada.
+2. Reutilizar lo que ya funciona, no reconstruir componentes existentes.
+3. No eliminar datos ni tablas existentes de Supabase.
+4. No inventar estructuras de Supabase — si falta una tabla, columna, env var
+   o integración, avisar y confirmar antes de crearla.
+5. Implementar únicamente lo que pide el módulo solicitado (no adelantar
+   funcionalidad de otros módulos del roadmap).
+6. Al terminar, verificar que funcione (probar en local, no asumir) antes de
+   seguir.
+7. No avanzar automáticamente al siguiente módulo sin que el usuario lo pida.
+8. Priorizar la solución más simple y demostrable — es un proyecto
+   universitario, no producción a escala.
+
 ## Gotchas / lecciones aprendidas
+
+- **Las rutas `/profesora/...` no tienen ningún control de acceso todavía**
+  (no existe login). Cualquiera que entre a la URL puede usarlas, a propósito
+  — se decidió no armar un login provisorio que después se tira. Se cierra
+  cuando se implemente el módulo de Autenticación.
 
 - **`vercel.json`**: no usar `rewrites` tipo catch-all con
   `destination: "/api/index.py"`. Un cambio reciente de Vercel hace que el
