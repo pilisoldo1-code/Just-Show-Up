@@ -1,5 +1,12 @@
 # Just Show Up — clases presenciales + suscripción a clases grabadas
 
+> **Para Claude Code**: si durante el trabajo descubrís una regla, convención,
+> restricción técnica o gotcha nuevo (algo que te costó averiguar y que le
+> ahorraría tiempo a otra sesión o a otra persona del equipo), agregalo a este
+> archivo en la sección que corresponda (`Gotchas`, `Convenciones`, `Reglas de
+> negocio`, etc.) como parte del mismo commit, sin que haga falta que te lo
+> pidan explícitamente. Mantenerlo desactualizado es peor que no tenerlo.
+
 ## Qué es esto
 
 Plataforma web que reemplaza un proceso manual por WhatsApp: una profesora
