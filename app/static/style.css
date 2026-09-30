@@ -78,6 +78,31 @@ h1 {
     color: var(--muted);
 }
 
+.semana-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 16px 0 24px;
+    flex-wrap: wrap;
+}
+
+.semana-rango {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.btn-secundario {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid #2a2e37;
+}
+
+.btn-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
 .header-row {
     display: flex;
     align-items: center;

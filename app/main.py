@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
@@ -15,6 +16,23 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 TABLE = "horario"
 DIAS_ORDEN = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+MESES = [
+    "", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+    "agosto", "setiembre", "octubre", "noviembre", "diciembre",
+]
+SEMANAS_HACIA_ADELANTE = 2
+
+
+def _rango_semana(offset: int) -> tuple[date, date]:
+    hoy = date.today()
+    lunes_actual = hoy - timedelta(days=hoy.weekday())
+    inicio = lunes_actual + timedelta(weeks=offset)
+    fin = inicio + timedelta(days=6)
+    return inicio, fin
+
+
+def _formato_rango(inicio: date, fin: date) -> str:
+    return f"{inicio.day} de {MESES[inicio.month]} al {fin.day} de {MESES[fin.month]}"
 
 
 def _orden_horario(row: dict) -> tuple:
@@ -28,9 +46,19 @@ def _get_horarios() -> list[dict]:
 
 
 @app.get("/")
-def home(request: Request):
+def home(request: Request, semana: int = 0):
+    semana = max(0, min(semana, SEMANAS_HACIA_ADELANTE))
+    inicio, fin = _rango_semana(semana)
     return templates.TemplateResponse(
-        "index.html", {"request": request, "horarios": _get_horarios()}
+        "index.html",
+        {
+            "request": request,
+            "horarios": _get_horarios(),
+            "semana": semana,
+            "rango_semana": _formato_rango(inicio, fin),
+            "hay_semana_anterior": semana > 0,
+            "hay_semana_siguiente": semana < SEMANAS_HACIA_ADELANTE,
+        },
     )
 
 

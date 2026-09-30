@@ -8,8 +8,23 @@
 </head>
 <body>
     <main>
-        <h1>Horarios disponibles</h1>
-        <p class="subtitle">Datos leídos en vivo desde Supabase (tabla <code>horario</code>).</p>
+        <h1>Horarios semanales</h1>
+
+        <div class="semana-nav">
+            {% if hay_semana_anterior %}
+            <a class="btn btn-secundario" href="/?semana={{ semana - 1 }}">‹ Semana anterior</a>
+            {% else %}
+            <span class="btn btn-secundario btn-disabled">‹ Semana anterior</span>
+            {% endif %}
+
+            <span class="semana-rango">{{ rango_semana }}</span>
+
+            {% if hay_semana_siguiente %}
+            <a class="btn btn-secundario" href="/?semana={{ semana + 1 }}">Semana siguiente ›</a>
+            {% else %}
+            <span class="btn btn-secundario btn-disabled">Semana siguiente ›</span>
+            {% endif %}
+        </div>
 
         <table class="horario-table">
             <thead>
