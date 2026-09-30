@@ -43,6 +43,30 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 - Existe un segundo deploy "oficial" conectado por GitHub a otra cuenta de
   Vercel (la de la dueña del repo) — ver Gotchas.
 
+## Trabajo en equipo
+
+Somos **3 personas** implementando sobre el mismo repo. Para no pisarnos:
+
+- **Ramas por módulo, no push directo a `main`.** Cada módulo del roadmap de
+  abajo es una unidad razonable de trabajo: `git checkout -b modulo-2-horarios`,
+  trabajar ahí, abrir PR a `main` cuando esté probado. `main` tiene que quedar
+  siempre en estado deployable (es lo que Vercel toma para el deploy oficial).
+- **Coordinar antes de tocar la base de datos.** Las migraciones de
+  `supabase/migrations/` se aplican directo al proyecto real de Supabase vía
+  el conector MCP — no es un archivo que se mergea después, el efecto es
+  inmediato sobre datos compartidos. Si dos personas crean/alteran tablas al
+  mismo tiempo se pueden pisar. Avisar en el grupo antes de correr una
+  migración, y idealmente que la aplique una sola persona por vez.
+- **Antes de empezar a trabajar**: `git pull` sobre `main` para partir de lo
+  último. Si dos personas tocan el mismo módulo, mejor hablarlo antes.
+- **Los módulos del roadmap tienen dependencias** (ver más abajo) — el 3 y el
+  4 necesitan que el 1 y el 2 estén al menos empezados, por ejemplo. Elegir
+  módulos en paralelo que no dependan entre sí evita bloqueos.
+- El repo (`pilisoldo1-code/Just-Show-Up`) y el deploy oficial en Vercel son
+  de una sola cuenta/persona del equipo; las otras dos personas necesitan ser
+  agregadas como colaboradoras en GitHub (y opcionalmente en el proyecto de
+  Vercel) para poder pushear y ver deploys directamente.
+
 ## Roadmap por módulos
 
 Se definieron como módulos verticales: cada uno entrega algo visible/probable
@@ -122,3 +146,4 @@ Supabase Auth (no se reinventa autenticación).
   traducir al inglés.
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
+- Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).
