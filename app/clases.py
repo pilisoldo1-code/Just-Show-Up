@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -6,6 +7,10 @@ from app.db import get_supabase
 TZ = ZoneInfo("America/Montevideo")
 DIAS_ORDEN = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
 HORAS_LIMITE_CANCELACION = 1
+MENSAJE_PLAZO = (
+    "El plazo de cancelación ya finalizó. "
+    "Las cancelaciones deben realizarse al menos 1 hora antes de la clase."
+)
 
 # PROVISORIO hasta que exista Supabase Auth: alumnas de prueba para elegir en la grilla.
 ALUMNAS_PROVISORIAS = {
@@ -76,12 +81,18 @@ def clases_entre(inicio: date, fin: date, alumna_id: str) -> list[dict]:
         .execute().data
     }
 
+    confirmadas = Counter(
+        r["id_clase"]
+        for r in sb.table("reserva").select("id_clase")
+        .eq("estado", "confirmada").in_("id_clase", ids).execute().data
+    )
+
     ahora_dt = ahora()
     tarjetas = []
     for c in clases:
         inicio_dt = _inicio_clase(c)
         cupo_max = c["horario"]["cupo_max"]
-        disponibles = max(0, cupo_max - c["cantidad_inscriptas"])
+        disponibles = max(0, cupo_max - confirmadas[c["id"]])
         fecha = date.fromisoformat(c["fecha"])
 
         if inicio_dt <= ahora_dt:
@@ -207,16 +218,26 @@ def cancelar(alumna_id: str, clase_id: int) -> tuple[bool, str]:
     reservas = _reserva_activa(alumna_id, clase_id)
     if not reservas:
         return False, "No tenés una reserva activa en esta clase."
-    clase = _clase(clase_id)
-    limite = _inicio_clase(clase) - timedelta(hours=HORAS_LIMITE_CANCELACION)
-    if ahora() > limite:
-        return False, "Solo se puede cancelar hasta 1 hora antes de la clase."
 
-    get_supabase().table("reserva").update(
-        {"estado": "cancelada", "fecha_cancelacion": ahora().isoformat()}
-    ).eq("id", reservas[0]["id"]).execute()
+    inicio = _inicio_clase(_clase(clase_id))
+    ahora_dt = ahora()
+    if ahora_dt >= inicio:
+        return False, "La clase ya comenzó, no se puede cancelar la reserva."
+    if ahora_dt > inicio - timedelta(hours=HORAS_LIMITE_CANCELACION):
+        return False, MENSAJE_PLAZO
+
+    # UPDATE condicionado a estado='confirmada': si dos pedidos llegan a la vez,
+    # solo uno modifica la fila y el otro no encuentra nada para actualizar.
+    actualizadas = (
+        get_supabase().table("reserva")
+        .update({"estado": "cancelada", "fecha_cancelacion": ahora_dt.isoformat()})
+        .eq("id", reservas[0]["id"]).eq("estado", "confirmada")
+        .execute().data
+    )
+    if not actualizadas:
+        return False, "Esa reserva ya estaba cancelada."
     _sincronizar_inscriptas(clase_id)
-    return True, "Cancelaste tu reserva. El lugar quedó liberado."
+    return True, "Tu reserva fue cancelada. El lugar quedó liberado."
 
 
 def anotar_en_espera(alumna_id: str, clase_id: int) -> tuple[bool, str]:

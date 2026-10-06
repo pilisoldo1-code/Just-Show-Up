@@ -58,8 +58,7 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   hace de **detalle**: día y fecha, hora, duración, precio, cupo máximo y
   "x lugares disponibles". Según el estado: **Reservar clase** (reserva directa,
   **sin diálogo de confirmación**), "Clase completa" + **Anotarme en lista de
-  espera** (cupo 0), "Reservada" + **Cancelar clase** (hasta 1 h antes) o
-  "Finalizada". Una clase ya reservada no vuelve a ofrecer "Reservar". Las
+  espera** (cupo 0), "Reservada" + **Cancelar reserva** o "Finalizada". Una clase ya reservada no vuelve a ofrecer "Reservar". Las
   acciones vuelven a esta pantalla con un aviso. Fechas inválidas o fuera de la
   ventana de 3 semanas redirigen a `/`. Decisiones del usuario (2026-10-06):
   mostrar precio y cupo máximo en el detalle, y mantener cancelar/lista de
@@ -87,6 +86,12 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   `uuid` **sin foreign key** porque todavía no existe `profiles`. Al hacer el
   módulo de Auth: crear `profiles`, borrar los datos de prueba, agregar la FK
   y reemplazar el selector por la sesión real.
+- **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
+  (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
+  (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
+  de plazo vencido y el servidor también lo rechaza (reserva intacta, cupo sin
+  liberar, queda cobrable para el resumen mensual futuro). Clase iniciada: sin
+  botón y el servidor la rechaza. Probado con 29 casos (ver Gotchas: cupos).
 - Lo que NO hace todavía la lista de espera: ofrecer el cupo liberado a la
   primera de la lista (ventana de 30 min), mails, ni salir de la lista.
 - Panel de profesora en `/profesora/horarios`: listado completo (activos e
@@ -227,6 +232,12 @@ Para cada módulo, en este orden:
   — no se pudo diagnosticar del todo porque esa cuenta de Vercel no es
   accesible desde este CLI. Mientras tanto: **avisar siempre que se pusheó
   algo y haga falta Redeploy manual para verlo reflejado**.
+- **Usuarias de prueba en `auth.users`** (mails `*@prueba.invalid`, ids
+  `a0000000-0000-4000-8000-00000000000{1,2,3}`, sin contraseña): existen porque
+  `reserva.id_alumna` ahora tiene FK a `profiles`, y el selector provisorio
+  necesita ids válidos. Se borran cuando haya login real (primero sus
+  `reserva`/`listadeespera`, después `delete from auth.users where email like
+  '%@prueba.invalid'`; `profiles` cae en cascada).
 - **Las policies RLS de `clase`, `reserva` y `listadeespera` están abiertas a
   `anon`** (select/insert/update), igual que `horario`: es provisorio hasta que
   exista Auth. Antes de dar por cerrado el proyecto hay que reemplazarlas por
@@ -235,9 +246,13 @@ Para cada módulo, en este orden:
   Vercel corre en UTC. Toda comparación de "ahora" va por `clases.ahora()`
   (usa `zoneinfo`; `tzdata` está en `requirements.txt` porque el runtime no
   garantiza la base de zonas horarias). No usar `date.today()` ni `datetime.now()`.
-- **Cupos**: `clase.cantidad_inscriptas` se recalcula contando reservas
-  confirmadas (`_sincronizar_inscriptas`); el cupo máximo sale de
-  `horario.cupo_max` (la tabla `clase` no lo copia). Para evitar sobreventa sin
+- **Cupos**: la fuente de verdad son las filas de `reserva` con
+  `estado='confirmada'`. Los "lugares disponibles" que se muestran se calculan
+  contándolas (no se confía en `clase.cantidad_inscriptas`, que es solo una
+  copia que se resincroniza en `_sincronizar_inscriptas`). La cancelación es
+  atómica: `UPDATE ... WHERE estado='confirmada'` y se mira cuántas filas
+  cambió, así 10 pedidos simultáneos liberan exactamente 1 lugar. El cupo
+  máximo sale de `horario.cupo_max` (la tabla `clase` no lo copia). Para evitar sobreventa sin
   funciones SQL, se inserta la reserva y se recuenta: si se pasó del cupo se
   cancela esa reserva. Es suficiente para la demo, no es transaccional.
 - **Las rutas `/profesora/...` no tienen ningún control de acceso todavía**

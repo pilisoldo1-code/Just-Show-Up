@@ -118,6 +118,7 @@ def dia(request: Request, fecha: str, ok: int = 0, aviso: str = ""):
             "request": request,
             "clases": clases.clases_entre(f, f, alumna_id),
             "titulo_dia": f"{DIAS_ORDEN[f.weekday()].capitalize()} {f.day}/{f.month}",
+            "mensaje_plazo": clases.MENSAJE_PLAZO,
             "semana": semana,
             "alumnas": ALUMNAS_PROVISORIAS,
             "alumna_id": alumna_id,

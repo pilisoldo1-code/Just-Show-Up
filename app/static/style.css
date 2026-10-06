@@ -436,3 +436,43 @@ main.ancho {
 .cards-semana .card-accion .badge {
     align-self: center;
 }
+
+
+.modal {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 24px;
+    width: min(400px, calc(100vw - 32px));
+}
+
+.modal::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.modal h2 {
+    margin: 0 0 4px;
+    font-size: 1.2rem;
+}
+
+.modal-clase {
+    margin: 0 0 16px;
+    color: var(--muted);
+}
+
+.modal-texto {
+    margin: 0 0 20px;
+    line-height: 1.5;
+}
+
+.modal-botones {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.btn-peligro-solido {
+    background: #f87171;
+    color: #0f1115;
+}

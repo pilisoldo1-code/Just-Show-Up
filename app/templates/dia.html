@@ -54,15 +54,32 @@
 
                     {% elif c.estado == 'inscripta' %}
                     <span class="badge badge-on">Reservada</span>
-                    {% if c.puede_cancelar %}
-                    <form action="/clases/{{ c.id }}/cancelar" method="post"
-                          onsubmit="return confirm('¿Cancelar tu reserva de esta clase?')">
-                        <input type="hidden" name="fecha" value="{{ fecha }}" />
-                        <button type="submit" class="btn btn-block btn-peligro">Cancelar clase</button>
-                    </form>
-                    {% else %}
-                    <p class="nota">La cancelación cerró (hasta 1 hora antes).</p>
-                    {% endif %}
+                    <button type="button" class="btn btn-block btn-peligro"
+                            onclick="document.getElementById('cancelar-{{ c.id }}').showModal()">Cancelar reserva</button>
+
+                    <dialog id="cancelar-{{ c.id }}" class="modal">
+                        {% if c.puede_cancelar %}
+                        <form action="/clases/{{ c.id }}/cancelar" method="post">
+                            <input type="hidden" name="fecha" value="{{ fecha }}" />
+                            <h2>Cancelar reserva</h2>
+                            <p class="modal-clase">{{ titulo_dia }} · {{ c.hora }}</p>
+                            <p class="modal-texto">¿Seguro que querés cancelar tu reserva para esta clase?</p>
+                            <div class="modal-botones">
+                                <button type="button" class="btn btn-secundario"
+                                        onclick="this.closest('dialog').close()">Volver</button>
+                                <button type="submit" class="btn btn-peligro-solido">Confirmar cancelación</button>
+                            </div>
+                        </form>
+                        {% else %}
+                        <h2>Plazo de cancelación vencido</h2>
+                        <p class="modal-clase">{{ titulo_dia }} · {{ c.hora }}</p>
+                        <p class="modal-texto">{{ mensaje_plazo }}</p>
+                        <div class="modal-botones">
+                            <button type="button" class="btn btn-secundario"
+                                    onclick="this.closest('dialog').close()">Volver</button>
+                        </div>
+                        {% endif %}
+                    </dialog>
 
                     {% elif c.estado == 'espera' %}
                     <span class="badge badge-espera">En lista de espera · posición {{ c.posicion_espera }}</span>
