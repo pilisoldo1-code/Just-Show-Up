@@ -70,7 +70,18 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   `*_create_clase_reserva_listadeespera.sql`), con los atributos del documento.
   Índices únicos parciales impiden reserva activa duplicada y estar dos veces
   en la misma lista de espera.
-- **PROVISORIO — identidad de alumna**: no hay login. La grilla tiene un selector
+- **Autenticación (módulo en curso, 2026-10-06)** — decisiones del usuario:
+  hay **una sola profesora**; **no hay registro público**: la profesora crea las
+  cuentas de sus alumnas presenciales (los usuarios del contenido online se
+  resuelven en su módulo). Hecho en base: tabla `profiles` (RLS activado **sin
+  policies** a propósito: solo el servidor accede, con la service key) + trigger
+  `on_auth_user_created` (el rol siempre nace `alumna`, nunca se toma del
+  cliente) + FK `reserva.id_alumna` y `listadeespera.id_alumna` → `profiles(id)`.
+  Pendiente: login/logout, sesión por cookie, proteger rutas, panel de alumnas
+  de la profesora, script para crear la cuenta de la profesora, quitar el
+  selector provisorio. **Hasta que se despliegue ese código, reservar en los
+  deploys falla** (las alumnas provisorias ya no existen para la FK).
+- **PROVISORIO — identidad de alumna** (se elimina con el módulo de Auth): no hay login. La grilla tiene un selector
   de "Alumna (prueba)" (3 alumnas fijas en `app/clases.py`, guardada en la
   cookie `alumna_id`). `reserva.id_alumna` y `listadeespera.id_alumna` son
   `uuid` **sin foreign key** porque todavía no existe `profiles`. Al hacer el
@@ -189,6 +200,14 @@ Para cada módulo, en este orden:
    universitario, no producción a escala.
 
 ## Gotchas / lecciones aprendidas
+
+- **`SUPABASE_SERVICE_KEY` (service_role) es un secreto de administrador**: solo
+  en `.env` y en variables de Vercel, jamás en el repo, en el chat ni en HTML.
+  Ignora RLS. Se usa únicamente en el servidor (crear usuarias con
+  `auth.admin`, leer/escribir `profiles`). Hay que cargarla en cada proyecto de
+  Vercel por separado. Para login usar un cliente **descartable por pedido**
+  (`create_client`), nunca el singleton: `sign_in_with_password` guarda la
+  sesión dentro del cliente y mezclaría usuarias entre pedidos.
 
 - **Supabase free pausa el proyecto tras ~1 semana sin actividad** y todo el
   sitio pasa a dar `Internal Server Error` (500) en *todos* los deploys a la
