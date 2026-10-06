@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-    <main>
+    <main class="ancho">
         <div class="header-row">
             <h1>Horarios semanales</h1>
             {% include "_alumna_selector.html" %}
@@ -34,7 +34,7 @@
         </div>
 
         {% if dias %}
-        <div class="cards">
+        <div class="cards cards-semana">
             {% for d in dias %}
             {% if d.todas_pasadas %}
             <div class="card card-pasada">

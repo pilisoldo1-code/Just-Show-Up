@@ -51,6 +51,9 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 - Home page (`/`): grilla de alumna con **una tarjeta por día** de la semana
   visible (hoy + 2 semanas), con las horas del día y insignias si ya estás
   inscripta o en espera. Los días ya pasados salen "Finalizado" y no se abren.
+  Layout (decisión del usuario): tarjetas grandes, 3 en la primera fila y el
+  resto centrado debajo (Lun-Mar-Mié / Jue-Vie); en pantallas ≤720px pasa a 2
+  por fila y ≤440px a 1. Nunca debe haber scroll horizontal (flex-basis en %).
 - Pantalla del día (`/dia/{fecha}`): una tarjeta por clase (08:00 / 09:00) con
   duración y "x lugares disponibles". Según el estado: **Inscribirme** (abre un
   diálogo de confirmación que recién ahí muestra **precio y duración**),
