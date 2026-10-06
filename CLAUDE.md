@@ -48,8 +48,24 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 
 - Tabla `horario` creada y poblada (10 registros: lunes a viernes, bloques
   08:00 y 09:00, 60 min, cupo 7, $800).
-- Home page (`/`) muestra los horarios **activos** en vivo desde Supabase
-  (vista de alumna, solo lectura).
+- Home page (`/`): grilla de alumna en **tarjetas**, una por clase concreta de
+  la semana visible (hoy + 2 semanas). Cada tarjeta muestra día/fecha, hora,
+  duración, cupos disponibles y precio, y según el estado: **Inscribirme**,
+  **Anotarme en lista de espera** (clase completa), **Cancelar clase**
+  (inscripta, hasta 1 h antes) o "Finalizada". Las `clase` se generan solas
+  (idempotente) al abrir cada semana, a partir de los horarios activos.
+- Tablas `clase`, `reserva` y `listadeespera` creadas (migración
+  `*_create_clase_reserva_listadeespera.sql`), con los atributos del documento.
+  Índices únicos parciales impiden reserva activa duplicada y estar dos veces
+  en la misma lista de espera.
+- **PROVISORIO — identidad de alumna**: no hay login. La grilla tiene un selector
+  de "Alumna (prueba)" (3 alumnas fijas en `app/clases.py`, guardada en la
+  cookie `alumna_id`). `reserva.id_alumna` y `listadeespera.id_alumna` son
+  `uuid` **sin foreign key** porque todavía no existe `profiles`. Al hacer el
+  módulo de Auth: crear `profiles`, borrar los datos de prueba, agregar la FK
+  y reemplazar el selector por la sesión real.
+- Lo que NO hace todavía la lista de espera: ofrecer el cupo liberado a la
+  primera de la lista (ventana de 30 min), mails, ni salir de la lista.
 - Panel de profesora en `/profesora/horarios`: listado completo (activos e
   inactivos), alta (`/profesora/horarios/nuevo`), edición
   (`/profesora/horarios/{id}/editar`) y activar/desactivar
@@ -91,14 +107,14 @@ en la web, no solo cambios de esquema.
 1. **Autenticación y perfiles** — pendiente. Supabase Auth, roles alumna/profesora.
 2. **Gestión de horarios y clases (Profesora)** — **en progreso**, arrancado
    antes que el 1 (decisión del usuario). Hecho: CRUD de horarios fijos
-   (alta/edición/activar-desactivar) y grilla de alumna mostrando horarios
-   activos. Pendiente dentro de este mismo módulo: tabla `Clase` (clase
-   concreta generada a partir de un horario para una fecha puntual) y la
-   generación automática de las clases de la semana a partir de los horarios
-   fijos — **no crear la tabla `Clase` sin confirmar antes con el usuario**.
-3. **Grilla y reservas (Alumna)** — ver horarios/cupos, reservar y cancelar.
-   Depende de que exista `Clase` (módulo 2) y de `Reserva`.
-4. **Lista de espera** — anotarse cuando está lleno, liberación de cupo.
+   (alta/edición/activar-desactivar), tabla `clase` con generación automática
+   por semana, y grilla de alumna en tarjetas. Pendiente: botón de la profesora
+   para generar la semana siguiente a pedido (hoy se genera sola al verla).
+3. **Grilla y reservas (Alumna)** — **hecho con alumna provisoria**: inscribirse,
+   cancelar (hasta 1 h antes), cupos en vivo. Falta el mail de confirmación y
+   "mis próximas reservas".
+4. **Lista de espera** — **parcial**: anotarse y ver la posición. Falta ofrecer
+   el cupo liberado (30 min), notificar y salir de la lista.
 5. **Asistencia** — la profesora marca presente/ausente.
 6. **Resumen mensual y pagos** — cálculo automático + registro de pagos
    (Mercado Pago para pagos, ver Stack).
@@ -180,6 +196,19 @@ Para cada módulo, en este orden:
   — no se pudo diagnosticar del todo porque esa cuenta de Vercel no es
   accesible desde este CLI. Mientras tanto: **avisar siempre que se pusheó
   algo y haga falta Redeploy manual para verlo reflejado**.
+- **Las policies RLS de `clase`, `reserva` y `listadeespera` están abiertas a
+  `anon`** (select/insert/update), igual que `horario`: es provisorio hasta que
+  exista Auth. Antes de dar por cerrado el proyecto hay que reemplazarlas por
+  policies por usuario (`auth.uid()`) y por rol.
+- **Zona horaria**: las horas de clase son locales (`America/Montevideo`) pero
+  Vercel corre en UTC. Toda comparación de "ahora" va por `clases.ahora()`
+  (usa `zoneinfo`; `tzdata` está en `requirements.txt` porque el runtime no
+  garantiza la base de zonas horarias). No usar `date.today()` ni `datetime.now()`.
+- **Cupos**: `clase.cantidad_inscriptas` se recalcula contando reservas
+  confirmadas (`_sincronizar_inscriptas`); el cupo máximo sale de
+  `horario.cupo_max` (la tabla `clase` no lo copia). Para evitar sobreventa sin
+  funciones SQL, se inserta la reserva y se recuenta: si se pasó del cupo se
+  cancela esa reserva. Es suficiente para la demo, no es transaccional.
 - **Las rutas `/profesora/...` no tienen ningún control de acceso todavía**
   (no existe login). Cualquiera que entre a la URL puede usarlas, a propósito
   — se decidió no armar un login provisorio que después se tira. Se cierra

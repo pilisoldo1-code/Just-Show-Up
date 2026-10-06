@@ -8,7 +8,24 @@
 </head>
 <body>
     <main>
-        <h1>Horarios semanales</h1>
+        <div class="header-row">
+            <h1>Horarios semanales</h1>
+            <form action="/alumna/elegir" method="post" class="alumna-selector">
+                <input type="hidden" name="semana" value="{{ semana }}" />
+                <label>
+                    Alumna (prueba)
+                    <select name="alumna_id" onchange="this.form.submit()">
+                        {% for id, nombre in alumnas.items() %}
+                        <option value="{{ id }}" {{ 'selected' if id == alumna_id else '' }}>{{ nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </form>
+        </div>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
 
         <div class="semana-nav">
             {% if hay_semana_anterior %}
@@ -26,32 +43,61 @@
             {% endif %}
         </div>
 
-        <table class="horario-table">
-            <thead>
-                <tr>
-                    <th>Día</th>
-                    <th>Hora inicio</th>
-                    <th>Duración</th>
-                    <th>Cupo máx.</th>
-                    <th>Precio</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for h in horarios %}
-                <tr>
-                    <td>{{ h.dia_semana | capitalize }}</td>
-                    <td>{{ h.hora_inicio[:5] }}</td>
-                    <td>{{ h.duracion }} min</td>
-                    <td>{{ h.cupo_max }}</td>
-                    <td>${{ h.precio }}</td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="5" class="empty">No hay horarios activos.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        {% if tarjetas %}
+        <div class="cards">
+            {% for c in tarjetas %}
+            <article class="card card-{{ c.estado }}">
+                <div class="card-top">
+                    <span class="card-dia">{{ c.dia }}</span>
+                    <span class="card-fecha">{{ c.fecha_txt }}</span>
+                </div>
+                <div class="card-hora">{{ c.hora }}</div>
+                <ul class="card-datos">
+                    <li>{{ c.duracion }} min</li>
+                    <li>
+                        {% if c.disponibles == 0 %}Completa{% else %}{{ c.disponibles }} de {{ c.cupo_max }} cupos{% endif %}
+                    </li>
+                    <li>${{ '%g'|format(c.precio) }}</li>
+                </ul>
+
+                <div class="card-accion">
+                    {% if c.estado == 'disponible' %}
+                    <form action="/clases/{{ c.id }}/inscribirse" method="post">
+                        <input type="hidden" name="semana" value="{{ semana }}" />
+                        <button type="submit" class="btn btn-block">Inscribirme</button>
+                    </form>
+
+                    {% elif c.estado == 'completa' %}
+                    <form action="/clases/{{ c.id }}/lista-espera" method="post">
+                        <input type="hidden" name="semana" value="{{ semana }}" />
+                        <button type="submit" class="btn btn-block btn-secundario">Anotarme en lista de espera</button>
+                    </form>
+
+                    {% elif c.estado == 'inscripta' %}
+                    <span class="badge badge-on">Inscripta</span>
+                    {% if c.puede_cancelar %}
+                    <form action="/clases/{{ c.id }}/cancelar" method="post"
+                          onsubmit="return confirm('¿Cancelar tu inscripción a esta clase?')">
+                        <input type="hidden" name="semana" value="{{ semana }}" />
+                        <button type="submit" class="btn btn-block btn-peligro">Cancelar clase</button>
+                    </form>
+                    {% else %}
+                    <p class="nota">La cancelación cerró (hasta 1 hora antes).</p>
+                    {% endif %}
+
+                    {% elif c.estado == 'espera' %}
+                    <span class="badge badge-espera">En lista de espera · posición {{ c.posicion_espera }}</span>
+
+                    {% else %}
+                    <span class="badge badge-off">Finalizada</span>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="vacio">No hay clases programadas esta semana.</p>
+        {% endif %}
     </main>
 </body>
 </html>
