@@ -468,3 +468,26 @@ main.ancho {
         min-height: 0;
     }
 }
+
+.cards-semana .card {
+    align-items: center;
+    text-align: center;
+}
+
+.cards-semana .card-top {
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.cards-semana .horas {
+    justify-content: center;
+}
+
+.cards-semana .card-accion {
+    align-items: center;
+}
+
+.cards-semana .card-accion .badge {
+    align-self: center;
+}
