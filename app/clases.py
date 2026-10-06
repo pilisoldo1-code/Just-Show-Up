@@ -180,10 +180,10 @@ def inscribirse(alumna_id: str, clase_id: int) -> tuple[bool, str]:
     if clase["estado"] != "programada" or ahora() >= _inicio_clase(clase):
         return False, "La clase ya no está disponible."
     if _reserva_activa(alumna_id, clase_id):
-        return False, "Ya estás inscripta en esta clase."
+        return False, "Ya tenés esta clase reservada."
     cupo = clase["horario"]["cupo_max"]
     if _confirmadas(clase_id) >= cupo:
-        return False, "La clase está completa. Podés anotarte en la lista de espera."
+        return False, "Clase completa. Podés anotarte en la lista de espera."
 
     nueva = sb.table("reserva").insert(
         {"id_alumna": alumna_id, "id_clase": clase_id}
@@ -194,19 +194,19 @@ def inscribirse(alumna_id: str, clase_id: int) -> tuple[bool, str]:
             {"estado": "cancelada", "fecha_cancelacion": ahora().isoformat()}
         ).eq("id", nueva["id"]).execute()
         _sincronizar_inscriptas(clase_id)
-        return False, "La clase se completó justo antes de tu inscripción."
+        return False, "La clase se completó justo antes de tu reserva."
 
     _sincronizar_inscriptas(clase_id)
     sb.table("listadeespera").update({"estado": "confirmado"}).eq(
         "id_alumna", alumna_id
     ).eq("id_clase", clase_id).in_("estado", ["en_espera", "ofrecido"]).execute()
-    return True, "¡Listo! Quedaste inscripta."
+    return True, "¡Reserva confirmada! Tenés un lugar en la clase."
 
 
 def cancelar(alumna_id: str, clase_id: int) -> tuple[bool, str]:
     reservas = _reserva_activa(alumna_id, clase_id)
     if not reservas:
-        return False, "No tenés una inscripción activa en esta clase."
+        return False, "No tenés una reserva activa en esta clase."
     clase = _clase(clase_id)
     limite = _inicio_clase(clase) - timedelta(hours=HORAS_LIMITE_CANCELACION)
     if ahora() > limite:
@@ -216,7 +216,7 @@ def cancelar(alumna_id: str, clase_id: int) -> tuple[bool, str]:
         {"estado": "cancelada", "fecha_cancelacion": ahora().isoformat()}
     ).eq("id", reservas[0]["id"]).execute()
     _sincronizar_inscriptas(clase_id)
-    return True, "Cancelaste tu inscripción. El cupo quedó liberado."
+    return True, "Cancelaste tu reserva. El lugar quedó liberado."
 
 
 def anotar_en_espera(alumna_id: str, clase_id: int) -> tuple[bool, str]:
@@ -225,9 +225,9 @@ def anotar_en_espera(alumna_id: str, clase_id: int) -> tuple[bool, str]:
     if clase["estado"] != "programada" or ahora() >= _inicio_clase(clase):
         return False, "La clase ya no está disponible."
     if _confirmadas(clase_id) < clase["horario"]["cupo_max"]:
-        return False, "Hay cupo disponible, podés inscribirte directamente."
+        return False, "Hay lugares disponibles, podés reservar la clase directamente."
     if _reserva_activa(alumna_id, clase_id):
-        return False, "Ya estás inscripta en esta clase."
+        return False, "Ya tenés esta clase reservada."
 
     activas = (
         sb.table("listadeespera").select("id_alumna")

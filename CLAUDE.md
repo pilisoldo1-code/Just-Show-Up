@@ -50,17 +50,20 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   08:00 y 09:00, 60 min, cupo 7, $800).
 - Home page (`/`): grilla de alumna con **una tarjeta por día** de la semana
   visible (hoy + 2 semanas), con las horas del día y insignias si ya estás
-  inscripta o en espera. Los días ya pasados salen "Finalizado" y no se abren.
+  reservada o en espera. Los días ya pasados salen "Finalizado" y no se abren.
   Layout (decisión del usuario): tarjetas grandes, 3 en la primera fila y el
   resto centrado debajo (Lun-Mar-Mié / Jue-Vie); en pantallas ≤720px pasa a 2
   por fila y ≤440px a 1. Nunca debe haber scroll horizontal (flex-basis en %).
-- Pantalla del día (`/dia/{fecha}`): una tarjeta por clase (08:00 / 09:00) con
-  duración y "x lugares disponibles". Según el estado: **Inscribirme** (abre un
-  diálogo de confirmación que recién ahí muestra **precio y duración**),
-  **Anotarme en lista de espera** (completa), **Cancelar clase** (inscripta,
-  hasta 1 h antes) o "Finalizada". Las acciones vuelven a esta pantalla.
-  Fechas inválidas o fuera de la ventana de 3 semanas redirigen a `/`.
-  El precio se muestra **solo** en el diálogo de confirmación (decisión del usuario).
+- Pantalla del día (`/dia/{fecha}`): una tarjeta por clase (08:00 / 09:00) que
+  hace de **detalle**: día y fecha, hora, duración, precio, cupo máximo y
+  "x lugares disponibles". Según el estado: **Reservar clase** (reserva directa,
+  **sin diálogo de confirmación**), "Clase completa" + **Anotarme en lista de
+  espera** (cupo 0), "Reservada" + **Cancelar clase** (hasta 1 h antes) o
+  "Finalizada". Una clase ya reservada no vuelve a ofrecer "Reservar". Las
+  acciones vuelven a esta pantalla con un aviso. Fechas inválidas o fuera de la
+  ventana de 3 semanas redirigen a `/`. Decisiones del usuario (2026-10-06):
+  mostrar precio y cupo máximo en el detalle, y mantener cancelar/lista de
+  espera aunque ya existan. Vocabulario: "reservar/reserva", no "inscribirse".
   Las `clase` se generan solas (idempotente) al abrir cada semana o día, a
   partir de los horarios activos.
 - Tablas `clase`, `reserva` y `listadeespera` creadas (migración

@@ -52,7 +52,7 @@
                     {% if d.todas_pasadas %}
                     <span class="badge badge-off">Finalizado</span>
                     {% else %}
-                        {% for h in d.inscripta_en %}<span class="badge badge-on">Inscripta {{ h }}</span>{% endfor %}
+                        {% for h in d.inscripta_en %}<span class="badge badge-on">Reservada {{ h }}</span>{% endfor %}
                         {% for h in d.espera_en %}<span class="badge badge-espera">En espera {{ h }}</span>{% endfor %}
                         <span class="ver-dia">Ver clases ›</span>
                     {% endif %}
