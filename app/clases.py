@@ -46,7 +46,7 @@ def generar_clases(inicio_semana: date) -> None:
         ).execute()
 
 
-def tarjetas_semana(inicio: date, fin: date, alumna_id: str) -> list[dict]:
+def clases_entre(inicio: date, fin: date, alumna_id: str) -> list[dict]:
     sb = get_supabase()
     clases = (
         sb.table("clase")
@@ -98,6 +98,7 @@ def tarjetas_semana(inicio: date, fin: date, alumna_id: str) -> list[dict]:
         tarjetas.append(
             {
                 "id": c["id"],
+                "fecha": c["fecha"],
                 "dia": c["horario"]["dia_semana"].capitalize(),
                 "fecha_txt": f"{fecha.day}/{fecha.month}",
                 "hora": c["hora_inicio"][:5],
@@ -111,6 +112,38 @@ def tarjetas_semana(inicio: date, fin: date, alumna_id: str) -> list[dict]:
             }
         )
     return tarjetas
+
+
+def offset_semana(fecha: date) -> int:
+    hoy = ahora().date()
+    lunes_hoy = hoy - timedelta(days=hoy.weekday())
+    lunes = fecha - timedelta(days=fecha.weekday())
+    return (lunes - lunes_hoy).days // 7
+
+
+def agrupar_por_dia(clases: list[dict]) -> list[dict]:
+    dias: dict[str, dict] = {}
+    for c in clases:
+        d = dias.setdefault(
+            c["fecha"],
+            {
+                "fecha": c["fecha"],
+                "dia": c["dia"],
+                "fecha_txt": c["fecha_txt"],
+                "horas": [],
+                "inscripta_en": [],
+                "espera_en": [],
+                "todas_pasadas": True,
+            },
+        )
+        d["horas"].append(c["hora"])
+        if c["estado"] != "pasada":
+            d["todas_pasadas"] = False
+        if c["estado"] == "inscripta":
+            d["inscripta_en"].append(c["hora"])
+        if c["estado"] == "espera":
+            d["espera_en"].append(c["hora"])
+    return list(dias.values())
 
 
 def _confirmadas(clase_id: int) -> int:

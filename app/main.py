@@ -55,9 +55,18 @@ def _alumna_actual(request: Request) -> str:
     return next(iter(ALUMNAS_PROVISORIAS))
 
 
-def _volver(semana: int, ok: bool, aviso: str) -> RedirectResponse:
-    query = urlencode({"semana": semana, "ok": int(ok), "aviso": aviso})
-    return RedirectResponse(url=f"/?{query}", status_code=303)
+def _parse_fecha(texto: str):
+    try:
+        return date.fromisoformat(texto)
+    except ValueError:
+        return None
+
+
+def _volver(fecha: str, ok: bool, aviso: str) -> RedirectResponse:
+    query = urlencode({"ok": int(ok), "aviso": aviso})
+    f = _parse_fecha(fecha)
+    destino = f"/dia/{f.isoformat()}" if f else "/"
+    return RedirectResponse(url=f"{destino}?{query}", status_code=303)
 
 
 def _ejecutar(accion, alumna_id: str, clase_id: int) -> tuple[bool, str]:
@@ -74,17 +83,45 @@ def home(request: Request, semana: int = 0, ok: int = 0, aviso: str = ""):
     inicio, fin = _rango_semana(semana)
     alumna_id = _alumna_actual(request)
     clases.generar_clases(inicio)
+    dias = clases.agrupar_por_dia(clases.clases_entre(inicio, fin, alumna_id))
     return templates.TemplateResponse(
         "index.html",
         {
             "request": request,
-            "tarjetas": clases.tarjetas_semana(inicio, fin, alumna_id),
+            "dias": dias,
             "semana": semana,
             "rango_semana": _formato_rango(inicio, fin),
             "hay_semana_anterior": semana > 0,
             "hay_semana_siguiente": semana < SEMANAS_HACIA_ADELANTE,
             "alumnas": ALUMNAS_PROVISORIAS,
             "alumna_id": alumna_id,
+            "fecha": "",
+            "aviso": aviso,
+            "aviso_ok": bool(ok),
+        },
+    )
+
+
+@app.get("/dia/{fecha}")
+def dia(request: Request, fecha: str, ok: int = 0, aviso: str = ""):
+    f = _parse_fecha(fecha)
+    if f is None:
+        return RedirectResponse(url="/", status_code=303)
+    semana = clases.offset_semana(f)
+    if not 0 <= semana <= SEMANAS_HACIA_ADELANTE:
+        return RedirectResponse(url="/", status_code=303)
+    alumna_id = _alumna_actual(request)
+    clases.generar_clases(f - timedelta(days=f.weekday()))
+    return templates.TemplateResponse(
+        "dia.html",
+        {
+            "request": request,
+            "clases": clases.clases_entre(f, f, alumna_id),
+            "titulo_dia": f"{DIAS_ORDEN[f.weekday()].capitalize()} {f.day}/{f.month}",
+            "semana": semana,
+            "alumnas": ALUMNAS_PROVISORIAS,
+            "alumna_id": alumna_id,
+            "fecha": f.isoformat(),
             "aviso": aviso,
             "aviso_ok": bool(ok),
         },
@@ -92,8 +129,12 @@ def home(request: Request, semana: int = 0, ok: int = 0, aviso: str = ""):
 
 
 @app.post("/alumna/elegir")
-def elegir_alumna(alumna_id: str = Form(...), semana: int = Form(0)):
-    respuesta = RedirectResponse(url=f"/?semana={semana}", status_code=303)
+def elegir_alumna(
+    alumna_id: str = Form(...), semana: int = Form(0), fecha: str = Form("")
+):
+    f = _parse_fecha(fecha)
+    destino = f"/dia/{f.isoformat()}" if f else f"/?semana={semana}"
+    respuesta = RedirectResponse(url=destino, status_code=303)
     if alumna_id in ALUMNAS_PROVISORIAS:
         respuesta.set_cookie(
             "alumna_id", alumna_id, max_age=60 * 60 * 24 * 30, httponly=True, samesite="lax"
@@ -102,21 +143,21 @@ def elegir_alumna(alumna_id: str = Form(...), semana: int = Form(0)):
 
 
 @app.post("/clases/{clase_id}/inscribirse")
-def inscribirse(request: Request, clase_id: int, semana: int = Form(0)):
+def inscribirse(request: Request, clase_id: int, fecha: str = Form("")):
     ok, aviso = _ejecutar(clases.inscribirse, _alumna_actual(request), clase_id)
-    return _volver(semana, ok, aviso)
+    return _volver(fecha, ok, aviso)
 
 
 @app.post("/clases/{clase_id}/cancelar")
-def cancelar_inscripcion(request: Request, clase_id: int, semana: int = Form(0)):
+def cancelar_inscripcion(request: Request, clase_id: int, fecha: str = Form("")):
     ok, aviso = _ejecutar(clases.cancelar, _alumna_actual(request), clase_id)
-    return _volver(semana, ok, aviso)
+    return _volver(fecha, ok, aviso)
 
 
 @app.post("/clases/{clase_id}/lista-espera")
-def anotarse_en_espera(request: Request, clase_id: int, semana: int = Form(0)):
+def anotarse_en_espera(request: Request, clase_id: int, fecha: str = Form("")):
     ok, aviso = _ejecutar(clases.anotar_en_espera, _alumna_actual(request), clase_id)
-    return _volver(semana, ok, aviso)
+    return _volver(fecha, ok, aviso)
 
 
 @app.get("/api/horario")

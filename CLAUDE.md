@@ -48,12 +48,18 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 
 - Tabla `horario` creada y poblada (10 registros: lunes a viernes, bloques
   08:00 y 09:00, 60 min, cupo 7, $800).
-- Home page (`/`): grilla de alumna en **tarjetas**, una por clase concreta de
-  la semana visible (hoy + 2 semanas). Cada tarjeta muestra día/fecha, hora,
-  duración, cupos disponibles y precio, y según el estado: **Inscribirme**,
-  **Anotarme en lista de espera** (clase completa), **Cancelar clase**
-  (inscripta, hasta 1 h antes) o "Finalizada". Las `clase` se generan solas
-  (idempotente) al abrir cada semana, a partir de los horarios activos.
+- Home page (`/`): grilla de alumna con **una tarjeta por día** de la semana
+  visible (hoy + 2 semanas), con las horas del día y insignias si ya estás
+  inscripta o en espera. Los días ya pasados salen "Finalizado" y no se abren.
+- Pantalla del día (`/dia/{fecha}`): una tarjeta por clase (08:00 / 09:00) con
+  duración y "x lugares disponibles". Según el estado: **Inscribirme** (abre un
+  diálogo de confirmación que recién ahí muestra **precio y duración**),
+  **Anotarme en lista de espera** (completa), **Cancelar clase** (inscripta,
+  hasta 1 h antes) o "Finalizada". Las acciones vuelven a esta pantalla.
+  Fechas inválidas o fuera de la ventana de 3 semanas redirigen a `/`.
+  El precio se muestra **solo** en el diálogo de confirmación (decisión del usuario).
+  Las `clase` se generan solas (idempotente) al abrir cada semana o día, a
+  partir de los horarios activos.
 - Tablas `clase`, `reserva` y `listadeespera` creadas (migración
   `*_create_clase_reserva_listadeespera.sql`), con los atributos del documento.
   Índices únicos parciales impiden reserva activa duplicada y estar dos veces

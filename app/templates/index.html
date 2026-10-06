@@ -10,17 +10,7 @@
     <main>
         <div class="header-row">
             <h1>Horarios semanales</h1>
-            <form action="/alumna/elegir" method="post" class="alumna-selector">
-                <input type="hidden" name="semana" value="{{ semana }}" />
-                <label>
-                    Alumna (prueba)
-                    <select name="alumna_id" onchange="this.form.submit()">
-                        {% for id, nombre in alumnas.items() %}
-                        <option value="{{ id }}" {{ 'selected' if id == alumna_id else '' }}>{{ nombre }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-            </form>
+            {% include "_alumna_selector.html" %}
         </div>
 
         {% if aviso %}
@@ -43,56 +33,35 @@
             {% endif %}
         </div>
 
-        {% if tarjetas %}
+        {% if dias %}
         <div class="cards">
-            {% for c in tarjetas %}
-            <article class="card card-{{ c.estado }}">
+            {% for d in dias %}
+            {% if d.todas_pasadas %}
+            <div class="card card-pasada">
+            {% else %}
+            <a class="card card-dia-link" href="/dia/{{ d.fecha }}">
+            {% endif %}
                 <div class="card-top">
-                    <span class="card-dia">{{ c.dia }}</span>
-                    <span class="card-fecha">{{ c.fecha_txt }}</span>
+                    <span class="card-dia">{{ d.dia }}</span>
+                    <span class="card-fecha">{{ d.fecha_txt }}</span>
                 </div>
-                <div class="card-hora">{{ c.hora }}</div>
-                <ul class="card-datos">
-                    <li>{{ c.duracion }} min</li>
-                    <li>
-                        {% if c.disponibles == 0 %}Completa{% else %}{{ c.disponibles }} de {{ c.cupo_max }} cupos{% endif %}
-                    </li>
-                    <li>${{ '%g'|format(c.precio) }}</li>
-                </ul>
-
+                <div class="horas">
+                    {% for h in d.horas %}<span class="hora-chip">{{ h }}</span>{% endfor %}
+                </div>
                 <div class="card-accion">
-                    {% if c.estado == 'disponible' %}
-                    <form action="/clases/{{ c.id }}/inscribirse" method="post">
-                        <input type="hidden" name="semana" value="{{ semana }}" />
-                        <button type="submit" class="btn btn-block">Inscribirme</button>
-                    </form>
-
-                    {% elif c.estado == 'completa' %}
-                    <form action="/clases/{{ c.id }}/lista-espera" method="post">
-                        <input type="hidden" name="semana" value="{{ semana }}" />
-                        <button type="submit" class="btn btn-block btn-secundario">Anotarme en lista de espera</button>
-                    </form>
-
-                    {% elif c.estado == 'inscripta' %}
-                    <span class="badge badge-on">Inscripta</span>
-                    {% if c.puede_cancelar %}
-                    <form action="/clases/{{ c.id }}/cancelar" method="post"
-                          onsubmit="return confirm('¿Cancelar tu inscripción a esta clase?')">
-                        <input type="hidden" name="semana" value="{{ semana }}" />
-                        <button type="submit" class="btn btn-block btn-peligro">Cancelar clase</button>
-                    </form>
+                    {% if d.todas_pasadas %}
+                    <span class="badge badge-off">Finalizado</span>
                     {% else %}
-                    <p class="nota">La cancelación cerró (hasta 1 hora antes).</p>
-                    {% endif %}
-
-                    {% elif c.estado == 'espera' %}
-                    <span class="badge badge-espera">En lista de espera · posición {{ c.posicion_espera }}</span>
-
-                    {% else %}
-                    <span class="badge badge-off">Finalizada</span>
+                        {% for h in d.inscripta_en %}<span class="badge badge-on">Inscripta {{ h }}</span>{% endfor %}
+                        {% for h in d.espera_en %}<span class="badge badge-espera">En espera {{ h }}</span>{% endfor %}
+                        <span class="ver-dia">Ver clases ›</span>
                     {% endif %}
                 </div>
-            </article>
+            {% if d.todas_pasadas %}
+            </div>
+            {% else %}
+            </a>
+            {% endif %}
             {% endfor %}
         </div>
         {% else %}

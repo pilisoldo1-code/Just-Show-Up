@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - {{ titulo_dia }}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        <div class="header-row">
+            <div>
+                <h1>{{ titulo_dia }}</h1>
+                <p class="subtitle"><a href="/?semana={{ semana }}">‹ Volver a la semana</a></p>
+            </div>
+            {% include "_alumna_selector.html" %}
+        </div>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        {% if clases %}
+        <div class="cards">
+            {% for c in clases %}
+            <article class="card card-{{ c.estado }}">
+                <div class="card-hora">{{ c.hora }}</div>
+                <ul class="card-datos">
+                    <li>Duración: {{ c.duracion }} min</li>
+                    <li>
+                        {% if c.disponibles == 0 %}Sin lugares disponibles
+                        {% elif c.disponibles == 1 %}1 lugar disponible
+                        {% else %}{{ c.disponibles }} lugares disponibles{% endif %}
+                    </li>
+                </ul>
+
+                <div class="card-accion">
+                    {% if c.estado == 'disponible' %}
+                    <button type="button" class="btn btn-block"
+                            onclick="document.getElementById('confirmar-{{ c.id }}').showModal()">Inscribirme</button>
+
+                    <dialog id="confirmar-{{ c.id }}" class="modal">
+                        <form action="/clases/{{ c.id }}/inscribirse" method="post">
+                            <input type="hidden" name="fecha" value="{{ fecha }}" />
+                            <h2>Confirmar inscripción</h2>
+                            <p class="modal-clase">{{ titulo_dia }} · {{ c.hora }}</p>
+                            <dl class="modal-datos">
+                                <div><dt>Duración</dt><dd>{{ c.duracion }} min</dd></div>
+                                <div><dt>Precio</dt><dd>${{ '%g'|format(c.precio) }}</dd></div>
+                            </dl>
+                            <div class="modal-botones">
+                                <button type="button" class="btn btn-secundario"
+                                        onclick="this.closest('dialog').close()">Volver</button>
+                                <button type="submit" class="btn">Confirmar inscripción</button>
+                            </div>
+                        </form>
+                    </dialog>
+
+                    {% elif c.estado == 'completa' %}
+                    <form action="/clases/{{ c.id }}/lista-espera" method="post">
+                        <input type="hidden" name="fecha" value="{{ fecha }}" />
+                        <button type="submit" class="btn btn-block btn-secundario">Anotarme en lista de espera</button>
+                    </form>
+
+                    {% elif c.estado == 'inscripta' %}
+                    <span class="badge badge-on">Inscripta</span>
+                    {% if c.puede_cancelar %}
+                    <form action="/clases/{{ c.id }}/cancelar" method="post"
+                          onsubmit="return confirm('¿Cancelar tu inscripción a esta clase?')">
+                        <input type="hidden" name="fecha" value="{{ fecha }}" />
+                        <button type="submit" class="btn btn-block btn-peligro">Cancelar clase</button>
+                    </form>
+                    {% else %}
+                    <p class="nota">La cancelación cerró (hasta 1 hora antes).</p>
+                    {% endif %}
+
+                    {% elif c.estado == 'espera' %}
+                    <span class="badge badge-espera">En lista de espera · posición {{ c.posicion_espera }}</span>
+
+                    {% else %}
+                    <span class="badge badge-off">Finalizada</span>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="vacio">No hay clases este día.</p>
+        {% endif %}
+    </main>
+</body>
+</html>

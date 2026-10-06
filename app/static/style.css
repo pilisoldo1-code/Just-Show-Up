@@ -330,3 +330,90 @@ h1 {
     text-align: center;
     padding: 32px 0;
 }
+
+a.card-dia-link {
+    color: inherit;
+    text-decoration: none;
+    transition: border-color 0.15s, transform 0.15s;
+}
+
+a.card-dia-link:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+.horas {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.hora-chip {
+    background: var(--bg);
+    border: 1px solid #2a2e37;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.ver-dia {
+    color: var(--accent);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.modal {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 24px;
+    width: min(380px, calc(100vw - 32px));
+}
+
+.modal::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.modal h2 {
+    margin: 0 0 4px;
+    font-size: 1.2rem;
+}
+
+.modal-clase {
+    margin: 0 0 16px;
+    color: var(--muted);
+}
+
+.modal-datos {
+    display: flex;
+    gap: 12px;
+    margin: 0 0 20px;
+}
+
+.modal-datos div {
+    flex: 1;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.modal-datos dt {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.modal-datos dd {
+    margin: 4px 0 0;
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+.modal-botones {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
