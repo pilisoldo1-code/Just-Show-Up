@@ -162,6 +162,15 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **Supabase free pausa el proyecto tras ~1 semana sin actividad** y todo el
+  sitio pasa a dar `Internal Server Error` (500) en *todos* los deploys a la
+  vez, aunque el código esté bien. Pasó el 2026-10-06. Diagnóstico: `get_project`
+  devuelve `status: INACTIVE`. Solución: `restore_project` (o botón *Restore*
+  en el dashboard de Supabase); tarda ~3 min en volver y los datos se
+  conservan. Si dos deploys distintos fallan juntos, sospechar de Supabase
+  antes que de Vercel. Para evitarlo, entrar al sitio al menos una vez por
+  semana (o programar un ping).
+
 - **El deploy oficial (`just-show-up-theta.vercel.app`) NO auto-deploya al
   pushear a `main`**, pese a figurar "conectado" a GitHub en el dashboard de
   esa cuenta. Cada push hay que ir manualmente a Deployments → Redeploy para
