@@ -114,6 +114,14 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     (`auth.admin.create_user`, ya confirmadas, sin mail de confirmación). Se
     muestra la contraseña temporal **una sola vez** (todavía no se envía por
     mail: falta cuenta de Resend + dominio propio verificado).
+  - **Cuentas de prueba para la demo (creadas 2026-10-07)**:
+    `profesora@prueba.invalid` (rol profesora) y `alumna@prueba.invalid`. Las
+    contraseñas se las dimos al usuario por el chat y **no se documentan acá**.
+    La de profesora es una administradora real en un sitio público: **borrarla
+    antes de usar el sistema de verdad** y crear la profesora real con el script.
+    Limpieza: borrar sus `reserva`/`listadeespera` y después
+    `delete from auth.users where email like '%@prueba.invalid'` (`profiles`
+    cae en cascada; incluye las 3 usuarias fijas del modo prueba).
   - **Crear a la profesora al entregar el sistema**: `python scripts/crear_profesora.py`
     (pide mail, nombre, apellido y contraseña por teclado; no pasan por el chat).
   - Probado con 78 casos (rutas, roles, errores, sesión, seguridad en la base).
@@ -252,6 +260,12 @@ Para cada módulo, en este orden:
   actualizar `.env` y las variables de **ambos** proyectos de Vercel. Nunca
   pedir ni aceptar claves por el chat: pegarlas desde el portapapeles al `.env`
   con `sed ... $(pbpaste) ...`.
+- **El deploy oficial (theta) necesita su propia `SUPABASE_SERVICE_KEY`**, cargada
+  en el dashboard de esa cuenta de Vercel (Settings > Environment Variables).
+  Sin ella el login y las reservas funcionan, pero fallan: alta y reinicio de
+  contraseña de alumnas, cambio de contraseña y revocar la sesión al salir
+  (muestran "Falta configurar la clave de administrador"). Pasarle la clave a
+  esa persona por un medio privado (no por chat grupal) y rotarla al final.
 - **`SUPABASE_SERVICE_KEY` (service_role) es un secreto de administrador**: solo
   en `.env` y en variables de Vercel, jamás en el repo, en el chat ni en HTML.
   Ignora RLS. Se usa únicamente en el servidor (crear usuarias con
