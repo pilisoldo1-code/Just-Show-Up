@@ -206,6 +206,14 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **PENDIENTE DE SEGURIDAD — rotar las claves de Supabase antes de cargar
+  alumnas reales.** La `service_role` fue pegada en el chat el 2026-10-06 (queda
+  en el historial de la conversación). Hoy la base solo tiene datos de prueba,
+  así que el riesgo es bajo, pero hay que tratarla como expuesta: Project
+  Settings > JWT Keys > generar nuevo secreto (cambia anon y service_role) y
+  actualizar `.env` y las variables de **ambos** proyectos de Vercel. Nunca
+  pedir ni aceptar claves por el chat: pegarlas desde el portapapeles al `.env`
+  con `sed ... $(pbpaste) ...`.
 - **`SUPABASE_SERVICE_KEY` (service_role) es un secreto de administrador**: solo
   en `.env` y en variables de Vercel, jamás en el repo, en el chat ni en HTML.
   Ignora RLS. Se usa únicamente en el servidor (crear usuarias con
