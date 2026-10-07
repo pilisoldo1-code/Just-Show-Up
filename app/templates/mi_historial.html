@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Mi historial</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>Mi historial</h1>
+        <p class="subtitle">Tus clases pasadas y las reservas que cancelaste.</p>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        {% if historial %}
+        <ul class="lista-clases">
+            {% for c in historial %}
+            <li>
+                <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
+                <div class="lc-detalle">{{ c.duracion }} min · ${{ '%g'|format(c.precio) }}</div>
+                <span class="badge {{ 'badge-off' if c.estado_txt == 'Cancelada' else 'badge-on' }}">{{ c.estado_txt }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="vacio vacio-izq">Todavía no tenés clases en tu historial.</p>
+        {% endif %}
+    </main>
+</body>
+</html>

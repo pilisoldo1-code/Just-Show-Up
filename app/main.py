@@ -268,6 +268,17 @@ def mis_inscripciones(request: Request, usuario: Usuario = Depends(requiere_alum
     return _render(request, "mis_inscripciones.html", usuario, aviso=aviso, aviso_ok=False, **datos)
 
 
+@app.get("/mi-historial")
+def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
+    try:
+        historial = clases.mis_inscripciones(usuario.id)["historial"]
+        aviso = ""
+    except Exception:
+        logging.exception("No se pudo cargar el historial")
+        historial, aviso = [], "No pudimos cargar tu historial. Probá de nuevo."
+    return _render(request, "mi_historial.html", usuario, historial=historial, aviso=aviso, aviso_ok=False)
+
+
 @app.get("/mis-facturas")
 def mis_facturas(request: Request, usuario: Usuario = Depends(requiere_alumna)):
     return _render(request, "mis_facturas.html", usuario)

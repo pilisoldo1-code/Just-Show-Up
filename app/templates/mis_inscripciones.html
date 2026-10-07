@@ -42,19 +42,6 @@
             {% endfor %}
         </ul>
         {% endif %}
-
-        {% if historial %}
-        <h2 class="seccion">Historial</h2>
-        <ul class="lista-clases lista-historial">
-            {% for c in historial %}
-            <li>
-                <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
-                <div class="lc-detalle">{{ c.duracion }} min · ${{ '%g'|format(c.precio) }}</div>
-                <span class="badge {{ 'badge-off' if c.estado_txt == 'Cancelada' else 'badge-on' }}">{{ c.estado_txt }}</span>
-            </li>
-            {% endfor %}
-        </ul>
-        {% endif %}
     </main>
 </body>
 </html>
