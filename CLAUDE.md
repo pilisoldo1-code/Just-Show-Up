@@ -80,12 +80,28 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     valida el token en cada pedido y lo **renueva solo** con el refresh token.
     Páginas privadas con `Cache-Control: no-store`.
   - Rutas: públicas `/login`, `/api/health`, `/static`; alumna `/`, `/dia/*`,
-    `/clases/*`; solo profesora `/profesora/*`; cualquiera logueada
-    `/cuenta/contrasena`, `/api/horario`. Sin sesión → `/login`; alumna en
+    `/clases/*`, `/mis-inscripciones`, `/mis-facturas`; solo profesora
+    `/profesora/*`; cualquiera logueada `/perfil`, `/perfil/contrasena`,
+    `/api/horario`. Sin sesión → `/login`; alumna en
     `/profesora/*` → vuelve a `/` con aviso; profesora en `/` → su panel.
     Dependencias en `app/auth.py`: `requiere_login`, `requiere_alumna`,
     `requiere_profesora`. La protección es del lado del servidor.
-  - Menú según rol (`_menu.html`): profesora = Horarios · Alumnas; alumna = Clases.
+  - Menú según rol (`_menu.html`): a la izquierda los links (profesora =
+    Horarios · Alumnas; alumna = Clases); **a la derecha el menú de cuenta**:
+    círculo con las **iniciales** + nombre, que al hacer click despliega **Mi
+    perfil · Mis inscripciones · Mis facturas · Cerrar sesión** (la profesora
+    solo ve Mi perfil y Cerrar sesión). Es un `<details>` que se cierra al
+    clickear afuera o con Escape.
+  - **Mi perfil** (`/perfil`): información de contacto (solo lectura; si algo está
+    mal se lo pide a la profesora) + formulario para cambiar la contraseña.
+    **Mis inscripciones** (`/mis-inscripciones`): próximas clases (con link a
+    `/dia/{fecha}` para cancelar), lista de espera con posición e historial
+    (canceladas y clases pasadas). **Mis facturas** (`/mis-facturas`): pantalla
+    vacía explicativa hasta que exista el módulo de resumen mensual y pagos.
+  - **Foto de perfil: pendiente de decisión.** Hoy el avatar son las iniciales
+    porque no existe dónde guardar fotos. Para fotos reales haría falta una
+    columna `foto_url` en `profiles` + un bucket de Supabase Storage con sus
+    policies: **confirmar con el usuario antes de crearlos**.
   - Base: `profiles` (= `Usuario`) con RLS: cada usuaria **lee solo su fila**, la
     profesora lee todas (`es_profesora()`); el permiso de UPDATE es **por
     columna** (solo nombre, apellido, teléfono, fecha de nacimiento y carné):

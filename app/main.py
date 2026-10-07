@@ -142,13 +142,42 @@ def logout(request: Request):
     return respuesta
 
 
-@app.get("/cuenta/contrasena")
-def contrasena_form(request: Request, usuario: Usuario = Depends(requiere_login)):
-    return _render(request, "cambiar_contrasena.html", usuario, aviso="", aviso_ok=False)
+_MESES_CORTOS = ["", "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
 
 
-@app.post("/cuenta/contrasena")
-def contrasena_cambiar(
+def _fecha_legible(iso: str | None) -> str:
+    f = _parse_fecha(iso) if iso else None
+    return f"{f.day} de {MESES[f.month]} de {f.year}" if f else ""
+
+
+def _datos_perfil(usuario: Usuario) -> dict:
+    datos = {"nombre": usuario.nombre, "apellido": usuario.apellido, "mail": usuario.mail,
+             "telefono": "", "fecha_nacimiento": "", "fecha_vencimiento_carne_salud": ""}
+    if usuario.es_prueba:
+        return datos
+    try:
+        filas = (
+            auth.cliente_con_token(usuario.token).table("profiles")
+            .select("telefono, fecha_nacimiento, fecha_vencimiento_carne_salud")
+            .eq("id", usuario.id).execute().data
+        )
+    except Exception:
+        logging.exception("No se pudo leer el perfil")
+        return datos
+    if filas:
+        datos["telefono"] = filas[0]["telefono"] or ""
+        datos["fecha_nacimiento"] = _fecha_legible(filas[0]["fecha_nacimiento"])
+        datos["fecha_vencimiento_carne_salud"] = _fecha_legible(filas[0]["fecha_vencimiento_carne_salud"])
+    return datos
+
+
+@app.get("/perfil")
+def perfil(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_login)):
+    return _render(request, "perfil.html", usuario, datos=_datos_perfil(usuario), aviso=aviso, aviso_ok=bool(ok))
+
+
+@app.post("/perfil/contrasena")
+def perfil_contrasena(
     request: Request,
     actual: str = Form(""),
     nueva: str = Form(""),
@@ -156,7 +185,7 @@ def contrasena_cambiar(
     usuario: Usuario = Depends(requiere_login),
 ):
     if usuario.es_prueba:
-        return RedirectResponse(url="/", status_code=303)
+        return RedirectResponse(url="/perfil", status_code=303)
     aviso = ""
     if nueva != repetir:
         aviso = "Las contraseñas nuevas no coinciden."
@@ -166,7 +195,8 @@ def contrasena_cambiar(
         except ErrorAuth as e:
             aviso = str(e)
     if aviso:
-        return _render(request, "cambiar_contrasena.html", usuario, status_code=400, aviso=aviso, aviso_ok=False)
+        return _render(request, "perfil.html", usuario, status_code=400,
+                       datos=_datos_perfil(usuario), aviso=aviso, aviso_ok=False)
     # Supabase cierra las sesiones al cambiar la contraseña: se abre una nueva para
     # que la usuaria no quede afuera apenas la cambia.
     try:
@@ -176,7 +206,7 @@ def contrasena_cambiar(
             url=auth.url_login("Tu contraseña se cambió. Iniciá sesión con la nueva."), status_code=303
         )
     return RedirectResponse(
-        url=_destino(usuario) + "?" + urlencode({"ok": 1, "aviso": "Tu contraseña se cambió correctamente."}),
+        url="/perfil?" + urlencode({"ok": 1, "aviso": "Tu contraseña se cambió correctamente."}),
         status_code=303,
     )
 
@@ -225,6 +255,22 @@ def dia(request: Request, fecha: str, ok: int = 0, aviso: str = "", usuario: Usu
         aviso=aviso,
         aviso_ok=bool(ok),
     )
+
+
+@app.get("/mis-inscripciones")
+def mis_inscripciones(request: Request, usuario: Usuario = Depends(requiere_alumna)):
+    try:
+        datos = clases.mis_inscripciones(usuario.id)
+        aviso = ""
+    except Exception:
+        logging.exception("No se pudieron cargar las inscripciones")
+        datos, aviso = {"proximas": [], "en_espera": [], "historial": []}, "No pudimos cargar tus inscripciones. Probá de nuevo."
+    return _render(request, "mis_inscripciones.html", usuario, aviso=aviso, aviso_ok=False, **datos)
+
+
+@app.get("/mis-facturas")
+def mis_facturas(request: Request, usuario: Usuario = Depends(requiere_alumna)):
+    return _render(request, "mis_facturas.html", usuario)
 
 
 @app.post("/alumna/elegir")

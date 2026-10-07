@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Mi perfil</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>Mi perfil</h1>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        <section class="panel">
+            <h2>Información de contacto</h2>
+            <dl class="datos-perfil">
+                <div><dt>Nombre</dt><dd>{{ datos.nombre }} {{ datos.apellido }}</dd></div>
+                <div><dt>Mail</dt><dd>{{ datos.mail or '—' }}</dd></div>
+                <div><dt>Teléfono</dt><dd>{{ datos.telefono or '—' }}</dd></div>
+                {% if not usuario.es_profesora %}
+                <div><dt>Fecha de nacimiento</dt><dd>{{ datos.fecha_nacimiento or '—' }}</dd></div>
+                <div><dt>Vencimiento del carné de salud</dt><dd>{{ datos.fecha_vencimiento_carne_salud or '—' }}</dd></div>
+                {% endif %}
+            </dl>
+            {% if not usuario.es_profesora %}
+            <p class="nota">Si algún dato no es correcto, avisale a tu profesora.</p>
+            {% endif %}
+        </section>
+
+        {% if not usuario.es_prueba %}
+        <section class="panel">
+            <h2>Cambiar contraseña</h2>
+            <p class="subtitle">La nueva contraseña debe tener al menos 8 caracteres.</p>
+            <form action="/perfil/contrasena" method="post" class="horario-form form-plano">
+                <label>
+                    Contraseña actual
+                    <input type="password" name="actual" autocomplete="current-password" required />
+                </label>
+                <label>
+                    Contraseña nueva
+                    <input type="password" name="nueva" autocomplete="new-password" minlength="8" required />
+                </label>
+                <label>
+                    Repetir contraseña nueva
+                    <input type="password" name="repetir" autocomplete="new-password" minlength="8" required />
+                </label>
+                <button type="submit" class="btn">Guardar contraseña</button>
+            </form>
+        </section>
+        {% endif %}
+    </main>
+</body>
+</html>

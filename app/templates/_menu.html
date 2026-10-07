@@ -7,6 +7,7 @@
         <a href="/">Clases</a>
         {% endif %}
     </div>
+
     <div class="menu-cuenta">
         {% if usuario.es_prueba %}
         <form action="/alumna/elegir" method="post" class="alumna-selector">
@@ -22,11 +23,35 @@
             </label>
         </form>
         {% else %}
-        <span class="menu-nombre">{{ usuario.nombre }} {{ usuario.apellido }}</span>
-        <a href="/cuenta/contrasena">Cambiar contraseña</a>
+        <details class="cuenta-menu">
+            <summary aria-label="Mi cuenta">
+                <span class="avatar" aria-hidden="true">{{ (usuario.nombre[:1] ~ usuario.apellido[:1]) | upper }}</span>
+                <span class="cuenta-nombre">{{ usuario.nombre }} {{ usuario.apellido }}</span>
+                <span class="cuenta-flecha" aria-hidden="true">▾</span>
+            </summary>
+            <div class="cuenta-opciones">
+                <a href="/perfil">Mi perfil</a>
+                {% if not usuario.es_profesora %}
+                <a href="/mis-inscripciones">Mis inscripciones</a>
+                <a href="/mis-facturas">Mis facturas</a>
+                {% endif %}
+                <form action="/logout" method="post">
+                    <button type="submit">Cerrar sesión</button>
+                </form>
+            </div>
+        </details>
         {% endif %}
-        <form action="/logout" method="post">
-            <button type="submit" class="link-btn">Cerrar sesión</button>
-        </form>
     </div>
 </nav>
+<script>
+    document.addEventListener("click", function (e) {
+        document.querySelectorAll("details.cuenta-menu[open]").forEach(function (d) {
+            if (!d.contains(e.target)) d.removeAttribute("open");
+        });
+    });
+    document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+            document.querySelectorAll("details.cuenta-menu[open]").forEach(function (d) { d.removeAttribute("open"); });
+        }
+    });
+</script>

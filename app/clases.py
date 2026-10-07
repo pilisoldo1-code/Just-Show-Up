@@ -262,3 +262,47 @@ def anotar_en_espera(alumna_id: str, clase_id: int) -> tuple[bool, str]:
         {"id_alumna": alumna_id, "id_clase": clase_id, "posicion": posicion}
     ).execute()
     return True, f"Quedaste en la lista de espera (posición {posicion})."
+
+
+def _item_clase(c: dict, **extra) -> dict:
+    fecha = date.fromisoformat(c["fecha"])
+    return {
+        "fecha": c["fecha"],
+        "dia": DIAS_ORDEN[fecha.weekday()].capitalize(),
+        "fecha_txt": f"{fecha.day}/{fecha.month}",
+        "hora": c["hora_inicio"][:5],
+        "duracion": c["duracion"],
+        "precio": c["precio"],
+        "inicio": _inicio_clase(c),
+        **extra,
+    }
+
+
+def mis_inscripciones(alumna_id: str) -> dict:
+    sb = get_supabase()
+    columnas_clase = "clase(id, fecha, hora_inicio, duracion, precio)"
+    reservas = (
+        sb.table("reserva").select(f"id, estado, fecha_cancelacion, {columnas_clase}")
+        .eq("id_alumna", alumna_id).execute().data
+    )
+    espera = (
+        sb.table("listadeespera").select(f"posicion, {columnas_clase}")
+        .eq("id_alumna", alumna_id).in_("estado", ["en_espera", "ofrecido"]).execute().data
+    )
+    ahora_dt = ahora()
+    proximas, historial, en_espera = [], [], []
+    for r in reservas:
+        item = _item_clase(r["clase"], estado=r["estado"])
+        if r["estado"] == "confirmada" and item["inicio"] > ahora_dt:
+            proximas.append(item)
+        else:
+            item["estado_txt"] = "Cancelada" if r["estado"] == "cancelada" else "Clase pasada"
+            historial.append(item)
+    for e in espera:
+        item = _item_clase(e["clase"], posicion=e["posicion"])
+        if item["inicio"] > ahora_dt:
+            en_espera.append(item)
+    proximas.sort(key=lambda i: i["inicio"])
+    en_espera.sort(key=lambda i: i["inicio"])
+    historial.sort(key=lambda i: i["inicio"], reverse=True)
+    return {"proximas": proximas, "en_espera": en_espera, "historial": historial}

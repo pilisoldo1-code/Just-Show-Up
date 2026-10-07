@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Mis inscripciones</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>Mis inscripciones</h1>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        <h2 class="seccion">Próximas clases</h2>
+        {% if proximas %}
+        <ul class="lista-clases">
+            {% for c in proximas %}
+            <li>
+                <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
+                <div class="lc-detalle">{{ c.duracion }} min · ${{ '%g'|format(c.precio) }}</div>
+                <a class="lc-accion" href="/dia/{{ c.fecha }}">Ver o cancelar ›</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="vacio vacio-izq">No tenés clases reservadas. <a href="/">Reservá una clase</a>.</p>
+        {% endif %}
+
+        {% if en_espera %}
+        <h2 class="seccion">En lista de espera</h2>
+        <ul class="lista-clases">
+            {% for c in en_espera %}
+            <li>
+                <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
+                <div class="lc-detalle">Posición {{ c.posicion }} en la lista</div>
+                <a class="lc-accion" href="/dia/{{ c.fecha }}">Ver ›</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if historial %}
+        <h2 class="seccion">Historial</h2>
+        <ul class="lista-clases lista-historial">
+            {% for c in historial %}
+            <li>
+                <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
+                <div class="lc-detalle">{{ c.duracion }} min · ${{ '%g'|format(c.precio) }}</div>
+                <span class="badge {{ 'badge-off' if c.estado_txt == 'Cancelada' else 'badge-on' }}">{{ c.estado_txt }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </main>
+</body>
+</html>
