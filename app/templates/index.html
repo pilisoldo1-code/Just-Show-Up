@@ -8,10 +8,8 @@
 </head>
 <body>
     <main class="ancho">
-        <div class="header-row">
-            <h1>Horarios semanales</h1>
-            {% include "_alumna_selector.html" %}
-        </div>
+        {% include "_menu.html" %}
+        <h1>Horarios semanales</h1>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Iniciar sesión</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main class="auth-main">
+        <div class="auth-card">
+            <h1>Just Show Up</h1>
+            <p class="subtitle">Iniciá sesión para reservar tus clases.</p>
+
+            {% if aviso %}
+            <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+            {% endif %}
+
+            <form action="/login" method="post" class="horario-form auth-form">
+                <label>
+                    Mail
+                    <input type="email" name="mail" value="{{ mail }}" autocomplete="username" required autofocus />
+                </label>
+                <label>
+                    Contraseña
+                    <input type="password" name="contrasena" autocomplete="current-password" required />
+                </label>
+                <button type="submit" class="btn btn-block">Iniciar sesión</button>
+            </form>
+
+            <p class="nota auth-nota">¿No tenés cuenta? Pedile a tu profesora que te dé de alta.</p>
+        </div>
+    </main>
+</body>
+</html>

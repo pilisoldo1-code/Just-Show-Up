@@ -476,3 +476,101 @@ main.ancho {
     background: #f87171;
     color: #0f1115;
 }
+
+.menu {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #2a2e37;
+}
+
+.menu-links,
+.menu-cuenta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.menu-links a {
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.menu-links a:hover {
+    color: var(--accent);
+}
+
+.menu-cuenta form {
+    margin: 0;
+}
+
+.menu-cuenta a {
+    color: var(--accent);
+    font-size: 0.9rem;
+}
+
+.menu-nombre {
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.auth-main {
+    max-width: 420px;
+    margin-top: 8vh;
+}
+
+.auth-card h1 {
+    text-align: center;
+}
+
+.auth-card .subtitle {
+    text-align: center;
+}
+
+.auth-nota {
+    text-align: center;
+    margin-top: 16px;
+}
+
+.tabla-scroll {
+    overflow-x: auto;
+}
+
+.credencial {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.credencial-etiqueta {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+}
+
+.credencial-valor {
+    font-size: 1.1rem;
+    word-break: break-all;
+}
+
+.credencial-clave {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+}

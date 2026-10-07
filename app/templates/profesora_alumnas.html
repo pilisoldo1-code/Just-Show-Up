@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Alumnas</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main class="ancho">
+        {% include "_menu.html" %}
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        <div class="header-row">
+            <h1>Alumnas</h1>
+            <a class="btn" href="/profesora/alumnas/nueva">+ Nueva alumna</a>
+        </div>
+        <p class="subtitle">Dás de alta a tus alumnas y ellas entran con su mail y una contraseña.</p>
+
+        <div class="tabla-scroll">
+        <table class="horario-table">
+            <thead>
+                <tr>
+                    <th>Apellido</th>
+                    <th>Nombre</th>
+                    <th>Mail</th>
+                    <th>Teléfono</th>
+                    <th>Carné de salud vence</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in alumnas %}
+                <tr>
+                    <td>{{ a.apellido }}</td>
+                    <td>{{ a.nombre }}</td>
+                    <td>{{ a.mail }}</td>
+                    <td>{{ a.telefono or '—' }}</td>
+                    <td>{{ a.fecha_vencimiento_carne_salud or '—' }}</td>
+                    <td class="acciones">
+                        <form action="/profesora/alumnas/{{ a.id }}/reiniciar-contrasena" method="post"
+                              onsubmit="return confirm('¿Generar una contraseña nueva para {{ a.nombre }} {{ a.apellido }}? La anterior dejará de funcionar.')">
+                            <button type="submit" class="link-btn">Reiniciar contraseña</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="empty">Todavía no hay alumnas cargadas.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </main>
+</body>
+</html>

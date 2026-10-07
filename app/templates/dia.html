@@ -8,13 +8,9 @@
 </head>
 <body>
     <main>
-        <div class="header-row">
-            <div>
-                <h1>{{ titulo_dia }}</h1>
-                <p class="subtitle"><a href="/?semana={{ semana }}">‹ Volver a la semana</a></p>
-            </div>
-            {% include "_alumna_selector.html" %}
-        </div>
+        {% include "_menu.html" %}
+        <h1>{{ titulo_dia }}</h1>
+        <p class="subtitle"><a href="/?semana={{ semana }}">‹ Volver a la semana</a></p>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>

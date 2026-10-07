@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - {{ titulo }}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>{{ titulo }}</h1>
+        <p class="subtitle">{{ nombre }}</p>
+
+        <div class="credencial">
+            <div>
+                <span class="credencial-etiqueta">Usuario (mail)</span>
+                <span class="credencial-valor">{{ mail }}</span>
+            </div>
+            <div>
+                <span class="credencial-etiqueta">Contraseña temporal</span>
+                <span class="credencial-valor credencial-clave">{{ contrasena }}</span>
+            </div>
+        </div>
+
+        <div class="aviso aviso-error">
+            Guardá esta contraseña ahora: <strong>no se vuelve a mostrar</strong>. Pasásela a la alumna;
+            puede cambiarla desde "Cambiar contraseña" apenas entre.
+        </div>
+
+        <a class="btn" href="/profesora/alumnas">Volver a alumnas</a>
+    </main>
+</body>
+</html>

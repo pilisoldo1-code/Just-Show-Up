@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Nueva alumna</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>Nueva alumna</h1>
+        <p class="subtitle"><a href="/profesora/alumnas">← Volver a alumnas</a></p>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        <form action="/profesora/alumnas" method="post" class="horario-form">
+            <label>
+                Nombre *
+                <input type="text" name="nombre" value="{{ datos.get('nombre', '') }}" required />
+            </label>
+            <label>
+                Apellido *
+                <input type="text" name="apellido" value="{{ datos.get('apellido', '') }}" required />
+            </label>
+            <label>
+                Mail * (es su usuario para entrar)
+                <input type="email" name="mail" value="{{ datos.get('mail', '') }}" required />
+            </label>
+            <label>
+                Teléfono
+                <input type="tel" name="telefono" value="{{ datos.get('telefono', '') }}" />
+            </label>
+            <label>
+                Fecha de nacimiento
+                <input type="date" name="fecha_nacimiento" value="{{ datos.get('fecha_nacimiento', '') }}" />
+            </label>
+            <label>
+                Vencimiento del carné de salud
+                <input type="date" name="fecha_vencimiento_carne_salud" value="{{ datos.get('fecha_vencimiento_carne_salud', '') }}" />
+            </label>
+            <p class="nota">Al crearla se genera una contraseña temporal que te mostramos una sola vez.</p>
+            <button type="submit" class="btn">Crear alumna</button>
+        </form>
+    </main>
+</body>
+</html>

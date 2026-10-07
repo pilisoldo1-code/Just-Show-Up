@@ -69,23 +69,43 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   `*_create_clase_reserva_listadeespera.sql`), con los atributos del documento.
   Índices únicos parciales impiden reserva activa duplicada y estar dos veces
   en la misma lista de espera.
-- **Autenticación (módulo en curso, 2026-10-06)** — decisiones del usuario:
-  hay **una sola profesora**; **no hay registro público**: la profesora crea las
-  cuentas de sus alumnas presenciales (los usuarios del contenido online se
-  resuelven en su módulo). Hecho en base: tabla `profiles` (RLS activado **sin
-  policies** a propósito: solo el servidor accede, con la service key) + trigger
-  `on_auth_user_created` (el rol siempre nace `alumna`, nunca se toma del
-  cliente) + FK `reserva.id_alumna` y `listadeespera.id_alumna` → `profiles(id)`.
-  Pendiente: login/logout, sesión por cookie, proteger rutas, panel de alumnas
-  de la profesora, script para crear la cuenta de la profesora, quitar el
-  selector provisorio. **Hasta que se despliegue ese código, reservar en los
-  deploys falla** (las alumnas provisorias ya no existen para la FK).
-- **PROVISORIO — identidad de alumna** (se elimina con el módulo de Auth): no hay login. La grilla tiene un selector
-  de "Alumna (prueba)" (3 alumnas fijas en `app/clases.py`, guardada en la
-  cookie `alumna_id`). `reserva.id_alumna` y `listadeespera.id_alumna` son
-  `uuid` **sin foreign key** porque todavía no existe `profiles`. Al hacer el
-  módulo de Auth: crear `profiles`, borrar los datos de prueba, agregar la FK
-  y reemplazar el selector por la sesión real.
+- **Autenticación — etapa 1 hecha (2026-10-07)**. Modelo acordado con el usuario:
+  **un despliegue = una profesora (administradora total, rol `profesora`)**; **no
+  hay registro público**: la profesora crea las cuentas de sus alumnas
+  presenciales desde `/profesora/alumnas` y ellas entran con mail + contraseña
+  temporal (que pueden cambiar en `/cuenta/contrasena`). Los usuarios del
+  contenido online (sin clases presenciales) se resuelven en su módulo.
+  - Login en `/login`, logout `POST /logout`. Sesión = 2 cookies `httpOnly`
+    (`sb_acceso`, `sb_refresco`, SameSite=lax, `secure` en https); el servidor
+    valida el token en cada pedido y lo **renueva solo** con el refresh token.
+    Páginas privadas con `Cache-Control: no-store`.
+  - Rutas: públicas `/login`, `/api/health`, `/static`; alumna `/`, `/dia/*`,
+    `/clases/*`; solo profesora `/profesora/*`; cualquiera logueada
+    `/cuenta/contrasena`, `/api/horario`. Sin sesión → `/login`; alumna en
+    `/profesora/*` → vuelve a `/` con aviso; profesora en `/` → su panel.
+    Dependencias en `app/auth.py`: `requiere_login`, `requiere_alumna`,
+    `requiere_profesora`. La protección es del lado del servidor.
+  - Menú según rol (`_menu.html`): profesora = Horarios · Alumnas; alumna = Clases.
+  - Base: `profiles` (= `Usuario`) con RLS: cada usuaria **lee solo su fila**, la
+    profesora lee todas (`es_profesora()`); el permiso de UPDATE es **por
+    columna** (solo nombre, apellido, teléfono, fecha de nacimiento y carné):
+    **`rol`, `mail` e `id` no son editables por el cliente**. El trigger crea el
+    perfil siempre como `alumna`. FK `reserva.id_alumna` y
+    `listadeespera.id_alumna` → `profiles(id)`.
+  - Cuentas creadas solo desde el servidor con la `SUPABASE_SERVICE_KEY`
+    (`auth.admin.create_user`, ya confirmadas, sin mail de confirmación). Se
+    muestra la contraseña temporal **una sola vez** (todavía no se envía por
+    mail: falta cuenta de Resend + dominio propio verificado).
+  - **Crear a la profesora al entregar el sistema**: `python scripts/crear_profesora.py`
+    (pide mail, nombre, apellido y contraseña por teclado; no pasan por el chat).
+  - Probado con 78 casos (rutas, roles, errores, sesión, seguridad en la base).
+  - Pendiente: **etapa 2** (reemplazar las policies abiertas a `anon` de
+    `horario`/`clase`/`reserva`/`listadeespera` por policies por usuaria y rol, mover
+    a la base la generación de clases y el contador de cupos), y quitar el modo
+    prueba + las 3 usuarias de prueba cuando el usuario confirme el login real.
+  - **Modo prueba**: con la variable `ALUMNA_PRUEBA=1` (apagada por defecto)
+    reaparece el selector de las 3 alumnas fijas de `app/clases.py` sin login.
+    Con la etapa 2 (RLS por usuaria) deja de poder funcionar.
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -132,7 +152,7 @@ Somos **3 personas** implementando sobre el mismo repo. Para no pisarnos:
 Se definieron como módulos verticales: cada uno entrega algo visible/probable
 en la web, no solo cambios de esquema.
 
-1. **Autenticación y perfiles** — pendiente. Supabase Auth, roles alumna/profesora.
+1. **Autenticación y perfiles** — **etapa 1 hecha** (ver Estado actual); falta la etapa 2 (RLS por rol).
 2. **Gestión de horarios y clases (Profesora)** — **en progreso**, arrancado
    antes que el 1 (decisión del usuario). Hecho: CRUD de horarios fijos
    (alta/edición/activar-desactivar), tabla `clase` con generación automática
@@ -263,10 +283,27 @@ Para cada módulo, en este orden:
   máximo sale de `horario.cupo_max` (la tabla `clase` no lo copia). Para evitar sobreventa sin
   funciones SQL, se inserta la reserva y se recuenta: si se pasó del cupo se
   cancela esa reserva. Es suficiente para la demo, no es transaccional.
-- **Las rutas `/profesora/...` no tienen ningún control de acceso todavía**
-  (no existe login). Cualquiera que entre a la URL puede usarlas, a propósito
-  — se decidió no armar un login provisorio que después se tira. Se cierra
-  cuando se implemente el módulo de Autenticación.
+- **Cambiar la contraseña cierra todas las sesiones en Supabase**, incluida la
+  de quien la cambia. Por eso `contrasena_cambiar` abre una sesión nueva
+  automáticamente (fijando `request.state.tokens_nuevos`, que el middleware
+  convierte en cookies). Sin eso la usuaria quedaba afuera apenas la cambiaba.
+- **No insertar filas a mano en `auth.users` con SQL sin completar los campos
+  de token** (`confirmation_token`, `recovery_token`, `email_change`, etc. deben
+  ser `''`, no NULL): GoTrue falla con 500 "Database error finding users". Crear
+  siempre con `auth.admin.create_user`. Las 3 usuarias de prueba se corrigieron.
+- **Un mail repetido no se puede detectar con el registro público de Supabase**
+  si la confirmación por mail está activada (devuelve éxito para no revelar
+  cuentas). Acá no aplica: las cuentas las crea el servidor con el admin API, que
+  sí informa `email_exists`.
+- **Las policies RLS siguen abiertas a `anon`** en `horario`, `clase`, `reserva` y
+  `listadeespera` hasta la etapa 2: el login protege las pantallas, pero alguien
+  con la clave pública de Supabase podría escribir directo en esas tablas.
+  `profiles` sí está cerrada (solo con sesión). El registro abierto de Supabase
+  ("Allow new users to sign up") debe estar APAGADO en el dashboard: se verificó
+  que seguía encendido el 2026-10-07 (`/auth/v1/settings` → `disable_signup:false`).
+- La regla de "cancelar hasta 1 h antes" la aplica la aplicación, no la base:
+  un usuario técnico podría saltársela hablando directo con Supabase. Cerrarlo
+  requiere una función SQL (mejora opcional de la etapa 2).
 
 - **`vercel.json`**: no usar `rewrites` tipo catch-all con
   `destination: "/api/index.py"`. Un cambio reciente de Vercel hace que el
