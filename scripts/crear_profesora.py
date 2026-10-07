@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 load_dotenv()
 
-from app import auth  # noqa: E402
+from app import auth, validaciones  # noqa: E402
 
 
 def main() -> None:
@@ -29,8 +29,9 @@ def main() -> None:
         raise SystemExit(problema)
     nombre = input("Nombre: ").strip()
     apellido = input("Apellido: ").strip()
-    if not nombre or not apellido:
-        raise SystemExit("El nombre y el apellido son obligatorios.")
+    problema = validaciones.nombre(nombre, "El nombre") or validaciones.nombre(apellido, "El apellido")
+    if problema:
+        raise SystemExit(problema)
 
     contrasena = getpass.getpass("Contraseña (mínimo 8 caracteres, no se ve al escribir): ")
     problema = auth.validar_contrasena(contrasena)

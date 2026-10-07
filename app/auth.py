@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 import secrets
 from dataclasses import dataclass
 from typing import Optional
@@ -12,6 +11,7 @@ from fastapi.responses import Response
 from gotrue.errors import AuthApiError, AuthError
 from supabase import Client, create_client
 
+from app import validaciones
 from app.clases import ALUMNAS_PROVISORIAS
 
 COOKIE_ACCESO = "sb_acceso"
@@ -24,8 +24,6 @@ MODO_PRUEBA = os.environ.get("ALUMNA_PRUEBA") == "1"
 MSG_CONEXION = "No pudimos conectarnos con el servidor. Revisá tu conexión y probá de nuevo."
 MSG_GENERICO = "No pudimos completar la operación. Probá de nuevo en unos minutos."
 MSG_SESION_VENCIDA = "Tu sesión venció. Iniciá sesión de nuevo."
-
-_FORMATO_MAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class ErrorAuth(Exception):
@@ -104,9 +102,7 @@ def validar_contrasena(contrasena: str) -> Optional[str]:
 
 
 def validar_mail(mail: str) -> Optional[str]:
-    if not _FORMATO_MAIL.match(mail):
-        return "El mail no es válido."
-    return None
+    return validaciones.mail(mail)
 
 
 # ---------- sesion ----------

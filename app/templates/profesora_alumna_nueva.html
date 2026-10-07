@@ -12,34 +12,41 @@
         <h1>Nueva alumna</h1>
         <p class="subtitle"><a href="/profesora/alumnas">← Volver a alumnas</a></p>
 
-        {% if aviso %}
-        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% if errores %}
+        <div class="aviso aviso-error">
+            <strong>{{ 'Corregí estos datos:' if errores|length > 1 else 'Corregí este dato:' }}</strong>
+            <ul class="lista-errores">
+                {% for e in errores %}<li>{{ e }}</li>{% endfor %}
+            </ul>
+        </div>
         {% endif %}
 
         <form action="/profesora/alumnas" method="post" class="horario-form">
             <label>
                 Nombre *
-                <input type="text" name="nombre" value="{{ datos.get('nombre', '') }}" required />
+                <input type="text" name="nombre" value="{{ datos.get('nombre', '') }}" maxlength="60" required />
             </label>
             <label>
                 Apellido *
-                <input type="text" name="apellido" value="{{ datos.get('apellido', '') }}" required />
+                <input type="text" name="apellido" value="{{ datos.get('apellido', '') }}" maxlength="60" required />
             </label>
             <label>
                 Mail * (es su usuario para entrar)
                 <input type="email" name="mail" value="{{ datos.get('mail', '') }}" required />
             </label>
             <label>
-                Teléfono
-                <input type="tel" name="telefono" value="{{ datos.get('telefono', '') }}" />
+                Teléfono (09xxxxxxx)
+                <input type="tel" name="telefono" value="{{ datos.get('telefono', '') }}"
+                       inputmode="numeric" maxlength="9" pattern="09[0-9]{7}" placeholder="099123456"
+                       title="9 números, empezando con 09 (por ejemplo 099123456)" />
             </label>
             <label>
                 Fecha de nacimiento
-                <input type="date" name="fecha_nacimiento" value="{{ datos.get('fecha_nacimiento', '') }}" />
+                <input type="date" name="fecha_nacimiento" value="{{ datos.get('fecha_nacimiento', '') }}" max="{{ ayer_iso }}" />
             </label>
             <label>
                 Vencimiento del carné de salud
-                <input type="date" name="fecha_vencimiento_carne_salud" value="{{ datos.get('fecha_vencimiento_carne_salud', '') }}" />
+                <input type="date" name="fecha_vencimiento_carne_salud" value="{{ datos.get('fecha_vencimiento_carne_salud', '') }}" min="{{ manana_iso }}" />
             </label>
             <p class="nota">Al crearla se genera una contraseña temporal que te mostramos una sola vez.</p>
             <button type="submit" class="btn">Crear alumna</button>

@@ -124,7 +124,16 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     cae en cascada; incluye las 3 usuarias fijas del modo prueba).
   - **Crear a la profesora al entregar el sistema**: `python scripts/crear_profesora.py`
     (pide mail, nombre, apellido y contraseña por teclado; no pasan por el chat).
-  - Probado con 78 casos (rutas, roles, errores, sesión, seguridad en la base).
+  - **Validaciones del alta de alumna** (`app/validaciones.py`, una sola fuente de
+    verdad; el servidor valida y muestra TODOS los errores juntos; el navegador
+    refuerza con `pattern`/`min`/`max`): nombre y apellido = solo letras (acentos,
+    ñ, espacios simples, apóstrofe y guion; sin números ni símbolos; máx. 60);
+    mail = debe tener `@` y un dominio con punto; teléfono (opcional) = `09` +
+    7 dígitos (se aceptan espacios/guiones al escribirlo y se guarda
+    normalizado, ej. `099123456`); fecha de nacimiento (opcional) = **anterior a
+    hoy**; vencimiento del carné (opcional) = **posterior a hoy** (hoy no vale).
+    "Hoy" es la fecha de Montevideo (`clases.ahora()`).
+  - Probado con 101 casos de auth + 78 de validaciones (rutas, roles, errores, sesión, seguridad en la base).
   - Pendiente: **etapa 2** (reemplazar las policies abiertas a `anon` de
     `horario`/`clase`/`reserva`/`listadeespera` por policies por usuaria y rol, mover
     a la base la generación de clases y el contador de cupos), y quitar el modo

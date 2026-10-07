@@ -769,3 +769,12 @@ main.ancho {
 .vacio-izq a {
     color: var(--accent);
 }
+
+.lista-errores {
+    margin: 8px 0 0;
+    padding-left: 20px;
+}
+
+.lista-errores li {
+    margin: 4px 0;
+}

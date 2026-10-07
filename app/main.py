@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import auth, clases
+from app import auth, clases, validaciones
 from app.auth import ErrorAuth, Redirigir, Usuario, requiere_alumna, requiere_login, requiere_profesora
 from app.clases import ALUMNAS_PROVISORIAS, DIAS_ORDEN
 from app.db import get_supabase
@@ -432,9 +432,14 @@ def alumnas_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuar
     return _render(request, "profesora_alumnas.html", usuario, alumnas=filas, aviso=aviso, aviso_ok=bool(ok))
 
 
+def _fechas_formulario() -> dict:
+    hoy = clases.ahora().date()
+    return {"ayer_iso": (hoy - timedelta(days=1)).isoformat(), "manana_iso": (hoy + timedelta(days=1)).isoformat()}
+
+
 @app.get("/profesora/alumnas/nueva")
 def alumna_nueva_form(request: Request, usuario: Usuario = Depends(requiere_profesora)):
-    return _render(request, "profesora_alumna_nueva.html", usuario, datos={}, aviso="", aviso_ok=False)
+    return _render(request, "profesora_alumna_nueva.html", usuario, datos={}, errores=[], **_fechas_formulario())
 
 
 @app.post("/profesora/alumnas")
@@ -448,33 +453,25 @@ def alumna_crear(
     fecha_vencimiento_carne_salud: str = Form(""),
     usuario: Usuario = Depends(requiere_profesora),
 ):
-    datos = {
-        "nombre": nombre.strip(), "apellido": apellido.strip(), "mail": mail.strip().lower(),
-        "telefono": telefono.strip(), "fecha_nacimiento": fecha_nacimiento.strip(),
-        "fecha_vencimiento_carne_salud": fecha_vencimiento_carne_salud.strip(),
+    ingresados = {
+        "nombre": nombre, "apellido": apellido, "mail": mail, "telefono": telefono,
+        "fecha_nacimiento": fecha_nacimiento, "fecha_vencimiento_carne_salud": fecha_vencimiento_carne_salud,
     }
-    problema = ""
-    if not datos["nombre"] or not datos["apellido"]:
-        problema = "El nombre y el apellido son obligatorios."
-    else:
-        problema = auth.validar_mail(datos["mail"]) or ""
-    for campo in ("fecha_nacimiento", "fecha_vencimiento_carne_salud"):
-        if not problema and datos[campo] and _parse_fecha(datos[campo]) is None:
-            problema = "Una de las fechas no es válida."
-    if not problema:
+    datos, errores = validaciones.validar_alumna(ingresados, clases.ahora().date())
+    if not errores:
         try:
             _, contrasena = auth.crear_cuenta(
                 datos["mail"], datos["nombre"], datos["apellido"],
                 extras={k: datos[k] for k in ("telefono", "fecha_nacimiento", "fecha_vencimiento_carne_salud")},
             )
         except ErrorAuth as e:
-            problema = str(e)
+            errores = [str(e)]
         except Exception:
             logging.exception("Error al crear alumna")
-            problema = auth.MSG_GENERICO
-    if problema:
+            errores = [auth.MSG_GENERICO]
+    if errores:
         return _render(request, "profesora_alumna_nueva.html", usuario, status_code=400,
-                       datos=datos, aviso=problema, aviso_ok=False)
+                       datos={k: v.strip() for k, v in ingresados.items()}, errores=errores, **_fechas_formulario())
     return _render(
         request, "alumna_credenciales.html", usuario,
         titulo="Alumna creada", nombre=f"{datos['nombre']} {datos['apellido']}",
