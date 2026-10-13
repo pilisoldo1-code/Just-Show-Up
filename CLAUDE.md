@@ -79,7 +79,8 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     (`sb_acceso`, `sb_refresco`, SameSite=lax, `secure` en https); el servidor
     valida el token en cada pedido y lo **renueva solo** con el refresh token.
     Páginas privadas con `Cache-Control: no-store`.
-  - Rutas: públicas `/login`, `/api/health`, `/static`; alumna `/`, `/dia/*`,
+  - Rutas: públicas `/login`, `/olvide-contrasena`, `/restablecer-contrasena`,
+    `/api/health`, `/static`; alumna `/`, `/dia/*`,
     `/clases/*`, `/mis-inscripciones`, `/mi-historial`, `/mis-facturas`; solo profesora
     `/profesora/*`; cualquiera logueada `/perfil`, `/perfil/contrasena`,
     `/api/horario`. Sin sesión → `/login`; alumna en
@@ -116,7 +117,10 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     mail: falta cuenta de Resend + dominio propio verificado).
   - **Cuentas de prueba para la demo (creadas 2026-10-07)**:
     `profesora@prueba.invalid` (rol profesora) y `alumna@prueba.invalid`. Las
-    contraseñas se las dimos al usuario por el chat y **no se documentan acá**.
+    contraseñas **no se documentan acá**: están en el archivo local
+    `.env.cuentas-prueba` (ignorado por git, regenerado 2026-10-13). No se
+    pueden recuperar (Supabase guarda solo el hash): si se pierden, se
+    reinician con `auth.admin.update_user_by_id` y la service key.
     La de profesora es una administradora real en un sitio público: **borrarla
     antes de usar el sistema de verdad** y crear la profesora real con el script.
     Limpieza: borrar sus `reserva`/`listadeespera` y después
@@ -124,6 +128,14 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     cae en cascada; incluye las 3 usuarias fijas del modo prueba).
   - **Crear a la profesora al entregar el sistema**: `python scripts/crear_profesora.py`
     (pide mail, nombre, apellido y contraseña por teclado; no pasan por el chat).
+  - **Olvidé mi contraseña (hecho 2026-10-13, decisión del usuario: link por
+    mail de Supabase)**: link en `/login` → `/olvide-contrasena` (pide el mail y
+    siempre responde lo mismo, exista o no la cuenta) → mail de Supabase con un
+    link → `/restablecer-contrasena` (contraseña nueva + repetir) → `/login`. El
+    `redirect_to` solo se arma para los hosts de `auth.SITIOS_PERMITIDOS` (si se
+    suma un dominio, agregarlo ahí **y** en Supabase). El servidor solo acepta
+    sesiones del link (`amr` = `otp`), no una sesión de login normal. Probado con
+    23 casos + navegador.
   - **Validaciones del alta de alumna** (`app/validaciones.py`, una sola fuente de
     verdad; el servidor valida y muestra TODOS los errores juntos; el navegador
     refuerza con `pattern`/`min`/`max`): nombre y apellido = solo letras (acentos,
@@ -288,7 +300,11 @@ Para cada módulo, en este orden:
   vez, aunque el código esté bien. Pasó el 2026-10-06. Diagnóstico: `get_project`
   devuelve `status: INACTIVE`. Solución: `restore_project` (o botón *Restore*
   en el dashboard de Supabase); tarda ~3 min en volver y los datos se
-  conservan. Si dos deploys distintos fallan juntos, sospechar de Supabase
+  conservan (volvió a pasar el 2026-10-13; en el login se ve "No pudimos
+  completar la operación"). Ojo: durante la restauración el estado pasa por
+  `COMING_UP` y `RESTORING` y la base **parece vacía** (0 tablas, 0 usuarias) y
+  después da 500 intermitentes: no es pérdida de datos, esperar a que quede
+  estable antes de tocar nada. Si dos deploys distintos fallan juntos, sospechar de Supabase
   antes que de Vercel. Para evitarlo, entrar al sitio al menos una vez por
   semana (o programar un ping).
 
@@ -328,6 +344,24 @@ Para cada módulo, en este orden:
   de quien la cambia. Por eso `contrasena_cambiar` abre una sesión nueva
   automáticamente (fijando `request.state.tokens_nuevos`, que el middleware
   convierte en cookies). Sin eso la usuaria quedaba afuera apenas la cambiaba.
+- **Recuperación de contraseña — configuración en el dashboard de Supabase**:
+  (1) Authentication > URL Configuration > *Redirect URLs* tiene que incluir
+  `https://just-show-up-amber.vercel.app/**` y `https://just-show-up-theta.vercel.app/**`;
+  si no, Supabase ignora el `redirect_to` y manda al *Site URL* (hoy
+  `http://localhost:3000`, que no existe). localhost en cualquier puerto sí está
+  permitido. (2) El mailer gratis de Supabase solo entrega a mails de miembros
+  del equipo de la organización y ~2 por hora; para alumnas reales hace falta
+  SMTP propio (Resend). Con mails inexistentes (`*.invalid`) Supabase falla y la
+  app lo registra en el log sin decírselo a la usuaria.
+- **El link de recuperación trae la sesión después del `#`** (flujo implícito),
+  que nunca llega al servidor: un script en `restablecer_contrasena.html` la
+  pasa a campos ocultos del formulario y limpia la URL. Para probar sin mandar
+  mails: `auth.admin.generate_link({"type": "recovery", ...})` devuelve el link
+  (abrirlo lo gasta: sirve una sola vez).
+- **Servidor local**: `uvicorn app.main:app --port 8000 --env-file .env` (la app
+  no carga `.env` sola; sin `--env-file` da `KeyError: 'SUPABASE_URL'`). El
+  panel de preview del desktop no puede ejecutar el venv dentro de `~/Desktop`
+  (permiso de macOS): levantarlo con Bash en segundo plano.
 - **No insertar filas a mano en `auth.users` con SQL sin completar los campos
   de token** (`confirmation_token`, `recovery_token`, `email_change`, etc. deben
   ser `''`, no NULL): GoTrue falla con 500 "Database error finding users". Crear

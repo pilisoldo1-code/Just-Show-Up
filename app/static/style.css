@@ -538,6 +538,20 @@ main.ancho {
     margin-top: 16px;
 }
 
+.auth-link {
+    text-align: center;
+    margin: 14px 0 0;
+}
+
+.auth-link a {
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.auth-link a:hover {
+    color: var(--text);
+}
+
 .tabla-scroll {
     overflow-x: auto;
 }

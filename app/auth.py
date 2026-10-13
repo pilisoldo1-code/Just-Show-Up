@@ -1,3 +1,5 @@
+import base64
+import json
 import logging
 import os
 import secrets
@@ -24,6 +26,14 @@ MODO_PRUEBA = os.environ.get("ALUMNA_PRUEBA") == "1"
 MSG_CONEXION = "No pudimos conectarnos con el servidor. Revisá tu conexión y probá de nuevo."
 MSG_GENERICO = "No pudimos completar la operación. Probá de nuevo en unos minutos."
 MSG_SESION_VENCIDA = "Tu sesión venció. Iniciá sesión de nuevo."
+MSG_LINK_INVALIDO = "El link para restablecer la contraseña venció o ya se usó. Pedí uno nuevo."
+
+# Solo a estos sitios puede apuntar el link del mail: armarlo con cualquier Host
+# permitiría que alguien desvíe el link (y la sesión) a un dominio propio.
+SITIOS_PERMITIDOS = {
+    "localhost", "127.0.0.1",
+    "just-show-up-amber.vercel.app", "just-show-up-theta.vercel.app",
+}
 
 
 class ErrorAuth(Exception):
@@ -89,6 +99,8 @@ def traducir_error(error: Exception) -> str:
             return "Tu cuenta todavía no está confirmada."
         if codigo == "over_request_rate_limit" or getattr(error, "status", None) == 429:
             return "Hiciste demasiados intentos. Esperá unos minutos y probá de nuevo."
+        if codigo == "same_password" or "different from the old" in texto:
+            return "La contraseña nueva tiene que ser distinta a la anterior."
         if codigo == "validation_failed" or "valid email" in texto:
             return "El mail no es válido."
     logging.error("Error de Supabase Auth sin traducir: %r", error)
@@ -313,3 +325,60 @@ def cambiar_contrasena(usuario: Usuario, actual: str, nueva: str) -> None:
         cliente_admin().auth.admin.update_user_by_id(usuario.id, {"password": nueva})
     except (AuthError, httpx.HTTPError) as e:
         raise ErrorAuth(traducir_error(e)) from e
+
+
+# ---------- olvidé mi contraseña (link por mail de Supabase) ----------
+
+def url_restablecer(request: Request) -> Optional[str]:
+    if request.url.hostname not in SITIOS_PERMITIDOS:
+        return None
+    esquema = "https" if _es_https(request) else "http"
+    return f"{esquema}://{request.url.netloc}/restablecer-contrasena"
+
+
+def pedir_recuperacion(mail: str, redirect_to: Optional[str]) -> None:
+    """No informa si el mail existe: la respuesta es la misma en los dos casos."""
+    try:
+        cliente_nuevo().auth.reset_password_for_email(
+            mail, {"redirect_to": redirect_to} if redirect_to else {}
+        )
+    except AuthApiError as e:
+        if getattr(e, "status", None) == 429 or (getattr(e, "code", None) or "").startswith("over_"):
+            raise ErrorAuth("Ya pediste varios links. Esperá unos minutos y probá de nuevo.") from e
+        logging.warning("Supabase no envió el mail de recuperación: %r", e)
+    except httpx.HTTPError as e:
+        raise ErrorAuth(MSG_CONEXION) from e
+
+
+def _es_sesion_de_recuperacion(acceso: str) -> bool:
+    # Una sesión iniciada con contraseña tiene amr "password"; la del link del mail, "otp".
+    try:
+        carga = acceso.split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(carga + "=" * (-len(carga) % 4)))
+    except (IndexError, ValueError):
+        return False
+    return any(m.get("method") in ("otp", "recovery") for m in claims.get("amr") or [])
+
+
+def restablecer_contrasena(acceso: str, refresco: str, nueva: str) -> None:
+    problema = validar_contrasena(nueva)
+    if problema:
+        raise ErrorAuth(problema)
+    if not acceso or not refresco or not _es_sesion_de_recuperacion(acceso):
+        raise ErrorAuth(MSG_LINK_INVALIDO)
+    cliente = cliente_nuevo()
+    try:
+        cliente.auth.set_session(acceso, refresco)
+    except (AuthError, ValueError) as e:
+        raise ErrorAuth(MSG_LINK_INVALIDO) from e
+    except httpx.HTTPError as e:
+        raise ErrorAuth(MSG_CONEXION) from e
+    try:
+        cliente.auth.update_user({"password": nueva})
+    except (AuthError, httpx.HTTPError) as e:
+        # La sesión del link queda viva para que pueda corregir y reintentar.
+        raise ErrorAuth(traducir_error(e)) from e
+    try:
+        cliente.auth.sign_out()
+    except Exception:
+        logging.warning("No se pudo cerrar la sesión del link de recuperación.")
