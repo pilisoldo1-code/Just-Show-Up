@@ -346,8 +346,8 @@ Para cada módulo, en este orden:
   convierte en cookies). Sin eso la usuaria quedaba afuera apenas la cambiaba.
 - **Recuperación de contraseña — configuración en el dashboard de Supabase**:
   (1) Authentication > URL Configuration > *Redirect URLs* tiene que incluir
-  `https://just-show-up-amber.vercel.app/**` y `https://just-show-up-theta.vercel.app/**`;
-  si no, Supabase ignora el `redirect_to` y manda al *Site URL* (hoy
+  `https://just-show-up-amber.vercel.app/**` y `https://just-show-up-theta.vercel.app/**`
+  (cargadas y verificadas el 2026-10-13); si se suma otro dominio y no se agrega, Supabase ignora el `redirect_to` y manda al *Site URL* (hoy
   `http://localhost:3000`, que no existe). localhost en cualquier puerto sí está
   permitido. (2) El mailer gratis de Supabase solo entrega a mails de miembros
   del equipo de la organización y ~2 por hora; para alumnas reales hace falta
