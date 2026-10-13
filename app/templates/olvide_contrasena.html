@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Olvidé mi contraseña</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main class="auth-main">
+        <div class="auth-card">
+            <h1>Olvidé mi contraseña</h1>
+
+            {% if enviado %}
+            <div class="aviso aviso-ok">
+                Si hay una cuenta con <strong>{{ mail }}</strong>, te enviamos un mail con un link para
+                elegir una contraseña nueva. Revisá también la carpeta de spam.
+            </div>
+            <p class="nota auth-nota">El link vence en 1 hora y sirve una sola vez.</p>
+            {% else %}
+            <p class="subtitle">Ingresá el mail con el que entrás y te mandamos un link para elegir una contraseña nueva.</p>
+
+            {% if aviso %}
+            <div class="aviso aviso-error">{{ aviso }}</div>
+            {% endif %}
+
+            <form action="/olvide-contrasena" method="post" class="horario-form auth-form">
+                <label>
+                    Mail
+                    <input type="email" name="mail" value="{{ mail }}" autocomplete="username" required autofocus />
+                </label>
+                <button type="submit" class="btn btn-block">Enviarme el link</button>
+            </form>
+            {% endif %}
+
+            <p class="auth-link"><a href="/login">Volver a iniciar sesión</a></p>
+        </div>
+    </main>
+</body>
+</html>

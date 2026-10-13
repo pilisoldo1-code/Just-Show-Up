@@ -142,6 +142,56 @@ def logout(request: Request):
     return respuesta
 
 
+@app.get("/olvide-contrasena")
+def olvide_form(request: Request):
+    return _render(request, "olvide_contrasena.html", mail="", enviado=False, aviso="")
+
+
+@app.post("/olvide-contrasena")
+def olvide(request: Request, mail: str = Form("")):
+    mail = mail.strip().lower()
+    problema = auth.validar_mail(mail) if mail else "Ingresá tu mail."
+    if problema:
+        return _render(request, "olvide_contrasena.html", status_code=400, mail=mail, enviado=False, aviso=problema)
+    try:
+        auth.pedir_recuperacion(mail, auth.url_restablecer(request))
+    except ErrorAuth as e:
+        return _render(request, "olvide_contrasena.html", status_code=429, mail=mail, enviado=False, aviso=str(e))
+    return _render(request, "olvide_contrasena.html", mail=mail, enviado=True, aviso="")
+
+
+@app.get("/restablecer-contrasena")
+def restablecer_form(request: Request):
+    return _render(request, "restablecer_contrasena.html", aviso="")
+
+
+@app.post("/restablecer-contrasena")
+def restablecer(
+    request: Request,
+    acceso: str = Form(""),
+    refresco: str = Form(""),
+    nueva: str = Form(""),
+    repetir: str = Form(""),
+):
+    if nueva != repetir:
+        aviso = "Las contraseñas no coinciden."
+    else:
+        try:
+            auth.restablecer_contrasena(acceso, refresco, nueva)
+            aviso = ""
+        except ErrorAuth as e:
+            aviso = str(e)
+    if aviso:
+        return _render(request, "restablecer_contrasena.html", status_code=400, aviso=aviso,
+                       vencido=aviso == auth.MSG_LINK_INVALIDO, acceso=acceso, refresco=refresco)
+    respuesta = RedirectResponse(
+        url="/login?" + urlencode({"ok": 1, "aviso": "Listo, tu contraseña se cambió. Iniciá sesión con la nueva."}),
+        status_code=303,
+    )
+    auth.borrar_cookies(respuesta)
+    return respuesta
+
+
 _MESES_CORTOS = ["", "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
 
 

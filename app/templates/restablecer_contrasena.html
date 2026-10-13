@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Nueva contraseña</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main class="auth-main">
+        <div class="auth-card">
+            <h1>Nueva contraseña</h1>
+
+            <div id="link-invalido" {% if not vencido %}hidden{% endif %}>
+                <div class="aviso aviso-error">El link para restablecer la contraseña venció o ya se usó. Pedí uno nuevo.</div>
+                <a class="btn btn-block" href="/olvide-contrasena">Pedir un link nuevo</a>
+            </div>
+
+            <div id="formulario" {% if vencido or not acceso %}hidden{% endif %}>
+                <p class="subtitle">Elegí una contraseña de al menos 8 caracteres.</p>
+
+                {% if aviso and not vencido %}
+                <div class="aviso aviso-error">{{ aviso }}</div>
+                {% endif %}
+
+                <form action="/restablecer-contrasena" method="post" class="horario-form auth-form">
+                    <input type="hidden" name="acceso" id="acceso" value="{{ acceso or '' }}" />
+                    <input type="hidden" name="refresco" id="refresco" value="{{ refresco or '' }}" />
+                    <label>
+                        Contraseña nueva
+                        <input type="password" name="nueva" autocomplete="new-password" minlength="8" required />
+                    </label>
+                    <label>
+                        Repetir contraseña nueva
+                        <input type="password" name="repetir" autocomplete="new-password" minlength="8" required />
+                    </label>
+                    <button type="submit" class="btn btn-block">Guardar contraseña</button>
+                </form>
+            </div>
+
+            <p class="auth-link"><a href="/login">Volver a iniciar sesión</a></p>
+        </div>
+    </main>
+    {% if not vencido and not acceso %}
+    <script>
+        // Supabase manda la sesión del link después del "#", que no llega al servidor:
+        // se pasa al formulario y se borra de la barra de direcciones.
+        (function () {
+            var datos = new URLSearchParams(location.hash.slice(1));
+            history.replaceState(null, "", location.pathname);
+            var acceso = datos.get("access_token");
+            var refresco = datos.get("refresh_token");
+            if (datos.get("type") === "recovery" && acceso && refresco) {
+                document.getElementById("acceso").value = acceso;
+                document.getElementById("refresco").value = refresco;
+                document.getElementById("formulario").hidden = false;
+            } else {
+                document.getElementById("link-invalido").hidden = false;
+            }
+        })();
+    </script>
+    {% endif %}
+</body>
+</html>
