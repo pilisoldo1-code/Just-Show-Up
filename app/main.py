@@ -18,6 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent
 app = FastAPI(title="Just Show Up - Horarios")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
+templates.env.filters["nombre_dia"] = clases.nombre_dia
 
 TABLE = "horario"
 MESES = [
@@ -295,7 +296,7 @@ def dia(request: Request, fecha: str, ok: int = 0, aviso: str = "", usuario: Usu
     return _render(
         request, "dia.html", usuario,
         clases=clases.clases_entre(sb, f, f, usuario.id),
-        titulo_dia=f"{DIAS_ORDEN[f.weekday()].capitalize()} {f.day}/{f.month}",
+        titulo_dia=f"{clases.nombre_dia(f)} {f.day}/{f.month}",
         mensaje_plazo=clases.MENSAJE_PLAZO,
         semana=semana,
         fecha=f.isoformat(),
@@ -457,7 +458,7 @@ def profesora_clases(request: Request, usuario: Usuario = Depends(requiere_profe
     return _render(
         request, "profesora_clases.html", usuario,
         clases=clases.clases_del_dia(sb, hoy),
-        titulo_dia=f"{DIAS_ORDEN[hoy.weekday()].capitalize()} {hoy.day} de {MESES[hoy.month]}",
+        titulo_dia=f"{clases.nombre_dia(hoy)} {hoy.day} de {MESES[hoy.month]}",
     )
 
 

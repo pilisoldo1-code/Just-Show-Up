@@ -18,7 +18,7 @@
                 <select name="dia_semana" required>
                     {% for dia in dias %}
                     <option value="{{ dia }}" {{ 'selected' if horario and horario.dia_semana == dia else '' }}>
-                        {{ dia | capitalize }}
+                        {{ dia | nombre_dia }}
                     </option>
                     {% endfor %}
                 </select>
