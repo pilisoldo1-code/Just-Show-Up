@@ -126,6 +126,12 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     Limpieza: borrar sus `reserva`/`listadeespera` y después
     `delete from auth.users where email like '%@prueba.invalid'` (`profiles`
     cae en cascada; incluye las 3 usuarias fijas del modo prueba).
+  - **Datos de demo (cargados 2026-10-13)**: `python scripts/datos_demo.py crear`
+    crea 8 alumnas `@demo.invalid` con reservas pasadas (con asistencia),
+    futuras, una clase completa y lista de espera; `... borrar` elimina **solo**
+    eso (verificado: la base queda idéntica a antes). `sofia@demo.invalid` puede
+    iniciar sesión (contraseña en `.env.cuentas-prueba`). Las demás no tienen
+    contraseña conocida. Borrar antes de usar el sistema de verdad.
   - **Crear a la profesora al entregar el sistema**: `python scripts/crear_profesora.py`
     (pide mail, nombre, apellido y contraseña por teclado; no pasan por el chat).
   - **Olvidé mi contraseña (hecho 2026-10-13, decisión del usuario: link por
