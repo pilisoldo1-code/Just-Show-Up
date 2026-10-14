@@ -32,7 +32,7 @@
             <tbody>
                 {% for h in horarios %}
                 <tr>
-                    <td>{{ h.dia_semana | capitalize }}</td>
+                    <td>{{ h.dia_semana | nombre_dia }}</td>
                     <td>{{ h.hora_inicio[:5] }}</td>
                     <td>{{ h.duracion }} min</td>
                     <td>{{ h.cupo_max }}</td>

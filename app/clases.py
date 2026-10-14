@@ -5,6 +5,16 @@ from supabase import Client
 
 TZ = ZoneInfo("America/Montevideo")
 DIAS_ORDEN = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+# DIAS_ORDEN son los valores guardados en la base (sin tilde); esto es lo que se muestra.
+NOMBRES_DIA = {
+    "lunes": "Lunes", "martes": "Martes", "miercoles": "Miércoles", "jueves": "Jueves",
+    "viernes": "Viernes", "sabado": "Sábado", "domingo": "Domingo",
+}
+
+
+def nombre_dia(dia: str | date) -> str:
+    clave = DIAS_ORDEN[dia.weekday()] if isinstance(dia, date) else dia
+    return NOMBRES_DIA.get(clave, clave.capitalize())
 HORAS_LIMITE_CANCELACION = 1
 MENSAJE_PLAZO = (
     "El plazo de cancelación ya finalizó. "
@@ -86,7 +96,7 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
             {
                 "id": c["id"],
                 "fecha": c["fecha"],
-                "dia": c["horario"]["dia_semana"].capitalize(),
+                "dia": nombre_dia(c["horario"]["dia_semana"]),
                 "fecha_txt": f"{fecha.day}/{fecha.month}",
                 "hora": c["hora_inicio"][:5],
                 "duracion": c["duracion"],
@@ -169,7 +179,7 @@ def _item_clase(c: dict, **extra) -> dict:
     fecha = date.fromisoformat(c["fecha"])
     return {
         "fecha": c["fecha"],
-        "dia": DIAS_ORDEN[fecha.weekday()].capitalize(),
+        "dia": nombre_dia(fecha),
         "fecha_txt": f"{fecha.day}/{fecha.month}",
         "hora": c["hora_inicio"][:5],
         "duracion": c["duracion"],
@@ -284,7 +294,7 @@ def clase_con_asistencia(sb: Client, clase_id: int) -> dict | None:
     return {
         "id": c["id"],
         "fecha": fecha,
-        "titulo": f"{DIAS_ORDEN[fecha.weekday()].capitalize()} {fecha.day}/{fecha.month} · {c['hora_inicio'][:5]}",
+        "titulo": f"{nombre_dia(fecha)} {fecha.day}/{fecha.month} · {c['hora_inicio'][:5]}",
         "hora_fin": (_inicio_clase(c) + timedelta(minutes=c["duracion"])).strftime("%H:%M"),
         "hora": c["hora_inicio"][:5],
         "ventana": _ventana_asistencia(c),

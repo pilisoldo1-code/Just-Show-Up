@@ -439,6 +439,10 @@ Para cada módulo, en este orden:
 - Nombres de tablas/columnas en snake_case en español, tal como están en el
   documento de especificación (`dia_semana`, `hora_inicio`, etc.) — no
   traducir al inglés.
+- **Días de la semana**: en la base van sin tilde (`miercoles`, `sabado`; el
+  check de `horario.dia_semana` solo acepta esos valores). Para mostrarlos usar
+  siempre `clases.nombre_dia(...)` (o el filtro Jinja `| nombre_dia`), que da
+  "Miércoles"/"Sábado"; nunca `.capitalize()` sobre el valor guardado.
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
 - Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).
