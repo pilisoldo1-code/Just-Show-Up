@@ -10,18 +10,16 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import Request
 from fastapi.responses import Response
-from gotrue.errors import AuthApiError, AuthError
+from supabase_auth.errors import AuthApiError, AuthError
 from supabase import Client, create_client
 
 from app import validaciones
-from app.clases import ALUMNAS_PROVISORIAS
 
 COOKIE_ACCESO = "sb_acceso"
 COOKIE_REFRESCO = "sb_refresco"
 DURACION_COOKIE = 60 * 60 * 24 * 30
 LARGO_MINIMO_CONTRASENA = 8
 ALFABETO_TEMPORAL = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
-MODO_PRUEBA = os.environ.get("ALUMNA_PRUEBA") == "1"
 
 MSG_CONEXION = "No pudimos conectarnos con el servidor. Revisá tu conexión y probá de nuevo."
 MSG_GENERICO = "No pudimos completar la operación. Probá de nuevo en unos minutos."
@@ -54,7 +52,6 @@ class Usuario:
     apellido: str
     rol: str
     token: str = ""
-    es_prueba: bool = False
 
     @property
     def es_profesora(self) -> bool:
@@ -202,22 +199,10 @@ def _exigir_sesion(request: Request) -> Usuario:
         raise Redirigir(url_login(str(e)))
     if usuario is not None:
         return usuario
-    if MODO_PRUEBA and not (request.cookies.get(COOKIE_ACCESO) or request.cookies.get(COOKIE_REFRESCO)):
-        return alumna_de_prueba(request)
     tenia_sesion = bool(request.cookies.get(COOKIE_ACCESO) or request.cookies.get(COOKIE_REFRESCO))
     raise Redirigir(
         url_login(MSG_SESION_VENCIDA if tenia_sesion else ""),
         borrar_cookies=tenia_sesion,
-    )
-
-
-def alumna_de_prueba(request: Request) -> Usuario:
-    elegida = request.cookies.get("alumna_id")
-    if elegida not in ALUMNAS_PROVISORIAS:
-        elegida = next(iter(ALUMNAS_PROVISORIAS))
-    return Usuario(
-        id=elegida, mail="", nombre=ALUMNAS_PROVISORIAS[elegida], apellido="",
-        rol="alumna", es_prueba=True,
     )
 
 
