@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Clases de hoy</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>Clases de hoy</h1>
+        <p class="subtitle">{{ titulo_dia }}</p>
+
+        {% if clases %}
+        <div class="cards">
+            {% for c in clases %}
+            <a class="card card-link {{ 'card-pasada' if c.ventana == 'cerrada' else '' }} {{ 'card-inscripta' if c.ventana == 'abierta' else '' }}"
+               href="/profesora/clases/{{ c.id }}">
+                <div class="card-hora">{{ c.hora }}</div>
+                <ul class="card-datos">
+                    <li>Duración: {{ c.duracion }} min</li>
+                    <li>Reservas: {{ c.reservadas }} de {{ c.cupo_max }}</li>
+                </ul>
+                <div class="card-accion">
+                    {% if c.ventana == 'abierta' %}
+                    <span class="badge badge-on">En curso · marcar asistencia</span>
+                    {% elif c.ventana == 'antes' %}
+                    <span class="badge badge-off">Todavía no empezó</span>
+                    {% else %}
+                    <span class="badge badge-off">Finalizada</span>
+                    {% endif %}
+                    <span class="ver-dia">Ver listado ›</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="vacio">Hoy no hay clases.</p>
+        {% endif %}
+    </main>
+</body>
+</html>

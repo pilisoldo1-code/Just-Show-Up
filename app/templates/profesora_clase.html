@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Asistencia</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>{{ clase.titulo }}</h1>
+        <p class="subtitle"><a href="/profesora/clases">‹ Volver a las clases de hoy</a></p>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        {% if clase.ventana == 'antes' %}
+        <p class="nota">La asistencia se marca durante la clase, de {{ clase.hora }} a {{ clase.hora_fin }}.</p>
+        {% elif clase.ventana == 'cerrada' %}
+        <p class="nota">La clase terminó a las {{ clase.hora_fin }}: la asistencia ya no se puede modificar.</p>
+        {% endif %}
+
+        {% if clase.alumnas %}
+        <p class="asistencia-resumen">
+            {{ clase.alumnas | length }} reservadas · {{ clase.presentes }} presentes · {{ clase.ausentes }} ausentes
+        </p>
+        <div class="tabla-scroll">
+            <table class="horario-table asistencia-tabla">
+                <thead>
+                    <tr>
+                        <th>Alumna</th>
+                        <th class="col-box">Presente</th>
+                        <th class="col-box">Ausente</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in clase.alumnas %}
+                    <tr>
+                        <td>{{ a.nombre }}</td>
+                        {% for valor in ['presente', 'ausente'] %}
+                        <td class="col-box">
+                            <form action="/profesora/clases/{{ clase.id }}/asistencia" method="post">
+                                <input type="hidden" name="id_reserva" value="{{ a.id_reserva }}" />
+                                <input type="radio" class="box box-{{ valor }}" name="estado" value="{{ valor }}"
+                                       aria-label="{{ valor | capitalize }}: {{ a.nombre }}"
+                                       {{ 'checked' if a.estado == valor else '' }}
+                                       {{ '' if clase.ventana == 'abierta' else 'disabled' }}
+                                       onchange="this.form.submit()" />
+                            </form>
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="vacio">Nadie reservó esta clase.</p>
+        {% endif %}
+    </main>
+</body>
+</html>

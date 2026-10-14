@@ -206,3 +206,87 @@ def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
     en_espera.sort(key=lambda i: i["inicio"])
     historial.sort(key=lambda i: i["inicio"], reverse=True)
     return {"proximas": proximas, "en_espera": en_espera, "historial": historial}
+
+
+# ---------- profesora: clases del día y asistencia ----------
+
+def _ventana_asistencia(c: dict) -> str:
+    """antes | abierta | cerrada: solo se marca mientras dura la clase."""
+    inicio = _inicio_clase(c)
+    ahora_dt = ahora()
+    if ahora_dt < inicio:
+        return "antes"
+    if ahora_dt <= inicio + timedelta(minutes=c["duracion"]):
+        return "abierta"
+    return "cerrada"
+
+
+def clases_del_dia(sb: Client, fecha: date) -> list[dict]:
+    filas = (
+        sb.table("clase").select("*, horario(cupo_max, activo)")
+        .eq("fecha", fecha.isoformat()).eq("estado", "programada")
+        .order("hora_inicio").execute().data
+    )
+    filas = [c for c in filas if c["horario"] and c["horario"]["activo"]]
+    if not filas:
+        return []
+    confirmadas = {
+        r["id_clase"]: r["cantidad"]
+        for r in sb.rpc("reservas_confirmadas", {"p_ids": [c["id"] for c in filas]}).execute().data
+    }
+    return [
+        {
+            "id": c["id"],
+            "hora": c["hora_inicio"][:5],
+            "duracion": c["duracion"],
+            "cupo_max": c["horario"]["cupo_max"],
+            "reservadas": confirmadas.get(c["id"], 0),
+            "ventana": _ventana_asistencia(c),
+        }
+        for c in filas
+    ]
+
+
+def clase_con_asistencia(sb: Client, clase_id: int) -> dict | None:
+    filas = sb.table("clase").select("*").eq("id", clase_id).execute().data
+    if not filas:
+        return None
+    c = filas[0]
+    reservas = (
+        sb.table("reserva").select("id, profiles(nombre, apellido), asistencia(estado)")
+        .eq("id_clase", clase_id).eq("estado", "confirmada").execute().data
+    )
+    alumnas = []
+    for r in reservas:
+        asistencia = r["asistencia"]
+        if isinstance(asistencia, list):
+            asistencia = asistencia[0] if asistencia else None
+        alumnas.append({
+            "id_reserva": r["id"],
+            "nombre": f"{r['profiles']['nombre']} {r['profiles']['apellido']}",
+            "estado": asistencia["estado"] if asistencia else None,
+        })
+    alumnas.sort(key=lambda a: a["nombre"].lower())
+    fecha = date.fromisoformat(c["fecha"])
+    return {
+        "id": c["id"],
+        "fecha": fecha,
+        "titulo": f"{DIAS_ORDEN[fecha.weekday()].capitalize()} {fecha.day}/{fecha.month} · {c['hora_inicio'][:5]}",
+        "hora_fin": (_inicio_clase(c) + timedelta(minutes=c["duracion"])).strftime("%H:%M"),
+        "hora": c["hora_inicio"][:5],
+        "ventana": _ventana_asistencia(c),
+        "alumnas": alumnas,
+        "presentes": sum(a["estado"] == "presente" for a in alumnas),
+        "ausentes": sum(a["estado"] == "ausente" for a in alumnas),
+    }
+
+
+def marcar_asistencia(sb: Client, id_reserva: int, estado: str) -> tuple[bool, str]:
+    if estado not in ("presente", "ausente"):
+        return False, "Elegí presente o ausente."
+    resultado = sb.rpc("marcar_asistencia", {"p_id_reserva": id_reserva, "p_estado": estado}).execute().data
+    return {
+        "ok": (True, "Asistencia guardada."),
+        "fuera_de_horario": (False, "La asistencia solo se puede marcar el día de la clase, mientras dura."),
+        "no_autorizada": (False, "Solo la profesora puede marcar asistencia."),
+    }.get(resultado, (False, "Esa alumna ya no tiene reserva en esta clase."))

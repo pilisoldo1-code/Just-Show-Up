@@ -79,7 +79,7 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     (`sb_acceso`, `sb_refresco`, SameSite=lax, `secure` en https); el servidor
     valida el token en cada pedido y lo **renueva solo** con el refresh token.
     Páginas privadas con `Cache-Control: no-store`.
-  - Rutas: públicas `/login`, `/olvide-contrasena`, `/restablecer-contrasena`,
+  - Rutas (la profesora además tiene `/profesora/clases/*`): públicas `/login`, `/olvide-contrasena`, `/restablecer-contrasena`,
     `/api/health`, `/static`; alumna `/`, `/dia/*`,
     `/clases/*`, `/mis-inscripciones`, `/mi-historial`, `/mis-facturas`; solo profesora
     `/profesora/*`; cualquiera logueada `/perfil`, `/perfil/contrasena`,
@@ -163,6 +163,22 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   - **Fase 2 PENDIENTE**: `supabase/pendientes/auth_etapa2_cerrar_anon.sql`
     quita las políticas abiertas a `anon`. **Aplicarla solo cuando amber y theta
     tengan este código**: con el código viejo los sitios dejan de funcionar.
+- **Asistencia — pantalla de la profesora (hecha 2026-10-13)**. Menú de la
+  profesora: Horarios · **Clases** · Alumnas. `/profesora/clases` = clases de
+  **hoy** (genera la semana si falta); `/profesora/clases/{id}` = listado de
+  alumnas con reserva confirmada y dos boxes, **Presente** y **Ausente**
+  (radios con aspecto de checkbox: marcar uno desmarca el otro, se guarda al
+  hacer click). Decisiones del usuario: solo la profesora marca; antes de la
+  clase no hay nada marcado; **solo se puede marcar el día de la clase y
+  mientras dura** (de la hora de inicio a inicio + duración, hora de Montevideo);
+  antes o después los boxes están bloqueados y la base también lo rechaza.
+  Tabla `asistencia` (id, id_reserva **único**, estado presente/ausente): una
+  sola fila por reserva = no puede estar presente y ausente a la vez; sin fila =
+  sin marcar. Se escribe solo con la función `marcar_asistencia` (verifica
+  profesora, reserva confirmada y horario). Cada alumna lee solo la suya.
+  Probado con 31 casos + navegador (escritorio y celular). **Pendiente
+  (próximo paso pedido por el usuario): mostrar la asistencia en la pantalla de
+  la alumna / Mi historial.**
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -221,7 +237,7 @@ en la web, no solo cambios de esquema.
    "mis próximas reservas".
 4. **Lista de espera** — **parcial**: anotarse y ver la posición. Falta ofrecer
    el cupo liberado (30 min), notificar y salir de la lista.
-5. **Asistencia** — la profesora marca presente/ausente.
+5. **Asistencia** — **pantalla de la profesora hecha**; falta mostrarla a la alumna (historial).
 6. **Resumen mensual y pagos** — cálculo automático + registro de pagos
    (Mercado Pago para pagos, ver Stack).
 7. **Suscripción y clases grabadas** — biblioteca de videos con gate de
@@ -341,6 +357,10 @@ Para cada módulo, en este orden:
   Vercel corre en UTC. Toda comparación de "ahora" va por `clases.ahora()`
   (usa `zoneinfo`; `tzdata` está en `requirements.txt` porque el runtime no
   garantiza la base de zonas horarias). No usar `date.today()` ni `datetime.now()`.
+- **El linter de Supabase avisa "Signed-In Users Can Execute SECURITY DEFINER
+  Function"** para `reservar`, `cancelar_reserva`, `anotar_en_espera`,
+  `reservas_confirmadas`, `generar_clases`, `marcar_asistencia` y `es_profesora`:
+  es intencional (son la única vía de escritura y validan adentro quién llama).
 - **Cupos**: la fuente de verdad son las filas de `reserva` con
   `estado='confirmada'`; los "lugares disponibles" salen de la función
   `reservas_confirmadas` (las alumnas no pueden contar reservas ajenas por RLS).
