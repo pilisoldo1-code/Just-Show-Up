@@ -11,8 +11,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import auth, clases, validaciones
 from app.auth import ErrorAuth, Redirigir, Usuario, requiere_alumna, requiere_login, requiere_profesora
-from app.clases import ALUMNAS_PROVISORIAS, DIAS_ORDEN
-from app.db import get_supabase
+from app.clases import DIAS_ORDEN
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -48,7 +47,7 @@ async def _sesion_y_cache(request: Request, call_next):
 
 
 def _render(request: Request, plantilla: str, usuario: Usuario | None = None, status_code: int = 200, **contexto):
-    contexto.update({"request": request, "usuario": usuario, "modo_prueba": auth.MODO_PRUEBA})
+    contexto.update({"request": request, "usuario": usuario})
     return templates.TemplateResponse(plantilla, contexto, status_code=status_code)
 
 
@@ -72,9 +71,13 @@ def _orden_horario(row: dict) -> tuple:
     return (DIAS_ORDEN.index(row["dia_semana"]), row["hora_inicio"])
 
 
-def _get_horarios() -> list[dict]:
-    supabase = get_supabase()
-    result = supabase.table(TABLE).select("*").eq("activo", True).execute()
+def _sb(usuario: Usuario):
+    """Cliente de Supabase con la sesión de la usuaria: las políticas RLS se aplican a ella."""
+    return auth.cliente_con_token(usuario.token)
+
+
+def _get_horarios(sb) -> list[dict]:
+    result = sb.table(TABLE).select("*").eq("activo", True).execute()
     return sorted(result.data, key=_orden_horario)
 
 
@@ -92,9 +95,9 @@ def _volver(fecha: str, ok: bool, aviso: str) -> RedirectResponse:
     return RedirectResponse(url=f"{destino}?{query}", status_code=303)
 
 
-def _ejecutar(accion, alumna_id: str, clase_id: int) -> tuple[bool, str]:
+def _ejecutar(accion, usuario: Usuario, clase_id: int) -> tuple[bool, str]:
     try:
-        return accion(alumna_id, clase_id)
+        return accion(_sb(usuario), clase_id)
     except Exception:
         logging.exception("Error en %s", accion.__name__)
         return False, "Ocurrió un error, probá de nuevo."
@@ -203,8 +206,6 @@ def _fecha_legible(iso: str | None) -> str:
 def _datos_perfil(usuario: Usuario) -> dict:
     datos = {"nombre": usuario.nombre, "apellido": usuario.apellido, "mail": usuario.mail,
              "telefono": "", "fecha_nacimiento": "", "fecha_vencimiento_carne_salud": ""}
-    if usuario.es_prueba:
-        return datos
     try:
         filas = (
             auth.cliente_con_token(usuario.token).table("profiles")
@@ -234,8 +235,6 @@ def perfil_contrasena(
     repetir: str = Form(""),
     usuario: Usuario = Depends(requiere_login),
 ):
-    if usuario.es_prueba:
-        return RedirectResponse(url="/perfil", status_code=303)
     aviso = ""
     if nueva != repetir:
         aviso = "Las contraseñas nuevas no coinciden."
@@ -267,8 +266,9 @@ def perfil_contrasena(
 def home(request: Request, semana: int = 0, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_alumna)):
     semana = max(0, min(semana, SEMANAS_HACIA_ADELANTE))
     inicio, fin = _rango_semana(semana)
-    clases.generar_clases(inicio)
-    dias = clases.agrupar_por_dia(clases.clases_entre(inicio, fin, usuario.id))
+    sb = _sb(usuario)
+    clases.generar_clases(sb, inicio)
+    dias = clases.agrupar_por_dia(clases.clases_entre(sb, inicio, fin, usuario.id))
     return _render(
         request, "index.html", usuario,
         dias=dias,
@@ -276,8 +276,6 @@ def home(request: Request, semana: int = 0, ok: int = 0, aviso: str = "", usuari
         rango_semana=_formato_rango(inicio, fin),
         hay_semana_anterior=semana > 0,
         hay_semana_siguiente=semana < SEMANAS_HACIA_ADELANTE,
-        alumnas=ALUMNAS_PROVISORIAS,
-        alumna_id=usuario.id,
         fecha="",
         aviso=aviso,
         aviso_ok=bool(ok),
@@ -292,15 +290,14 @@ def dia(request: Request, fecha: str, ok: int = 0, aviso: str = "", usuario: Usu
     semana = clases.offset_semana(f)
     if not 0 <= semana <= SEMANAS_HACIA_ADELANTE:
         return RedirectResponse(url="/", status_code=303)
-    clases.generar_clases(f - timedelta(days=f.weekday()))
+    sb = _sb(usuario)
+    clases.generar_clases(sb, f - timedelta(days=f.weekday()))
     return _render(
         request, "dia.html", usuario,
-        clases=clases.clases_entre(f, f, usuario.id),
+        clases=clases.clases_entre(sb, f, f, usuario.id),
         titulo_dia=f"{DIAS_ORDEN[f.weekday()].capitalize()} {f.day}/{f.month}",
         mensaje_plazo=clases.MENSAJE_PLAZO,
         semana=semana,
-        alumnas=ALUMNAS_PROVISORIAS,
-        alumna_id=usuario.id,
         fecha=f.isoformat(),
         aviso=aviso,
         aviso_ok=bool(ok),
@@ -310,7 +307,7 @@ def dia(request: Request, fecha: str, ok: int = 0, aviso: str = "", usuario: Usu
 @app.get("/mis-inscripciones")
 def mis_inscripciones(request: Request, usuario: Usuario = Depends(requiere_alumna)):
     try:
-        datos = clases.mis_inscripciones(usuario.id)
+        datos = clases.mis_inscripciones(_sb(usuario), usuario.id)
         aviso = ""
     except Exception:
         logging.exception("No se pudieron cargar las inscripciones")
@@ -321,7 +318,7 @@ def mis_inscripciones(request: Request, usuario: Usuario = Depends(requiere_alum
 @app.get("/mi-historial")
 def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
     try:
-        historial = clases.mis_inscripciones(usuario.id)["historial"]
+        historial = clases.mis_inscripciones(_sb(usuario), usuario.id)["historial"]
         aviso = ""
     except Exception:
         logging.exception("No se pudo cargar el historial")
@@ -334,41 +331,27 @@ def mis_facturas(request: Request, usuario: Usuario = Depends(requiere_alumna)):
     return _render(request, "mis_facturas.html", usuario)
 
 
-@app.post("/alumna/elegir")
-def elegir_alumna(
-    alumna_id: str = Form(...), semana: int = Form(0), fecha: str = Form("")
-):
-    f = _parse_fecha(fecha)
-    destino = f"/dia/{f.isoformat()}" if f else f"/?semana={semana}"
-    respuesta = RedirectResponse(url=destino, status_code=303)
-    if auth.MODO_PRUEBA and alumna_id in ALUMNAS_PROVISORIAS:
-        respuesta.set_cookie(
-            "alumna_id", alumna_id, max_age=60 * 60 * 24 * 30, httponly=True, samesite="lax"
-        )
-    return respuesta
-
-
 @app.post("/clases/{clase_id}/inscribirse")
 def inscribirse(clase_id: int, fecha: str = Form(""), usuario: Usuario = Depends(requiere_alumna)):
-    ok, aviso = _ejecutar(clases.inscribirse, usuario.id, clase_id)
+    ok, aviso = _ejecutar(clases.inscribirse, usuario, clase_id)
     return _volver(fecha, ok, aviso)
 
 
 @app.post("/clases/{clase_id}/cancelar")
 def cancelar_inscripcion(clase_id: int, fecha: str = Form(""), usuario: Usuario = Depends(requiere_alumna)):
-    ok, aviso = _ejecutar(clases.cancelar, usuario.id, clase_id)
+    ok, aviso = _ejecutar(clases.cancelar, usuario, clase_id)
     return _volver(fecha, ok, aviso)
 
 
 @app.post("/clases/{clase_id}/lista-espera")
 def anotarse_en_espera(clase_id: int, fecha: str = Form(""), usuario: Usuario = Depends(requiere_alumna)):
-    ok, aviso = _ejecutar(clases.anotar_en_espera, usuario.id, clase_id)
+    ok, aviso = _ejecutar(clases.anotar_en_espera, usuario, clase_id)
     return _volver(fecha, ok, aviso)
 
 
 @app.get("/api/horario")
 def api_horario(usuario: Usuario = Depends(requiere_login)):
-    return _get_horarios()
+    return _get_horarios(_sb(usuario))
 
 
 @app.get("/api/health")
@@ -380,7 +363,7 @@ def health():
 
 @app.get("/profesora/horarios")
 def profesora_horarios(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_profesora)):
-    supabase = get_supabase()
+    supabase = _sb(usuario)
     result = supabase.table(TABLE).select("*").execute()
     horarios = sorted(result.data, key=_orden_horario)
     return _render(request, "profesora_horarios.html", usuario, horarios=horarios,
@@ -405,7 +388,7 @@ def crear_horario(
     activo: bool = Form(False),
     usuario: Usuario = Depends(requiere_profesora),
 ):
-    supabase = get_supabase()
+    supabase = _sb(usuario)
     supabase.table(TABLE).insert(
         {
             "dia_semana": dia_semana,
@@ -421,7 +404,7 @@ def crear_horario(
 
 @app.get("/profesora/horarios/{horario_id}/editar")
 def editar_horario_form(request: Request, horario_id: int, usuario: Usuario = Depends(requiere_profesora)):
-    supabase = get_supabase()
+    supabase = _sb(usuario)
     result = supabase.table(TABLE).select("*").eq("id", horario_id).single().execute()
     return _render(
         request, "profesora_horario_form.html", usuario,
@@ -440,7 +423,7 @@ def actualizar_horario(
     activo: bool = Form(False),
     usuario: Usuario = Depends(requiere_profesora),
 ):
-    supabase = get_supabase()
+    supabase = _sb(usuario)
     supabase.table(TABLE).update(
         {
             "dia_semana": dia_semana,
@@ -456,7 +439,7 @@ def actualizar_horario(
 
 @app.post("/profesora/horarios/{horario_id}/toggle")
 def toggle_horario(horario_id: int, usuario: Usuario = Depends(requiere_profesora)):
-    supabase = get_supabase()
+    supabase = _sb(usuario)
     actual = supabase.table(TABLE).select("activo").eq("id", horario_id).single().execute()
     supabase.table(TABLE).update({"activo": not actual.data["activo"]}).eq(
         "id", horario_id

@@ -1,8 +1,7 @@
-from collections import Counter
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from app.db import get_supabase
+from supabase import Client
 
 TZ = ZoneInfo("America/Montevideo")
 DIAS_ORDEN = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
@@ -11,13 +10,6 @@ MENSAJE_PLAZO = (
     "El plazo de cancelación ya finalizó. "
     "Las cancelaciones deben realizarse al menos 1 hora antes de la clase."
 )
-
-# PROVISORIO hasta que exista Supabase Auth: alumnas de prueba para elegir en la grilla.
-ALUMNAS_PROVISORIAS = {
-    "a0000000-0000-4000-8000-000000000001": "Alumna Uno",
-    "a0000000-0000-4000-8000-000000000002": "Alumna Dos",
-    "a0000000-0000-4000-8000-000000000003": "Alumna Tres",
-}
 
 
 def ahora() -> datetime:
@@ -32,27 +24,11 @@ def _inicio_clase(clase: dict) -> datetime:
     )
 
 
-def generar_clases(inicio_semana: date) -> None:
-    sb = get_supabase()
-    horarios = sb.table("horario").select("*").eq("activo", True).execute().data
-    filas = [
-        {
-            "id_horario": h["id"],
-            "fecha": (inicio_semana + timedelta(days=DIAS_ORDEN.index(h["dia_semana"]))).isoformat(),
-            "hora_inicio": h["hora_inicio"],
-            "duracion": h["duracion"],
-            "precio": h["precio"],
-        }
-        for h in horarios
-    ]
-    if filas:
-        sb.table("clase").upsert(
-            filas, on_conflict="id_horario,fecha", ignore_duplicates=True
-        ).execute()
+def generar_clases(sb: Client, inicio_semana: date) -> None:
+    sb.rpc("generar_clases", {"p_lunes": inicio_semana.isoformat()}).execute()
 
 
-def clases_entre(inicio: date, fin: date, alumna_id: str) -> list[dict]:
-    sb = get_supabase()
+def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[dict]:
     clases = (
         sb.table("clase")
         .select("*, horario(cupo_max, activo, dia_semana)")
@@ -81,18 +57,18 @@ def clases_entre(inicio: date, fin: date, alumna_id: str) -> list[dict]:
         .execute().data
     }
 
-    confirmadas = Counter(
-        r["id_clase"]
-        for r in sb.table("reserva").select("id_clase")
-        .eq("estado", "confirmada").in_("id_clase", ids).execute().data
-    )
+    # Las alumnas solo ven sus propias reservas: el total por clase lo cuenta la base.
+    confirmadas = {
+        r["id_clase"]: r["cantidad"]
+        for r in sb.rpc("reservas_confirmadas", {"p_ids": ids}).execute().data
+    }
 
     ahora_dt = ahora()
     tarjetas = []
     for c in clases:
         inicio_dt = _inicio_clase(c)
         cupo_max = c["horario"]["cupo_max"]
-        disponibles = max(0, cupo_max - confirmadas[c["id"]])
+        disponibles = max(0, cupo_max - confirmadas.get(c["id"], 0))
         fecha = date.fromisoformat(c["fecha"])
 
         if inicio_dt <= ahora_dt:
@@ -157,111 +133,36 @@ def agrupar_por_dia(clases: list[dict]) -> list[dict]:
     return list(dias.values())
 
 
-def _confirmadas(clase_id: int) -> int:
-    return (
-        get_supabase().table("reserva").select("id", count="exact")
-        .eq("id_clase", clase_id).eq("estado", "confirmada").execute().count
-    )
+# Reservar, cancelar y anotarse en espera los hace la base (funciones SQL) con la
+# sesión de la alumna: valida cupo y plazos con la clase bloqueada, sin sobreventa.
+
+def inscribirse(sb: Client, clase_id: int) -> tuple[bool, str]:
+    resultado = sb.rpc("reservar", {"p_id_clase": clase_id}).execute().data
+    return {
+        "ok": (True, "¡Reserva confirmada! Tenés un lugar en la clase."),
+        "ya_reservada": (False, "Ya tenés esta clase reservada."),
+        "completa": (False, "Clase completa. Podés anotarte en la lista de espera."),
+    }.get(resultado, (False, "La clase ya no está disponible."))
 
 
-def _sincronizar_inscriptas(clase_id: int) -> None:
-    get_supabase().table("clase").update(
-        {"cantidad_inscriptas": _confirmadas(clase_id)}
-    ).eq("id", clase_id).execute()
+def cancelar(sb: Client, clase_id: int) -> tuple[bool, str]:
+    resultado = sb.rpc("cancelar_reserva", {"p_id_clase": clase_id}).execute().data
+    return {
+        "ok": (True, "Tu reserva fue cancelada. El lugar quedó liberado."),
+        "iniciada": (False, "La clase ya comenzó, no se puede cancelar la reserva."),
+        "plazo_vencido": (False, MENSAJE_PLAZO),
+    }.get(resultado, (False, "No tenés una reserva activa en esta clase."))
 
 
-def _clase(clase_id: int) -> dict:
-    return (
-        get_supabase().table("clase").select("*, horario(cupo_max)")
-        .eq("id", clase_id).single().execute().data
-    )
-
-
-def _reserva_activa(alumna_id: str, clase_id: int) -> list[dict]:
-    return (
-        get_supabase().table("reserva").select("id")
-        .eq("id_alumna", alumna_id).eq("id_clase", clase_id).eq("estado", "confirmada")
-        .execute().data
-    )
-
-
-def inscribirse(alumna_id: str, clase_id: int) -> tuple[bool, str]:
-    sb = get_supabase()
-    clase = _clase(clase_id)
-    if clase["estado"] != "programada" or ahora() >= _inicio_clase(clase):
-        return False, "La clase ya no está disponible."
-    if _reserva_activa(alumna_id, clase_id):
-        return False, "Ya tenés esta clase reservada."
-    cupo = clase["horario"]["cupo_max"]
-    if _confirmadas(clase_id) >= cupo:
-        return False, "Clase completa. Podés anotarte en la lista de espera."
-
-    nueva = sb.table("reserva").insert(
-        {"id_alumna": alumna_id, "id_clase": clase_id}
-    ).execute().data[0]
-
-    if _confirmadas(clase_id) > cupo:
-        sb.table("reserva").update(
-            {"estado": "cancelada", "fecha_cancelacion": ahora().isoformat()}
-        ).eq("id", nueva["id"]).execute()
-        _sincronizar_inscriptas(clase_id)
-        return False, "La clase se completó justo antes de tu reserva."
-
-    _sincronizar_inscriptas(clase_id)
-    sb.table("listadeespera").update({"estado": "confirmado"}).eq(
-        "id_alumna", alumna_id
-    ).eq("id_clase", clase_id).in_("estado", ["en_espera", "ofrecido"]).execute()
-    return True, "¡Reserva confirmada! Tenés un lugar en la clase."
-
-
-def cancelar(alumna_id: str, clase_id: int) -> tuple[bool, str]:
-    reservas = _reserva_activa(alumna_id, clase_id)
-    if not reservas:
-        return False, "No tenés una reserva activa en esta clase."
-
-    inicio = _inicio_clase(_clase(clase_id))
-    ahora_dt = ahora()
-    if ahora_dt >= inicio:
-        return False, "La clase ya comenzó, no se puede cancelar la reserva."
-    if ahora_dt > inicio - timedelta(hours=HORAS_LIMITE_CANCELACION):
-        return False, MENSAJE_PLAZO
-
-    # UPDATE condicionado a estado='confirmada': si dos pedidos llegan a la vez,
-    # solo uno modifica la fila y el otro no encuentra nada para actualizar.
-    actualizadas = (
-        get_supabase().table("reserva")
-        .update({"estado": "cancelada", "fecha_cancelacion": ahora_dt.isoformat()})
-        .eq("id", reservas[0]["id"]).eq("estado", "confirmada")
-        .execute().data
-    )
-    if not actualizadas:
-        return False, "Esa reserva ya estaba cancelada."
-    _sincronizar_inscriptas(clase_id)
-    return True, "Tu reserva fue cancelada. El lugar quedó liberado."
-
-
-def anotar_en_espera(alumna_id: str, clase_id: int) -> tuple[bool, str]:
-    sb = get_supabase()
-    clase = _clase(clase_id)
-    if clase["estado"] != "programada" or ahora() >= _inicio_clase(clase):
-        return False, "La clase ya no está disponible."
-    if _confirmadas(clase_id) < clase["horario"]["cupo_max"]:
-        return False, "Hay lugares disponibles, podés reservar la clase directamente."
-    if _reserva_activa(alumna_id, clase_id):
-        return False, "Ya tenés esta clase reservada."
-
-    activas = (
-        sb.table("listadeespera").select("id_alumna")
-        .eq("id_clase", clase_id).in_("estado", ["en_espera", "ofrecido"]).execute().data
-    )
-    if any(a["id_alumna"] == alumna_id for a in activas):
-        return False, "Ya estás en la lista de espera."
-
-    posicion = len(activas) + 1
-    sb.table("listadeespera").insert(
-        {"id_alumna": alumna_id, "id_clase": clase_id, "posicion": posicion}
-    ).execute()
-    return True, f"Quedaste en la lista de espera (posición {posicion})."
+def anotar_en_espera(sb: Client, clase_id: int) -> tuple[bool, str]:
+    r = sb.rpc("anotar_en_espera", {"p_id_clase": clase_id}).execute().data
+    if r["resultado"] == "ok":
+        return True, f"Quedaste en la lista de espera (posición {r['posicion']})."
+    return False, {
+        "hay_lugar": "Hay lugares disponibles, podés reservar la clase directamente.",
+        "ya_reservada": "Ya tenés esta clase reservada.",
+        "ya_en_espera": "Ya estás en la lista de espera.",
+    }.get(r["resultado"], "La clase ya no está disponible.")
 
 
 def _item_clase(c: dict, **extra) -> dict:
@@ -278,8 +179,7 @@ def _item_clase(c: dict, **extra) -> dict:
     }
 
 
-def mis_inscripciones(alumna_id: str) -> dict:
-    sb = get_supabase()
+def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
     columnas_clase = "clase(id, fecha, hora_inicio, duracion, precio)"
     reservas = (
         sb.table("reserva").select(f"id, estado, fecha_cancelacion, {columnas_clase}")

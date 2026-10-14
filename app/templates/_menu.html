@@ -9,20 +9,6 @@
     </div>
 
     <div class="menu-cuenta">
-        {% if usuario.es_prueba %}
-        <form action="/alumna/elegir" method="post" class="alumna-selector">
-            <input type="hidden" name="semana" value="{{ semana }}" />
-            <input type="hidden" name="fecha" value="{{ fecha }}" />
-            <label>
-                Alumna (prueba)
-                <select name="alumna_id" onchange="this.form.submit()">
-                    {% for id, nombre in alumnas.items() %}
-                    <option value="{{ id }}" {{ 'selected' if id == alumna_id else '' }}>{{ nombre }}</option>
-                    {% endfor %}
-                </select>
-            </label>
-        </form>
-        {% else %}
         <details class="cuenta-menu">
             <summary aria-label="Mi cuenta">
                 <span class="avatar" aria-hidden="true">{{ (usuario.nombre[:1] ~ usuario.apellido[:1]) | upper }}</span>
@@ -41,7 +27,6 @@
                 </form>
             </div>
         </details>
-        {% endif %}
     </div>
 </nav>
 <script>

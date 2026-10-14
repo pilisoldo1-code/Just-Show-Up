@@ -146,13 +146,23 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     hoy**; vencimiento del carné (opcional) = **posterior a hoy** (hoy no vale).
     "Hoy" es la fecha de Montevideo (`clases.ahora()`).
   - Probado con 101 casos de auth + 78 de validaciones (rutas, roles, errores, sesión, seguridad en la base).
-  - Pendiente: **etapa 2** (reemplazar las policies abiertas a `anon` de
-    `horario`/`clase`/`reserva`/`listadeespera` por policies por usuaria y rol, mover
-    a la base la generación de clases y el contador de cupos), y quitar el modo
-    prueba + las 3 usuarias de prueba cuando el usuario confirme el login real.
-  - **Modo prueba**: con la variable `ALUMNA_PRUEBA=1` (apagada por defecto)
-    reaparece el selector de las 3 alumnas fijas de `app/clases.py` sin login.
-    Con la etapa 2 (RLS por usuaria) deja de poder funcionar.
+- **Autenticación — etapa 2, fase 1 hecha (2026-10-13)**: la app habla con
+  Supabase **con la sesión de cada usuaria** (`_sb(usuario)` en `main.py`), no con
+  un cliente anónimo. Migración `*_auth_etapa2_politicas_y_funciones.sql`:
+  - Políticas para `authenticated`: horarios y clases los leen todas, solo la
+    profesora los crea/edita/borra; `reserva` y `listadeespera`: cada alumna lee
+    solo las suyas, la profesora todas. Las alumnas **no escriben directo**.
+  - Funciones SQL (`security definer`, solo con sesión): `reservar`,
+    `cancelar_reserva`, `anotar_en_espera` (bloquean la fila de la clase: sin
+    sobreventa, y el plazo de 1 h lo controla la base), `reservas_confirmadas`
+    (cuenta cupos sin revelar quiénes reservaron) y `generar_clases` (semanas
+    cercanas, idempotente). `clases.py` traduce sus códigos a los mensajes.
+  - Se quitó el **modo prueba** (`ALUMNA_PRUEBA` y el selector de alumnas).
+  - Probado con 53 casos (cupos con reservas simultáneas, lista de espera,
+    plazos, aislamiento entre alumnas, permisos de profesora, rutas).
+  - **Fase 2 PENDIENTE**: `supabase/pendientes/auth_etapa2_cerrar_anon.sql`
+    quita las políticas abiertas a `anon`. **Aplicarla solo cuando amber y theta
+    tengan este código**: con el código viejo los sitios dejan de funcionar.
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -199,7 +209,8 @@ Somos **3 personas** implementando sobre el mismo repo. Para no pisarnos:
 Se definieron como módulos verticales: cada uno entrega algo visible/probable
 en la web, no solo cambios de esquema.
 
-1. **Autenticación y perfiles** — **etapa 1 hecha** (ver Estado actual); falta la etapa 2 (RLS por rol).
+1. **Autenticación y perfiles** — etapa 1 y olvidé mi contraseña hechos; etapa 2
+   fase 1 hecha, falta la fase 2 (cerrar `anon`) y rotar claves (ver Gotchas).
 2. **Gestión de horarios y clases (Profesora)** — **en progreso**, arrancado
    antes que el 1 (decisión del usuario). Hecho: CRUD de horarios fijos
    (alta/edición/activar-desactivar), tabla `clase` con generación automática
@@ -274,13 +285,15 @@ Para cada módulo, en este orden:
 ## Gotchas / lecciones aprendidas
 
 - **PENDIENTE DE SEGURIDAD — rotar las claves de Supabase antes de cargar
-  alumnas reales.** La `service_role` fue pegada en el chat el 2026-10-06 (queda
-  en el historial de la conversación). Hoy la base solo tiene datos de prueba,
-  así que el riesgo es bajo, pero hay que tratarla como expuesta: Project
-  Settings > JWT Keys > generar nuevo secreto (cambia anon y service_role) y
-  actualizar `.env` y las variables de **ambos** proyectos de Vercel. Nunca
-  pedir ni aceptar claves por el chat: pegarlas desde el portapapeles al `.env`
-  con `sed ... $(pbpaste) ...`.
+  alumnas reales.** La `service_role` legacy fue pegada en el chat el 2026-10-06:
+  tratarla como expuesta. El proyecto ya usa el sistema nuevo de JWT Signing
+  Keys (ECC), así que **no existe "generar nuevo secreto"**: la forma de anularla
+  es pasar a las claves nuevas y desactivar las legacy. Pasos: (1) API Keys >
+  crear *secret key* (`sb_secret_...`) y usar la *publishable* (`sb_publishable_...`)
+  como `SUPABASE_KEY`; (2) cargarlas en `.env` (con `sed ... $(pbpaste) ...`) y en
+  **ambos** Vercel + Redeploy; (3) verificar los dos sitios; (4) recién ahí API
+  Keys > Legacy API keys > *Disable*. No revocar la "Previous key" (HS256) antes:
+  rompe las claves legacy que la app usa hoy. Nunca pedir ni aceptar claves por el chat.
 - **El deploy oficial (theta) necesita su propia `SUPABASE_SERVICE_KEY`**, cargada
   en el dashboard de esa cuenta de Vercel (Settings > Environment Variables).
   Sin ella el login y las reservas funcionan, pero fallan: alta y reinicio de
@@ -318,28 +331,24 @@ Para cada módulo, en este orden:
   accesible desde este CLI. Mientras tanto: **avisar siempre que se pusheó
   algo y haga falta Redeploy manual para verlo reflejado**.
 - **Usuarias de prueba en `auth.users`** (mails `*@prueba.invalid`, ids
-  `a0000000-0000-4000-8000-00000000000{1,2,3}`, sin contraseña): existen porque
-  `reserva.id_alumna` ahora tiene FK a `profiles`, y el selector provisorio
-  necesita ids válidos. Se borran cuando haya login real (primero sus
+  `a0000000-0000-4000-8000-00000000000{1,2,3}`, sin contraseña): eran del selector
+  del modo prueba (ya quitado). Sirven para probar varias alumnas a la vez:
+  `auth.admin.generate_link({"type": "magiclink", ...})` da una sesión sin
+  contraseña (abrir el link y leer `access_token` del `#`). Borrarlas al entregar (primero sus
   `reserva`/`listadeespera`, después `delete from auth.users where email like
   '%@prueba.invalid'`; `profiles` cae en cascada).
-- **Las policies RLS de `clase`, `reserva` y `listadeespera` están abiertas a
-  `anon`** (select/insert/update), igual que `horario`: es provisorio hasta que
-  exista Auth. Antes de dar por cerrado el proyecto hay que reemplazarlas por
-  policies por usuario (`auth.uid()`) y por rol.
 - **Zona horaria**: las horas de clase son locales (`America/Montevideo`) pero
   Vercel corre en UTC. Toda comparación de "ahora" va por `clases.ahora()`
   (usa `zoneinfo`; `tzdata` está en `requirements.txt` porque el runtime no
   garantiza la base de zonas horarias). No usar `date.today()` ni `datetime.now()`.
 - **Cupos**: la fuente de verdad son las filas de `reserva` con
-  `estado='confirmada'`. Los "lugares disponibles" que se muestran se calculan
-  contándolas (no se confía en `clase.cantidad_inscriptas`, que es solo una
-  copia que se resincroniza en `_sincronizar_inscriptas`). La cancelación es
-  atómica: `UPDATE ... WHERE estado='confirmada'` y se mira cuántas filas
-  cambió, así 10 pedidos simultáneos liberan exactamente 1 lugar. El cupo
-  máximo sale de `horario.cupo_max` (la tabla `clase` no lo copia). Para evitar sobreventa sin
-  funciones SQL, se inserta la reserva y se recuenta: si se pasó del cupo se
-  cancela esa reserva. Es suficiente para la demo, no es transaccional.
+  `estado='confirmada'`; los "lugares disponibles" salen de la función
+  `reservas_confirmadas` (las alumnas no pueden contar reservas ajenas por RLS).
+  `clase.cantidad_inscriptas` es una copia que las funciones resincronizan. El
+  cupo máximo sale de `horario.cupo_max` (la tabla `clase` no lo copia).
+  `reservar`/`cancelar_reserva`/`anotar_en_espera` hacen `select ... for update`
+  sobre la clase, así que los pedidos simultáneos se ordenan: sin sobreventa
+  (probado: 3 reservas a la vez con cupo 2 → 2 ok, 1 completa).
 - **Cambiar la contraseña cierra todas las sesiones en Supabase**, incluida la
   de quien la cambia. Por eso `contrasena_cambiar` abre una sesión nueva
   automáticamente (fijando `request.state.tokens_nuevos`, que el middleware
@@ -371,22 +380,19 @@ Para cada módulo, en este orden:
   cuentas). Acá no aplica: las cuentas las crea el servidor con el admin API, que
   sí informa `email_exists`.
 - **Las policies RLS siguen abiertas a `anon`** en `horario`, `clase`, `reserva` y
-  `listadeespera` hasta la etapa 2: el login protege las pantallas, pero alguien
-  con la clave pública de Supabase podría escribir directo en esas tablas.
-  `profiles` sí está cerrada (solo con sesión). El registro abierto de Supabase
-  ("Allow new users to sign up") debe estar APAGADO en el dashboard: se verificó
-  que seguía encendido el 2026-10-07 (`/auth/v1/settings` → `disable_signup:false`).
-- La regla de "cancelar hasta 1 h antes" la aplica la aplicación, no la base:
-  un usuario técnico podría saltársela hablando directo con Supabase. Cerrarlo
-  requiere una función SQL (mejora opcional de la etapa 2).
+  `listadeespera` hasta aplicar la fase 2 de la etapa 2 (ver Estado actual): la
+  app ya no las usa, pero alguien con la clave pública podría escribir directo.
+  `profiles` sí está cerrada. El registro abierto de Supabase ("Allow new users
+  to sign up") está **apagado** (verificado 2026-10-13, `disable_signup:true`).
 
 - **`vercel.json`**: no usar `rewrites` tipo catch-all con
   `destination: "/api/index.py"`. Un cambio reciente de Vercel hace que el
   rewrite reescriba el path real que recibe FastAPI, y todo devuelve 404. Con
   un solo `api/index.py` alcanza con `functions.includeFiles`, sin rewrites.
-- **`supabase-py` 2.7.4** valida que `SUPABASE_KEY` tenga formato JWT exacto
-  (regex con puntos). No acepta las publishable keys nuevas (`sb_publishable_...`).
-  Usar siempre la anon key legacy (empieza con `eyJ...`).
+- **`supabase-py` actualizado a 2.32.0** (2026-10-13): acepta las claves nuevas
+  `sb_publishable_`/`sb_secret_` (la 2.7.4 solo aceptaba JWT `eyJ...`). Los errores
+  de auth se importan de `supabase_auth.errors` (el paquete `gotrue` ya no se usa).
+  Al actualizar el venv local, desinstalar `gotrue` para no importar el viejo.
 - Pegar esa key manualmente en un campo de Vercel desde el celular es muy
   propenso a truncarse — mejor usar el botón de copiar del bloque de código,
   o hacer ese paso puntual desde una computadora.
