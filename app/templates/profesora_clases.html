@@ -3,14 +3,20 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Just Show Up - Clases de hoy</title>
+    <title>Just Show Up - Clases</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
     <main>
         {% include "_menu.html" %}
-        <h1>Clases de hoy</h1>
-        <p class="subtitle">{{ titulo_dia }}</p>
+        <h1>Clases</h1>
+        <nav class="dias-nav" aria-label="Elegir día">
+            {% for d in dias %}
+            <a href="/profesora/clases?fecha={{ d.fecha }}" class="dia-chip {{ 'dia-chip-activo' if d.activo else '' }}"
+               {{ 'aria-current=page' if d.activo else '' }}>{{ d.texto }}</a>
+            {% endfor %}
+        </nav>
+        <p class="subtitle">{{ titulo_dia }}{% if not es_hoy %} · podés ver quiénes reservaron; la asistencia se marca el día de la clase{% endif %}</p>
 
         {% if clases %}
         <div class="cards">
@@ -36,7 +42,7 @@
             {% endfor %}
         </div>
         {% else %}
-        <p class="vacio">Hoy no hay clases.</p>
+        <p class="vacio">{{ 'Hoy no hay clases.' if es_hoy else 'No hay clases este día.' }}</p>
         {% endif %}
     </main>
 </body>
