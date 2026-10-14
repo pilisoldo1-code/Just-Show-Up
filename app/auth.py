@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import Request
 from fastapi.responses import Response
-from gotrue.errors import AuthApiError, AuthError
+from supabase_auth.errors import AuthApiError, AuthError
 from supabase import Client, create_client
 
 from app import validaciones
