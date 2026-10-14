@@ -10,19 +10,25 @@
     <main>
         {% include "_menu.html" %}
         <h1>Mi historial</h1>
-        <p class="subtitle">Tus clases pasadas y las reservas que cancelaste.</p>
+        <p class="subtitle">Tus clases pasadas con tu asistencia y las reservas que cancelaste.</p>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
         {% if historial %}
+        {% if presentes or ausentes %}
+        <p class="asistencia-resumen">
+            {{ presentes }} {{ 'clase asistida' if presentes == 1 else 'clases asistidas' }} ·
+            {{ ausentes }} {{ 'ausencia' if ausentes == 1 else 'ausencias' }}
+        </p>
+        {% endif %}
         <ul class="lista-clases">
             {% for c in historial %}
             <li>
                 <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
                 <div class="lc-detalle">{{ c.duracion }} min · ${{ '%g'|format(c.precio) }}</div>
-                <span class="badge {{ 'badge-off' if c.estado_txt == 'Cancelada' else 'badge-on' }}">{{ c.estado_txt }}</span>
+                <span class="badge {{ c.badge }}">{{ c.estado_txt }}</span>
             </li>
             {% endfor %}
         </ul>
