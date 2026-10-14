@@ -777,3 +777,72 @@ main.ancho {
 .lista-errores li {
     margin: 4px 0;
 }
+
+.card-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.card-link:hover {
+    border-color: var(--accent);
+}
+
+.asistencia-resumen {
+    color: var(--muted);
+    margin: 0 0 12px;
+}
+
+.asistencia-tabla .col-box {
+    text-align: center;
+    width: 110px;
+}
+
+.asistencia-tabla form {
+    margin: 0;
+}
+
+.box {
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    border: 2px solid var(--muted);
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    vertical-align: middle;
+    display: inline-grid;
+    place-content: center;
+}
+
+.box::before {
+    content: "✓";
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--bg);
+    visibility: hidden;
+}
+
+.box:checked::before {
+    visibility: visible;
+}
+
+.box-presente:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.box-ausente:checked {
+    background: #f87171;
+    border-color: #f87171;
+}
+
+.box:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.box:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}

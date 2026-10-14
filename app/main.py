@@ -447,6 +447,42 @@ def toggle_horario(horario_id: int, usuario: Usuario = Depends(requiere_profesor
     return RedirectResponse(url="/profesora/horarios", status_code=303)
 
 
+# ---------- profesora: clases y asistencia ----------
+
+@app.get("/profesora/clases")
+def profesora_clases(request: Request, usuario: Usuario = Depends(requiere_profesora)):
+    sb = _sb(usuario)
+    hoy = clases.ahora().date()
+    clases.generar_clases(sb, hoy - timedelta(days=hoy.weekday()))
+    return _render(
+        request, "profesora_clases.html", usuario,
+        clases=clases.clases_del_dia(sb, hoy),
+        titulo_dia=f"{DIAS_ORDEN[hoy.weekday()].capitalize()} {hoy.day} de {MESES[hoy.month]}",
+    )
+
+
+@app.get("/profesora/clases/{clase_id}")
+def profesora_clase(request: Request, clase_id: int, ok: int = 0, aviso: str = "",
+                    usuario: Usuario = Depends(requiere_profesora)):
+    clase = clases.clase_con_asistencia(_sb(usuario), clase_id)
+    if clase is None:
+        return RedirectResponse(url="/profesora/clases", status_code=303)
+    return _render(request, "profesora_clase.html", usuario, clase=clase, aviso=aviso, aviso_ok=bool(ok))
+
+
+@app.post("/profesora/clases/{clase_id}/asistencia")
+def profesora_marcar(clase_id: int, id_reserva: int = Form(...), estado: str = Form(""),
+                     usuario: Usuario = Depends(requiere_profesora)):
+    try:
+        ok, aviso = clases.marcar_asistencia(_sb(usuario), id_reserva, estado)
+    except Exception:
+        logging.exception("Error al marcar asistencia")
+        ok, aviso = False, "Ocurrió un error, probá de nuevo."
+    return RedirectResponse(
+        url=f"/profesora/clases/{clase_id}?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303
+    )
+
+
 # ---------- profesora: alumnas ----------
 
 COLUMNAS_ALUMNA = "id, nombre, apellido, mail, telefono, fecha_nacimiento, fecha_vencimiento_carne_salud"
