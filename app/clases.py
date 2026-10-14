@@ -179,10 +179,26 @@ def _item_clase(c: dict, **extra) -> dict:
     }
 
 
+def _asistencia_de(reserva: dict) -> str | None:
+    a = reserva.get("asistencia")
+    if isinstance(a, list):
+        a = a[0] if a else None
+    return a["estado"] if a else None
+
+
+def _estado_historial(reserva: dict) -> tuple[str, str]:
+    if reserva["estado"] == "cancelada":
+        return "Cancelada", "badge-off"
+    return {
+        "presente": ("Presente", "badge-on"),
+        "ausente": ("Ausente", "badge-ausente"),
+    }.get(_asistencia_de(reserva), ("Sin registrar", "badge-off"))
+
+
 def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
     columnas_clase = "clase(id, fecha, hora_inicio, duracion, precio)"
     reservas = (
-        sb.table("reserva").select(f"id, estado, fecha_cancelacion, {columnas_clase}")
+        sb.table("reserva").select(f"id, estado, fecha_cancelacion, asistencia(estado), {columnas_clase}")
         .eq("id_alumna", alumna_id).execute().data
     )
     espera = (
@@ -196,7 +212,7 @@ def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
         if r["estado"] == "confirmada" and item["inicio"] > ahora_dt:
             proximas.append(item)
         else:
-            item["estado_txt"] = "Cancelada" if r["estado"] == "cancelada" else "Clase pasada"
+            item["estado_txt"], item["badge"] = _estado_historial(r)
             historial.append(item)
     for e in espera:
         item = _item_clase(e["clase"], posicion=e["posicion"])
@@ -258,13 +274,10 @@ def clase_con_asistencia(sb: Client, clase_id: int) -> dict | None:
     )
     alumnas = []
     for r in reservas:
-        asistencia = r["asistencia"]
-        if isinstance(asistencia, list):
-            asistencia = asistencia[0] if asistencia else None
         alumnas.append({
             "id_reserva": r["id"],
             "nombre": f"{r['profiles']['nombre']} {r['profiles']['apellido']}",
-            "estado": asistencia["estado"] if asistencia else None,
+            "estado": _asistencia_de(r),
         })
     alumnas.sort(key=lambda a: a["nombre"].lower())
     fecha = date.fromisoformat(c["fecha"])

@@ -142,6 +142,11 @@ h1 {
     color: var(--muted);
 }
 
+.badge-ausente {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+}
+
 .acciones {
     display: flex;
     gap: 12px;

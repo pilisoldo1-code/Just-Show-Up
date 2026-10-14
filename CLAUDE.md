@@ -176,9 +176,11 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   sola fila por reserva = no puede estar presente y ausente a la vez; sin fila =
   sin marcar. Se escribe solo con la función `marcar_asistencia` (verifica
   profesora, reserva confirmada y horario). Cada alumna lee solo la suya.
-  Probado con 31 casos + navegador (escritorio y celular). **Pendiente
-  (próximo paso pedido por el usuario): mostrar la asistencia en la pantalla de
-  la alumna / Mi historial.**
+  Probado con 31 casos + navegador (escritorio y celular).
+- **Asistencia — pantalla de la alumna (hecha 2026-10-13)**: en **Mi historial**
+  cada clase pasada muestra **Presente** (verde), **Ausente** (rojo), **Sin
+  registrar** (gris, la profesora no marcó) o **Cancelada**, y arriba un resumen
+  "N clases asistidas · M ausencias". Probado con 10 casos + navegador.
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -237,7 +239,7 @@ en la web, no solo cambios de esquema.
    "mis próximas reservas".
 4. **Lista de espera** — **parcial**: anotarse y ver la posición. Falta ofrecer
    el cupo liberado (30 min), notificar y salir de la lista.
-5. **Asistencia** — **pantalla de la profesora hecha**; falta mostrarla a la alumna (historial).
+5. **Asistencia** — **hecho** (profesora marca; la alumna lo ve en Mi historial).
 6. **Resumen mensual y pagos** — cálculo automático + registro de pagos
    (Mercado Pago para pagos, ver Stack).
 7. **Suscripción y clases grabadas** — biblioteca de videos con gate de

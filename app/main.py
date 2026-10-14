@@ -323,7 +323,11 @@ def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
     except Exception:
         logging.exception("No se pudo cargar el historial")
         historial, aviso = [], "No pudimos cargar tu historial. Probá de nuevo."
-    return _render(request, "mi_historial.html", usuario, historial=historial, aviso=aviso, aviso_ok=False)
+    return _render(
+        request, "mi_historial.html", usuario, historial=historial, aviso=aviso, aviso_ok=False,
+        presentes=sum(c["estado_txt"] == "Presente" for c in historial),
+        ausentes=sum(c["estado_txt"] == "Ausente" for c in historial),
+    )
 
 
 @app.get("/mis-facturas")
