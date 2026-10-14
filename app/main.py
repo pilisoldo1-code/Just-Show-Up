@@ -26,6 +26,7 @@ MESES = [
     "agosto", "setiembre", "octubre", "noviembre", "diciembre",
 ]
 SEMANAS_HACIA_ADELANTE = 2
+DIAS_ADELANTE_PROFESORA = 7  # la profesora ve inscriptas de hoy hasta el mismo día de la semana siguiente
 
 
 @app.exception_handler(Redirigir)
@@ -454,15 +455,32 @@ def toggle_horario(horario_id: int, usuario: Usuario = Depends(requiere_profesor
 
 # ---------- profesora: clases y asistencia ----------
 
-@app.get("/profesora/clases")
-def profesora_clases(request: Request, usuario: Usuario = Depends(requiere_profesora)):
-    sb = _sb(usuario)
+def _dias_profesora() -> list[date]:
     hoy = clases.ahora().date()
-    clases.generar_clases(sb, hoy - timedelta(days=hoy.weekday()))
+    return [hoy + timedelta(days=i) for i in range(DIAS_ADELANTE_PROFESORA + 1)]
+
+
+@app.get("/profesora/clases")
+def profesora_clases(request: Request, fecha: str = "", usuario: Usuario = Depends(requiere_profesora)):
+    dias = _dias_profesora()
+    hoy = dias[0]
+    f = _parse_fecha(fecha) if fecha else hoy
+    if f not in dias:
+        return RedirectResponse(url="/profesora/clases", status_code=303)
+    sb = _sb(usuario)
+    for lunes in {d - timedelta(days=d.weekday()) for d in (dias[0], dias[-1])}:
+        clases.generar_clases(sb, lunes)
+    etiquetas = {hoy: "Hoy", hoy + timedelta(days=1): "Mañana"}
     return _render(
         request, "profesora_clases.html", usuario,
-        clases=clases.clases_del_dia(sb, hoy),
-        titulo_dia=f"{clases.nombre_dia(hoy)} {hoy.day} de {MESES[hoy.month]}",
+        clases=clases.clases_del_dia(sb, f),
+        titulo_dia=f"{clases.nombre_dia(f)} {f.day} de {MESES[f.month]}",
+        es_hoy=f == hoy,
+        dias=[
+            {"fecha": d.isoformat(), "activo": d == f,
+             "texto": etiquetas.get(d, f"{clases.nombre_dia(d)[:3]} {d.day}")}
+            for d in dias
+        ],
     )
 
 
@@ -470,7 +488,7 @@ def profesora_clases(request: Request, usuario: Usuario = Depends(requiere_profe
 def profesora_clase(request: Request, clase_id: int, ok: int = 0, aviso: str = "",
                     usuario: Usuario = Depends(requiere_profesora)):
     clase = clases.clase_con_asistencia(_sb(usuario), clase_id)
-    if clase is None:
+    if clase is None or clase["fecha"] > _dias_profesora()[-1]:
         return RedirectResponse(url="/profesora/clases", status_code=303)
     return _render(request, "profesora_clase.html", usuario, clase=clase, aviso=aviso, aviso_ok=bool(ok))
 

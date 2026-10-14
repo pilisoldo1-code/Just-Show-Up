@@ -10,14 +10,14 @@
     <main>
         {% include "_menu.html" %}
         <h1>{{ clase.titulo }}</h1>
-        <p class="subtitle"><a href="/profesora/clases">‹ Volver a las clases de hoy</a></p>
+        <p class="subtitle"><a href="/profesora/clases?fecha={{ clase.fecha.isoformat() }}">‹ Volver a las clases del día</a></p>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
         {% if clase.ventana == 'antes' %}
-        <p class="nota">La asistencia se marca durante la clase, de {{ clase.hora }} a {{ clase.hora_fin }}.</p>
+        <p class="nota">La asistencia se marca el día de la clase, mientras dura: de {{ clase.hora }} a {{ clase.hora_fin }}.</p>
         {% elif clase.ventana == 'cerrada' %}
         <p class="nota">La clase terminó a las {{ clase.hora_fin }}: la asistencia ya no se puede modificar.</p>
         {% endif %}

@@ -171,7 +171,11 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     tengan este código**: con el código viejo los sitios dejan de funcionar.
 - **Asistencia — pantalla de la profesora (hecha 2026-10-13)**. Menú de la
   profesora: Horarios · **Clases** · Alumnas. `/profesora/clases` = clases de
-  **hoy** (genera la semana si falta); `/profesora/clases/{id}` = listado de
+  hoy, con botones para elegir día (**Hoy, Mañana, … hasta hoy + 7**, ej. del
+  martes 13 al martes 20; decisión del usuario: ver inscriptas como máximo una
+  semana adelante, `DIAS_ADELANTE_PROFESORA`). `?fecha=` fuera de ese rango
+  vuelve a hoy y el detalle de una clase a más de 7 días tampoco se abre. En los
+  días futuros se ve quién reservó pero los boxes siguen bloqueados; `/profesora/clases/{id}` = listado de
   alumnas con reserva confirmada y dos boxes, **Presente** y **Ausente**
   (radios con aspecto de checkbox: marcar uno desmarca el otro, se guarda al
   hacer click). Decisiones del usuario: solo la profesora marca; antes de la
