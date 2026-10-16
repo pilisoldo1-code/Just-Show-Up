@@ -264,53 +264,57 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 
 ### Metas por integrante (para el martes 20/10)
 
-**Julieta — Seguridad (cierre de la etapa 2)** · rama `seguridad-etapa-2`
-1. Decidir lo de la licencia (recrear o dejar).
-2. Probar amber de punta a punta con las cuentas de prueba (login, reservas, cancelación,
-   asistencia, planificación, funciones de administración). Las pruebas deben dejar la base
-   idéntica (foto antes/después) y **solo pueden tocar datos creados por ellas** (motivo
-   `PRUEBA...`, horarios de prueba): nunca "el primero de la tabla".
-3. Cargar las claves nuevas en amber (CLI, leyendo de `.env`, sin mostrarlas) + redeploy.
-4. Pasarle las claves a Pilar por privado; verificar theta cuando las cargue.
-5. Pasarles las claves nuevas a las otras dos por privado (para su `.env` local).
-6. Aplicar `supabase/pendientes/auth_etapa2_cerrar_anon.sql` (avisando en el grupo antes),
-   actualizar `scripts/seed.py` (usa acceso anónimo), correr todas las pruebas.
-7. Recién con todo verificado: desactivar las claves viejas en Supabase y comprobar que la
-   `service_role` expuesta responde 401.
-- **Listo cuando**: claves viejas desactivadas, sin sesión no se lee ninguna tabla, amber y
-  theta funcionando con claves nuevas, CLAUDE.md actualizado.
+> La **seguridad (rotación de claves y fase 2 RLS) queda en pausa** y se retoma después
+> del martes. Mientras tanto: **nadie desactiva las claves viejas, nadie aplica
+> `supabase/pendientes/auth_etapa2_cerrar_anon.sql` y nadie cambia variables de Vercel.**
+> Las claves viejas siguen funcionando, así que el `.env` de cada una sigue sirviendo.
 
-**Pilar — theta + Estadísticas** · rama `modulo-estadisticas`
-1. (Cuando Julieta le pase las claves) En Vercel de theta → Settings → Environment Variables:
-   `SUPABASE_KEY` = publishable nueva y `SUPABASE_SERVICE_KEY` = secret nueva, en
-   **Production y Preview** (`SUPABASE_URL` no cambia; si existe `ALUMNA_PRUEBA`, borrarla).
-   Después **Redeploy** del último deploy de Production y avisar.
-2. Módulo **Estadísticas** (pedido del profesor), pantalla de la profesora
-   `/profesora/estadisticas` con filtro de período (este mes / últimos 3 meses / todo):
-   día de la semana con más asistencias, horario con más asistencias, top 3 alumnas con
-   más asistencias, top 3 con más faltas, mes con más asistencias, % de asistencia.
-   "Asistencia" = fila de `asistencia` con estado `presente`; "falta" = `ausente`.
-   **No necesita tablas nuevas**: solo lectura con la sesión de la profesora (RLS ya lo
-   permite). Con los datos de demo ya hay números para mostrar.
-- **Listo cuando**: theta con claves nuevas; pantalla de Estadísticas con pruebas
-  (incluido que una alumna no pueda entrar) y probada en celular; PR abierto.
+**Pilar — Estadísticas** (pedido del profesor) · rama `modulo-estadisticas`
+- Pantalla de la profesora `/profesora/estadisticas` (opción "Estadísticas" en su menú) con
+  filtro de período (este mes / últimos 3 meses / todo): día de la semana con más
+  asistencias, horario con más asistencias, top 3 alumnas con más asistencias, top 3 con
+  más faltas, mes con más asistencias y % de asistencia general.
+- "Asistencia" = fila de `asistencia` con estado `presente`; "falta" = `ausente`.
+- **No necesita tablas nuevas**: solo lectura con la sesión de la profesora (RLS ya lo
+  permite). Lógica en `app/estadisticas.py`. Con los datos de demo ya hay números.
+- **Listo cuando**: pantalla funcionando, probada en celular, pruebas (incluido que una
+  alumna no pueda entrar), PR abierto.
 
 **Integrante 3 — Resumen mensual y pagos (módulo 6, sin Mercado Pago)** · rama `modulo-6-resumen`
-1. **Necesita autorización de Julieta para crear tablas**: `resumenmensual` y `pago` con los
-   atributos del modelo de datos (ver tabla más abajo), con RLS desde el inicio (profesora
-   todo; alumna solo lo suyo; **sin acceso anon**). Avisar en el grupo antes de la migración.
-2. Regla de cobro (ver "Reglas de negocio"): reservas `confirmada` de clases `programada`
-   ya dictadas del mes. No se cobran las canceladas (por la alumna o por la profesora).
-3. Profesora: pantalla "Resúmenes" (elegir mes → por alumna: cantidad de clases, total,
-   estado pendiente/pagado), botón "Generar resumen del mes" y "Registrar pago"
-   (efectivo/transferencia) que lo pasa a pagado.
-4. Alumna: **Mis facturas** (hoy vacía) muestra sus resúmenes y el detalle de clases.
+- **Necesita autorización de Julieta para crear tablas**: `resumenmensual` y `pago` con los
+  atributos del modelo de datos (tabla más abajo), con RLS desde el inicio (profesora
+  todo; alumna solo lo suyo; **sin acceso anon**). Avisar en el grupo antes de la migración.
+- Regla de cobro (ver "Reglas de negocio"): reservas `confirmada` de clases `programada`
+  ya dictadas en el mes. No se cobran las canceladas (por la alumna ni por la profesora).
+- Profesora: pantalla "Resúmenes" (elegir mes → por alumna: cantidad de clases, total,
+  estado pendiente/pagado), botón "Generar resumen del mes" y "Registrar pago"
+  (efectivo/transferencia) que lo pasa a pagado.
+- Alumna: **Mis facturas** (hoy vacía) muestra sus resúmenes y el detalle de clases.
+- Lógica en `app/resumen.py`.
 - **Listo cuando**: migración aplicada con RLS verificado, pantallas de profesora y alumna,
   pruebas con datos de prueba que se limpian, PR abierto.
 
-**Pendiente sin dueña (para después del martes)**: Tipo de clase (falta que el profesor/
-equipo defina los nombres de los tipos), completar Lista de espera (oferta de 30 min),
-mails con Resend.
+**Julieta — Lista de espera completa (módulo 4)** · rama `modulo-4-lista-espera`
+- Hoy solo se puede anotarse y ver la posición. Falta (reglas de negocio): **cuando se
+  libera un lugar, se le ofrece a la primera de la lista, que tiene 30 minutos para
+  confirmar; si no confirma, pasa a la siguiente**. Y poder **salir de la lista**.
+- **No necesita tablas nuevas**: `listadeespera` ya tiene los estados `ofrecido`,
+  `confirmado`, `expirado` y la columna `oferta_vence_en` (hoy sin uso). Sí hay que
+  **modificar funciones de la base** (`cancelar_reserva`, `reservar`, `anotar_en_espera`)
+  y agregar alguna nueva (confirmar oferta, salir de la lista, vencer ofertas): avisar en el
+  grupo antes de aplicarlas.
+- Sin mails todavía: el aviso es **dentro de la app** (en el día, en la grilla y en Mis
+  inscripciones: "Se liberó un lugar: confirmá antes de las HH:MM"). Mientras la oferta
+  está vigente, ese lugar no lo puede tomar otra alumna. Las ofertas vencidas se procesan
+  al consultar (no hay tareas programadas).
+- Cuidado con Planificación: si la profesora cancela la clase, las ofertas se cierran.
+- Decisión pendiente de Julieta (de antes): recrear o no la licencia "Vacaciones".
+- **Listo cuando**: oferta, confirmación, vencimiento y salida funcionando, con pruebas de
+  concurrencia (dos alumnas intentando el mismo lugar) y PR abierto.
+
+**Para después del martes**: cerrar la seguridad (rotación de claves + fase 2 RLS +
+desactivar claves viejas; ver estado arriba y Gotchas), Tipo de clase (faltan los nombres
+de los tipos), mails con Resend, suscripción y videos (modalidad sin decidir).
 
 ### Reglas para no pisarse
 - Antes de arrancar: `git pull` en `main`, `pip install -r requirements.txt` y
