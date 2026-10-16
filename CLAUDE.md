@@ -241,6 +241,92 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 - Existe un segundo deploy "oficial" conectado por GitHub a otra cuenta de
   Vercel (la de la dueña del repo) — ver Gotchas.
 
+## Plan del equipo hasta el martes 20/10/2026
+
+> **Para Claude Code**: leé esta sección antes de empezar. Cada integrante trabaja en
+> **un módulo distinto, en su propia rama**. No toques módulos de otra persona.
+
+### Estado al viernes 16/10 (lo que hay que saber antes de arrancar)
+- `main` = commit `e5760f9` (incluye Planificación). theta y **amber** ya tienen ese código.
+  amber se desplegó desde una copia limpia de `main` (sin `.env`); vuelta atrás:
+  `vercel rollback dpl_H4KXxxhVEtVBqKbmrHDPrdM1yQp8`.
+- **Rotación de claves EN CURSO**: ya existen las claves nuevas (`sb_publishable_...` y
+  la secret `servidor_app`, `sb_secret_...`). Julieta ya las tiene en su `.env` y la app
+  pasa todas las pruebas con ellas. amber y theta **todavía usan las claves viejas**,
+  que siguen activas. **Nadie desactive las claves viejas** hasta que Julieta lo coordine.
+- **Fase 2 de seguridad (RLS) NO aplicada todavía**: sin sesión se puede leer y escribir
+  `horario`, `clase`, `reserva` y `listadeespera`. No crear tablas nuevas con acceso `anon`.
+- **Licencia "Vacaciones" 20–26/10 (era una prueba)**: la eliminó por error una prueba
+  automática el 16/10 (tomaba "el primer bloqueo de la tabla"). Volvieron las 10 clases y
+  las 22 reservas de demo. **Decisión pendiente de Julieta**: recrearla o dejarla así.
+  No la recreen ni toquen bloqueos reales hasta que Julieta decida.
+- Datos de demo cargados (8 alumnas `@demo.invalid`) y cuentas de prueba `@prueba.invalid`.
+
+### Metas por integrante (para el martes 20/10)
+
+**Julieta — Seguridad (cierre de la etapa 2)** · rama `seguridad-etapa-2`
+1. Decidir lo de la licencia (recrear o dejar).
+2. Probar amber de punta a punta con las cuentas de prueba (login, reservas, cancelación,
+   asistencia, planificación, funciones de administración). Las pruebas deben dejar la base
+   idéntica (foto antes/después) y **solo pueden tocar datos creados por ellas** (motivo
+   `PRUEBA...`, horarios de prueba): nunca "el primero de la tabla".
+3. Cargar las claves nuevas en amber (CLI, leyendo de `.env`, sin mostrarlas) + redeploy.
+4. Pasarle las claves a Pilar por privado; verificar theta cuando las cargue.
+5. Pasarles las claves nuevas a las otras dos por privado (para su `.env` local).
+6. Aplicar `supabase/pendientes/auth_etapa2_cerrar_anon.sql` (avisando en el grupo antes),
+   actualizar `scripts/seed.py` (usa acceso anónimo), correr todas las pruebas.
+7. Recién con todo verificado: desactivar las claves viejas en Supabase y comprobar que la
+   `service_role` expuesta responde 401.
+- **Listo cuando**: claves viejas desactivadas, sin sesión no se lee ninguna tabla, amber y
+  theta funcionando con claves nuevas, CLAUDE.md actualizado.
+
+**Pilar — theta + Estadísticas** · rama `modulo-estadisticas`
+1. (Cuando Julieta le pase las claves) En Vercel de theta → Settings → Environment Variables:
+   `SUPABASE_KEY` = publishable nueva y `SUPABASE_SERVICE_KEY` = secret nueva, en
+   **Production y Preview** (`SUPABASE_URL` no cambia; si existe `ALUMNA_PRUEBA`, borrarla).
+   Después **Redeploy** del último deploy de Production y avisar.
+2. Módulo **Estadísticas** (pedido del profesor), pantalla de la profesora
+   `/profesora/estadisticas` con filtro de período (este mes / últimos 3 meses / todo):
+   día de la semana con más asistencias, horario con más asistencias, top 3 alumnas con
+   más asistencias, top 3 con más faltas, mes con más asistencias, % de asistencia.
+   "Asistencia" = fila de `asistencia` con estado `presente`; "falta" = `ausente`.
+   **No necesita tablas nuevas**: solo lectura con la sesión de la profesora (RLS ya lo
+   permite). Con los datos de demo ya hay números para mostrar.
+- **Listo cuando**: theta con claves nuevas; pantalla de Estadísticas con pruebas
+  (incluido que una alumna no pueda entrar) y probada en celular; PR abierto.
+
+**Integrante 3 — Resumen mensual y pagos (módulo 6, sin Mercado Pago)** · rama `modulo-6-resumen`
+1. **Necesita autorización de Julieta para crear tablas**: `resumenmensual` y `pago` con los
+   atributos del modelo de datos (ver tabla más abajo), con RLS desde el inicio (profesora
+   todo; alumna solo lo suyo; **sin acceso anon**). Avisar en el grupo antes de la migración.
+2. Regla de cobro (ver "Reglas de negocio"): reservas `confirmada` de clases `programada`
+   ya dictadas del mes. No se cobran las canceladas (por la alumna o por la profesora).
+3. Profesora: pantalla "Resúmenes" (elegir mes → por alumna: cantidad de clases, total,
+   estado pendiente/pagado), botón "Generar resumen del mes" y "Registrar pago"
+   (efectivo/transferencia) que lo pasa a pagado.
+4. Alumna: **Mis facturas** (hoy vacía) muestra sus resúmenes y el detalle de clases.
+- **Listo cuando**: migración aplicada con RLS verificado, pantallas de profesora y alumna,
+  pruebas con datos de prueba que se limpian, PR abierto.
+
+**Pendiente sin dueña (para después del martes)**: Tipo de clase (falta que el profesor/
+equipo defina los nombres de los tipos), completar Lista de espera (oferta de 30 min),
+mails con Resend.
+
+### Reglas para no pisarse
+- Antes de arrancar: `git pull` en `main`, `pip install -r requirements.txt` y
+  `pip uninstall gotrue` (la librería de Supabase se actualizó a 2.32).
+- Cada una en su rama y PR a `main`; merge recién cuando la dueña del módulo lo pruebe.
+- Archivos compartidos (`app/main.py`, `app/templates/_menu.html`, `app/static/style.css`,
+  `CLAUDE.md`): agregar código en **una sección propia al final** (rutas al final de
+  `main.py`, CSS al final con un comentario `/* ---------- módulo ---------- */`). La lógica
+  nueva va en **un archivo propio** (`app/estadisticas.py`, `app/resumen.py`), no en
+  `app/clases.py`. En `CLAUDE.md`, cada una edita solo la sección de su módulo.
+- **Base de datos compartida**: avisar en el grupo antes de cualquier migración; nunca
+  borrar ni modificar datos reales ni de demo; las pruebas crean y borran solo lo suyo.
+- Las cuentas de prueba están en `.env.cuentas-prueba` de Julieta (no está en git):
+  pedírselas por privado. Nunca pegar claves ni contraseñas en el chat ni en el repo.
+- Si el sitio da error 500 en todos lados: Supabase pausado (ver Gotchas).
+
 ## Trabajo en equipo
 
 Somos **3 personas** implementando sobre el mismo repo. Para no pisarnos:
@@ -426,6 +512,11 @@ Para cada módulo, en este orden:
   "Semana anterior/siguiente" y en el "Volver" de los diálogos). Pendiente de
   corregir; en Planificación se corrigió solo para esa pantalla
   (`.acciones-confirmar`) para no cambiar el diseño del resto sin pedirlo.
+- **Las pruebas automáticas NUNCA deben elegir "el primer registro" de una tabla
+  compartida** (16/10: una prueba tomó el primer bloqueo creyendo que era el suyo y eliminó
+  una licencia real). Identificar lo propio por un marcador (`motivo` que empieza con
+  `PRUEBA`, horarios de prueba con precio 1, mails `@prueba.invalid`) y abortar si se va a
+  tocar algo que no lo tiene. Comparar una "foto" (hash) de las tablas antes y después.
 - **Cupos**: la fuente de verdad son las filas de `reserva` con
   `estado='confirmada'`; los "lugares disponibles" salen de la función
   `reservas_confirmadas` (las alumnas no pueden contar reservas ajenas por RLS).
