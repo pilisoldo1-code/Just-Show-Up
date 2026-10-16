@@ -513,6 +513,99 @@ def profesora_marcar(clase_id: int, id_reserva: int = Form(...), estado: str = F
     )
 
 
+# ---------- profesora: planificación (bloqueos) ----------
+
+def _datos_bloqueo(desde: str, hasta: str, id_horario: str, motivo: str):
+    try:
+        horario = int(id_horario) if id_horario else None
+    except ValueError:
+        horario = -1  # no existe: lo rechaza la validación
+    return _parse_fecha(desde), _parse_fecha(hasta), horario, motivo.strip()
+
+
+def _render_planificacion(request: Request, usuario: Usuario, status_code: int = 200, **contexto):
+    sb = _sb(usuario)
+    hoy = clases.ahora().date()
+    contexto.setdefault("datos", {})
+    contexto.setdefault("errores", [])
+    return _render(
+        request, "profesora_planificacion.html", usuario, status_code=status_code,
+        bloqueos=clases.bloqueos(sb), horarios=clases.horarios_para_elegir(sb),
+        hoy_iso=hoy.isoformat(), largo_motivo=clases.LARGO_MAX_MOTIVO, **contexto,
+    )
+
+
+@app.get("/profesora/planificacion")
+def profesora_planificacion(request: Request, ok: int = 0, aviso: str = "",
+                            usuario: Usuario = Depends(requiere_profesora)):
+    return _render_planificacion(request, usuario, aviso=aviso, aviso_ok=bool(ok))
+
+
+@app.post("/profesora/planificacion/revisar")
+def profesora_planificacion_revisar(
+    request: Request,
+    desde: str = Form(""),
+    hasta: str = Form(""),
+    id_horario: str = Form(""),
+    motivo: str = Form(""),
+    usuario: Usuario = Depends(requiere_profesora),
+):
+    sb = _sb(usuario)
+    f_desde, f_hasta, horario, texto = _datos_bloqueo(desde, hasta, id_horario, motivo)
+    errores = clases.validar_bloqueo(sb, f_desde, f_hasta, horario, texto)
+    datos = {"desde": desde, "hasta": hasta, "id_horario": id_horario, "motivo": motivo.strip()}
+    if errores:
+        return _render_planificacion(request, usuario, status_code=400, datos=datos, errores=errores)
+    horario_txt = next((h["texto"] for h in clases.horarios_para_elegir(sb) if h["id"] == horario), "")
+    return _render(
+        request, "profesora_planificacion_revisar.html", usuario,
+        datos=datos, previa=clases.vista_previa_bloqueo(sb, f_desde, f_hasta, horario),
+        rango_txt=clases._rango_texto(f_desde, f_hasta),
+        alcance_txt=f"Solo {horario_txt}" if horario_txt else "Todas las clases",
+    )
+
+
+@app.post("/profesora/planificacion/confirmar")
+def profesora_planificacion_confirmar(
+    request: Request,
+    desde: str = Form(""),
+    hasta: str = Form(""),
+    id_horario: str = Form(""),
+    motivo: str = Form(""),
+    reservas_previstas: str = Form(""),
+    usuario: Usuario = Depends(requiere_profesora),
+):
+    sb = _sb(usuario)
+    f_desde, f_hasta, horario, texto = _datos_bloqueo(desde, hasta, id_horario, motivo)
+    errores = clases.validar_bloqueo(sb, f_desde, f_hasta, horario, texto)
+    if errores:
+        datos = {"desde": desde, "hasta": hasta, "id_horario": id_horario, "motivo": motivo.strip()}
+        return _render_planificacion(request, usuario, status_code=400, datos=datos, errores=errores)
+    try:
+        ok, aviso = clases.confirmar_bloqueo(
+            sb, f_desde, f_hasta, horario, texto,
+            int(reservas_previstas) if reservas_previstas.isdigit() else None,
+        )
+    except Exception:
+        logging.exception("Error al crear bloqueo")
+        ok, aviso = False, "Ocurrió un error, probá de nuevo."
+    return RedirectResponse(
+        url="/profesora/planificacion?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303
+    )
+
+
+@app.post("/profesora/planificacion/{bloqueo_id}/eliminar")
+def profesora_planificacion_eliminar(bloqueo_id: int, usuario: Usuario = Depends(requiere_profesora)):
+    try:
+        ok, aviso = clases.eliminar_bloqueo(_sb(usuario), bloqueo_id)
+    except Exception:
+        logging.exception("Error al eliminar bloqueo")
+        ok, aviso = False, "Ocurrió un error, probá de nuevo."
+    return RedirectResponse(
+        url="/profesora/planificacion?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303
+    )
+
+
 # ---------- profesora: alumnas ----------
 
 COLUMNAS_ALUMNA = "id, nombre, apellido, mail, telefono, fecha_nacimiento, fecha_vencimiento_carne_salud"

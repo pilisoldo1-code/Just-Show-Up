@@ -15,6 +15,20 @@
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
+        {% if canceladas_profesora %}
+        <h2 class="seccion">Canceladas por la profesora</h2>
+        <p class="nota">Estas clases que tenías reservadas no se van a dictar y no se cobran.</p>
+        <ul class="lista-clases">
+            {% for c in canceladas_profesora %}
+            <li>
+                <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
+                <div class="lc-detalle">{{ c.duracion }} min</div>
+                <span class="badge badge-espera">Cancelada por la profesora</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
         <h2 class="seccion">Próximas clases</h2>
         {% if proximas %}
         <ul class="lista-clases">

@@ -34,7 +34,7 @@
         {% if dias %}
         <div class="cards cards-semana">
             {% for d in dias %}
-            {% if d.todas_pasadas %}
+            {% if d.sin_clases_disponibles %}
             <div class="card card-pasada">
             {% else %}
             <a class="card card-dia-link" href="/dia/{{ d.fecha }}">
@@ -44,18 +44,21 @@
                     <span class="card-fecha">{{ d.fecha_txt }}</span>
                 </div>
                 <div class="horas">
-                    {% for h in d.horas %}<span class="hora-chip">{{ h }}</span>{% endfor %}
+                    {% for h in d.horas %}<span class="hora-chip {{ 'hora-chip-cancelada' if h in d.canceladas_en else '' }}">{{ h }}</span>{% endfor %}
                 </div>
                 <div class="card-accion">
                     {% if d.todas_pasadas %}
                     <span class="badge badge-off">Finalizado</span>
+                    {% elif d.sin_clases_disponibles %}
+                    <span class="badge badge-espera">Clases canceladas por la profesora</span>
                     {% else %}
+                        {% if d.canceladas_en %}<span class="badge badge-espera">Cancelada {{ d.canceladas_en | join(', ') }}</span>{% endif %}
                         {% for h in d.inscripta_en %}<span class="badge badge-on">Reservada {{ h }}</span>{% endfor %}
                         {% for h in d.espera_en %}<span class="badge badge-espera">En espera {{ h }}</span>{% endfor %}
                         <span class="ver-dia">Ver clases ›</span>
                     {% endif %}
                 </div>
-            {% if d.todas_pasadas %}
+            {% if d.sin_clases_disponibles %}
             </div>
             {% else %}
             </a>

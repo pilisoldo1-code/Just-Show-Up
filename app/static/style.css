@@ -879,3 +879,50 @@ main.ancho {
     color: var(--bg);
     font-weight: 600;
 }
+
+/* ---------- planificación ---------- */
+
+.form-fila {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.btn-chico {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    width: auto;
+}
+
+.lista-afectadas .lc-detalle {
+    flex: 2 1 240px;
+}
+
+.acciones-confirmar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.card-cancelada {
+    opacity: 0.6;
+    border-style: dashed;
+}
+
+.hora-chip-cancelada {
+    text-decoration: line-through;
+    color: var(--muted);
+}
+
+.acciones-confirmar .btn {
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.acciones-confirmar .btn-secundario {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid #2a2e37;
+}

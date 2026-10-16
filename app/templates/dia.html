@@ -28,11 +28,13 @@
                     <li>Duración: {{ c.duracion }} min</li>
                     <li>Precio: ${{ '%g'|format(c.precio) }}</li>
                     <li>Cupo máximo: {{ c.cupo_max }}</li>
+                    {% if c.estado != 'cancelada' %}
                     <li>
                         {% if c.disponibles == 0 %}Clase completa
                         {% elif c.disponibles == 1 %}1 lugar disponible
                         {% else %}{{ c.disponibles }} lugares disponibles{% endif %}
                     </li>
+                    {% endif %}
                 </ul>
 
                 <div class="card-accion">
@@ -76,6 +78,10 @@
                         </div>
                         {% endif %}
                     </dialog>
+
+                    {% elif c.estado == 'cancelada' %}
+                    <span class="badge badge-espera">Cancelada por la profesora</span>
+                    <p class="nota">Esta clase no se va a dictar. Si la tenías reservada, no se cobra.</p>
 
                     {% elif c.estado == 'espera' %}
                     <span class="badge badge-espera">En lista de espera · posición {{ c.posicion_espera }}</span>

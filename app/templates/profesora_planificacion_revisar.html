@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Revisar bloqueo</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>Revisar antes de guardar</h1>
+        <p class="subtitle"><a href="/profesora/planificacion">‹ Volver a Planificación</a></p>
+
+        <section class="panel">
+            <dl class="datos-perfil">
+                <div><dt>Fechas</dt><dd>{{ rango_txt }}</dd></div>
+                <div><dt>Clases</dt><dd>{{ alcance_txt }}</dd></div>
+                <div><dt>Motivo</dt><dd>{{ datos.motivo }}</dd></div>
+            </dl>
+        </section>
+
+        {% if previa.a_cancelar %}
+        <div class="aviso aviso-error">
+            Se van a cancelar <strong>{{ previa.a_cancelar | length }} {{ 'clase' if previa.a_cancelar|length == 1 else 'clases' }}</strong>
+            {% if previa.total_reservas %}y <strong>{{ previa.total_reservas }} {{ 'reserva confirmada' if previa.total_reservas == 1 else 'reservas confirmadas' }}</strong>{% else %}(no hay reservas){% endif %}.
+            Las alumnas lo van a ver como "Cancelada por la profesora" y no se les cobra.
+            {% if previa.total_espera %}Se cierra la lista de espera de {{ previa.total_espera }} {{ 'alumna' if previa.total_espera == 1 else 'alumnas' }}.{% endif %}
+        </div>
+
+        <ul class="lista-clases lista-afectadas">
+            {% for c in previa.a_cancelar %}
+            <li>
+                <div class="lc-fecha"><strong>{{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
+                <div class="lc-detalle">
+                    {% if c.alumnas %}{{ c.alumnas | length }} {{ 'reserva' if c.alumnas|length == 1 else 'reservas' }}: {{ c.alumnas | join(', ') }}{% else %}Sin reservas{% endif %}{% if c.espera %} · {{ c.espera }} en lista de espera{% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="aviso aviso-ok">No hay clases para cancelar en esas fechas.</div>
+        {% endif %}
+
+        {% if previa.empezadas %}
+        <p class="nota">No se cancelan porque ya empezaron: {% for c in previa.empezadas %}{{ c.fecha_txt }} {{ c.hora }}{{ ', ' if not loop.last }}{% endfor %}.</p>
+        {% endif %}
+        {% if previa.ya_canceladas %}
+        <p class="nota">Ya estaban canceladas por otro bloqueo: {% for c in previa.ya_canceladas %}{{ c.fecha_txt }} {{ c.hora }}{{ ', ' if not loop.last }}{% endfor %}.</p>
+        {% endif %}
+        {% if previa.faltan_generar %}
+        <p class="nota">Las clases posteriores al {{ previa.ultima_generada }} todavía no están en el calendario: cuando se generen, las de estas fechas ya van a quedar canceladas.</p>
+        {% endif %}
+
+        <form action="/profesora/planificacion/confirmar" method="post" class="acciones-confirmar">
+            <input type="hidden" name="desde" value="{{ datos.desde }}" />
+            <input type="hidden" name="hasta" value="{{ datos.hasta }}" />
+            <input type="hidden" name="id_horario" value="{{ datos.id_horario }}" />
+            <input type="hidden" name="motivo" value="{{ datos.motivo }}" />
+            <input type="hidden" name="reservas_previstas" value="{{ previa.total_reservas }}" />
+            <a class="btn btn-secundario" href="/profesora/planificacion">Volver sin guardar</a>
+            <button type="submit" class="btn btn-peligro-solido">
+                {% if previa.a_cancelar %}Confirmar y cancelar {{ previa.a_cancelar | length }} {{ 'clase' if previa.a_cancelar|length == 1 else 'clases' }}{% else %}Guardar bloqueo{% endif %}
+            </button>
+        </form>
+    </main>
+</body>
+</html>
