@@ -173,7 +173,9 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   profesora: Horarios · **Clases** · Alumnas. `/profesora/clases` = clases de
   hoy, con botones para elegir día (**Hoy, Mañana, … hasta hoy + 7**, ej. del
   martes 13 al martes 20; decisión del usuario: ver inscriptas como máximo una
-  semana adelante, `DIAS_ADELANTE_PROFESORA`). `?fecha=` fuera de ese rango
+  semana adelante, `DIAS_ADELANTE_PROFESORA`). **Solo aparecen los días que
+  tienen clases** (decisión del usuario: si mañana es sábado sin clase, se pasa
+  directo al lunes) y la pantalla abre en el primero de ellos. `?fecha=` fuera de ese rango o sin clases
   vuelve a hoy y el detalle de una clase a más de 7 días tampoco se abre. En los
   días futuros se ve quién reservó pero los boxes siguen bloqueados; `/profesora/clases/{id}` = listado de
   alumnas con reserva confirmada y dos boxes, **Presente** y **Ausente**

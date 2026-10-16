@@ -462,14 +462,21 @@ def _dias_profesora() -> list[date]:
 
 @app.get("/profesora/clases")
 def profesora_clases(request: Request, fecha: str = "", usuario: Usuario = Depends(requiere_profesora)):
-    dias = _dias_profesora()
-    hoy = dias[0]
-    f = _parse_fecha(fecha) if fecha else hoy
-    if f not in dias:
-        return RedirectResponse(url="/profesora/clases", status_code=303)
+    rango = _dias_profesora()
+    hoy = rango[0]
     sb = _sb(usuario)
-    for lunes in {d - timedelta(days=d.weekday()) for d in (dias[0], dias[-1])}:
+    for lunes in {d - timedelta(days=d.weekday()) for d in (rango[0], rango[-1])}:
         clases.generar_clases(sb, lunes)
+    # Solo los días que tienen clases: si mañana no hay (ej. sábado), se pasa al siguiente.
+    dias = clases.dias_con_clases(sb, rango[0], rango[-1])
+    if fecha:
+        f = _parse_fecha(fecha)
+        if f not in dias:
+            return RedirectResponse(url="/profesora/clases", status_code=303)
+    else:
+        f = dias[0] if dias else None
+    if f is None:
+        return _render(request, "profesora_clases.html", usuario, clases=[], dias=[], titulo_dia="", es_hoy=True)
     etiquetas = {hoy: "Hoy", hoy + timedelta(days=1): "Mañana"}
     return _render(
         request, "profesora_clases.html", usuario,
