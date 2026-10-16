@@ -16,9 +16,14 @@
                {{ 'aria-current=page' if d.activo else '' }}>{{ d.texto }}</a>
             {% endfor %}
         </nav>
+        {% if dias %}
         <p class="subtitle">{{ titulo_dia }}{% if not es_hoy %} · podés ver quiénes reservaron; la asistencia se marca el día de la clase{% endif %}</p>
 
-        {% if clases %}
+        {% endif %}
+
+        {% if not dias %}
+        <p class="vacio">No hay clases en los próximos 7 días.</p>
+        {% elif clases %}
         <div class="cards">
             {% for c in clases %}
             <a class="card card-link {{ 'card-pasada' if c.ventana == 'cerrada' else '' }} {{ 'card-inscripta' if c.ventana == 'abierta' else '' }}"

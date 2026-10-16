@@ -247,6 +247,15 @@ def _ventana_asistencia(c: dict) -> str:
     return "cerrada"
 
 
+def dias_con_clases(sb: Client, desde: date, hasta: date) -> list[date]:
+    filas = (
+        sb.table("clase").select("fecha, horario(activo)")
+        .gte("fecha", desde.isoformat()).lte("fecha", hasta.isoformat())
+        .eq("estado", "programada").execute().data
+    )
+    return sorted({date.fromisoformat(c["fecha"]) for c in filas if c["horario"] and c["horario"]["activo"]})
+
+
 def clases_del_dia(sb: Client, fecha: date) -> list[dict]:
     filas = (
         sb.table("clase").select("*, horario(cupo_max, activo)")
