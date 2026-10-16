@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Planificación</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>Planificación</h1>
+        <p class="subtitle">Licencias, vacaciones o días sin clase. Las clases de esas fechas se cancelan y no se pueden reservar.</p>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        <section class="panel">
+            <h2>Nuevo bloqueo</h2>
+            {% if errores %}
+            <div class="aviso aviso-error">
+                <strong>{{ 'Corregí estos datos:' if errores|length > 1 else 'Corregí este dato:' }}</strong>
+                <ul class="lista-errores">
+                    {% for e in errores %}<li>{{ e }}</li>{% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            <form action="/profesora/planificacion/revisar" method="post" class="horario-form form-plano">
+                <div class="form-fila">
+                    <label>
+                        Fecha de inicio
+                        <input type="date" name="desde" value="{{ datos.desde or '' }}" min="{{ hoy_iso }}" required />
+                    </label>
+                    <label>
+                        Fecha de finalización
+                        <input type="date" name="hasta" value="{{ datos.hasta or '' }}" min="{{ hoy_iso }}" required />
+                    </label>
+                </div>
+                <label>
+                    Solo este horario (opcional)
+                    <select name="id_horario">
+                        <option value="">Todas las clases de esas fechas</option>
+                        {% for h in horarios %}
+                        <option value="{{ h.id }}" {{ 'selected' if datos.id_horario == h.id|string else '' }}>{{ h.texto }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    Motivo
+                    <input type="text" name="motivo" value="{{ datos.motivo or '' }}" maxlength="{{ largo_motivo }}"
+                           placeholder="Ej.: vacaciones, licencia, consulta médica" required />
+                </label>
+                <p class="nota">Antes de guardar vas a ver qué clases y qué reservas se cancelan.</p>
+                <button type="submit" class="btn">Revisar clases afectadas</button>
+            </form>
+        </section>
+
+        <h2 class="seccion">Bloqueos registrados</h2>
+        {% if bloqueos.vigentes %}
+        <ul class="lista-clases lista-bloqueos">
+            {% for b in bloqueos.vigentes %}
+            <li>
+                <div class="lc-fecha"><strong>{{ b.rango_txt }}</strong> · {{ b.alcance_txt }}</div>
+                <div class="lc-detalle">{{ b.motivo }} · {{ b.clases }} {{ 'clase cancelada' if b.clases == 1 else 'clases canceladas' }}{% if b.reservas %} · {{ b.reservas }} {{ 'reserva' if b.reservas == 1 else 'reservas' }}{% endif %}</div>
+                <span class="badge {{ 'badge-on' if b.estado == 'en_curso' else 'badge-espera' }}">{{ b.estado_txt }}</span>
+                <button type="button" class="btn btn-peligro btn-chico"
+                        onclick="document.getElementById('eliminar-{{ b.id }}').showModal()">Eliminar</button>
+
+                <dialog id="eliminar-{{ b.id }}" class="modal">
+                    <form action="/profesora/planificacion/{{ b.id }}/eliminar" method="post">
+                        <h2>Eliminar bloqueo</h2>
+                        <p class="modal-clase">{{ b.rango_txt }} · {{ b.alcance_txt }}</p>
+                        <p class="modal-texto">
+                            {% if b.vuelven_clases %}
+                            {{ 'Vuelve a estar disponible 1 clase' if b.vuelven_clases == 1 else 'Vuelven a estar disponibles ' ~ b.vuelven_clases ~ ' clases' }}
+                            {% if b.vuelven_reservas %} y {{ 'se recupera 1 reserva' if b.vuelven_reservas == 1 else 'se recuperan ' ~ b.vuelven_reservas ~ ' reservas' }} de las alumnas (si el cupo lo permite){% endif %}.
+                            {% else %}
+                            No vuelve ninguna clase (ya pasaron o siguen cubiertas por otro bloqueo).
+                            {% endif %}
+                            Las clases que ya pasaron siguen canceladas.
+                        </p>
+                        <div class="modal-botones">
+                            <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                            <button type="submit" class="btn btn-peligro-solido">Eliminar bloqueo</button>
+                        </div>
+                    </form>
+                </dialog>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="vacio vacio-izq">No hay bloqueos próximos ni en curso.</p>
+        {% endif %}
+
+        {% if bloqueos.finalizados %}
+        <h2 class="seccion">Historial</h2>
+        <ul class="lista-clases lista-historial">
+            {% for b in bloqueos.finalizados %}
+            <li>
+                <div class="lc-fecha"><strong>{{ b.rango_txt }}</strong> · {{ b.alcance_txt }}</div>
+                <div class="lc-detalle">{{ b.motivo }} · {{ b.clases }} {{ 'clase cancelada' if b.clases == 1 else 'clases canceladas' }}</div>
+                <span class="badge badge-off">{{ b.estado_txt }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </main>
+</body>
+</html>

@@ -44,7 +44,7 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
         .select("*, horario(cupo_max, activo, dia_semana)")
         .gte("fecha", inicio.isoformat())
         .lte("fecha", fin.isoformat())
-        .eq("estado", "programada")
+        .in_("estado", ["programada", "cancelada"])
         .execute()
         .data
     )
@@ -81,7 +81,9 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
         disponibles = max(0, cupo_max - confirmadas.get(c["id"], 0))
         fecha = date.fromisoformat(c["fecha"])
 
-        if inicio_dt <= ahora_dt:
+        if c["estado"] == "cancelada":
+            estado = "cancelada"
+        elif inicio_dt <= ahora_dt:
             estado = "pasada"
         elif c["id"] in inscriptas:
             estado = "inscripta"
@@ -130,12 +132,18 @@ def agrupar_por_dia(clases: list[dict]) -> list[dict]:
                 "horas": [],
                 "inscripta_en": [],
                 "espera_en": [],
+                "canceladas_en": [],
                 "todas_pasadas": True,
+                "sin_clases_disponibles": True,
             },
         )
         d["horas"].append(c["hora"])
         if c["estado"] != "pasada":
             d["todas_pasadas"] = False
+        if c["estado"] not in ("pasada", "cancelada"):
+            d["sin_clases_disponibles"] = False
+        if c["estado"] == "cancelada":
+            d["canceladas_en"].append(c["hora"])
         if c["estado"] == "inscripta":
             d["inscripta_en"].append(c["hora"])
         if c["estado"] == "espera":
@@ -198,6 +206,8 @@ def _asistencia_de(reserva: dict) -> str | None:
 
 def _estado_historial(reserva: dict) -> tuple[str, str]:
     if reserva["estado"] == "cancelada":
+        if reserva.get("id_bloqueo") is not None:
+            return "Cancelada por la profesora", "badge-espera"
         return "Cancelada", "badge-off"
     return {
         "presente": ("Presente", "badge-on"),
@@ -208,7 +218,7 @@ def _estado_historial(reserva: dict) -> tuple[str, str]:
 def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
     columnas_clase = "clase(id, fecha, hora_inicio, duracion, precio)"
     reservas = (
-        sb.table("reserva").select(f"id, estado, fecha_cancelacion, asistencia(estado), {columnas_clase}")
+        sb.table("reserva").select(f"id, estado, fecha_cancelacion, id_bloqueo, asistencia(estado), {columnas_clase}")
         .eq("id_alumna", alumna_id).execute().data
     )
     espera = (
@@ -216,12 +226,14 @@ def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
         .eq("id_alumna", alumna_id).in_("estado", ["en_espera", "ofrecido"]).execute().data
     )
     ahora_dt = ahora()
-    proximas, historial, en_espera = [], [], []
+    proximas, historial, en_espera, canceladas_profesora = [], [], [], []
     for r in reservas:
         item = _item_clase(r["clase"], estado=r["estado"])
         if r["estado"] == "confirmada" and item["inicio"] > ahora_dt:
             proximas.append(item)
         else:
+            if r["estado"] == "cancelada" and r["id_bloqueo"] is not None and item["inicio"] > ahora_dt:
+                canceladas_profesora.append(item)
             item["estado_txt"], item["badge"] = _estado_historial(r)
             historial.append(item)
     for e in espera:
@@ -230,8 +242,10 @@ def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
             en_espera.append(item)
     proximas.sort(key=lambda i: i["inicio"])
     en_espera.sort(key=lambda i: i["inicio"])
+    canceladas_profesora.sort(key=lambda i: i["inicio"])
     historial.sort(key=lambda i: i["inicio"], reverse=True)
-    return {"proximas": proximas, "en_espera": en_espera, "historial": historial}
+    return {"proximas": proximas, "en_espera": en_espera, "historial": historial,
+            "canceladas_profesora": canceladas_profesora}
 
 
 # ---------- profesora: clases del día y asistencia ----------
@@ -322,3 +336,192 @@ def marcar_asistencia(sb: Client, id_reserva: int, estado: str) -> tuple[bool, s
         "fuera_de_horario": (False, "La asistencia solo se puede marcar el día de la clase, mientras dura."),
         "no_autorizada": (False, "Solo la profesora puede marcar asistencia."),
     }.get(resultado, (False, "Esa alumna ya no tiene reserva en esta clase."))
+
+
+# ---------- profesora: planificación (licencias, vacaciones y cancelaciones) ----------
+# Un bloqueo cancela las clases de un rango de fechas (todas o las de un horario).
+# Crear y eliminar lo hacen las funciones crear_bloqueo / quitar_bloqueo de la base;
+# acá solo se arma la vista previa (sin escribir nada) y se traducen los resultados.
+
+MESES_CORTOS = ["", "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "set", "oct", "nov", "dic"]
+LARGO_MAX_MOTIVO = 200
+ESTADOS_BLOQUEO = {"proximo": "Próximo", "en_curso": "En curso", "finalizado": "Finalizado"}
+
+
+def fecha_corta(f: date) -> str:
+    return f"{nombre_dia(f)} {f.day} {MESES_CORTOS[f.month]}"
+
+
+def _rango_texto(desde: date, hasta: date) -> str:
+    return fecha_corta(desde) if desde == hasta else f"Del {fecha_corta(desde)} al {fecha_corta(hasta)}"
+
+
+def _estado_bloqueo(desde: date, hasta: date, hoy: date) -> str:
+    if hasta < hoy:
+        return "finalizado"
+    return "en_curso" if desde <= hoy else "proximo"
+
+
+def horarios_para_elegir(sb: Client) -> list[dict]:
+    filas = sb.table("horario").select("id, dia_semana, hora_inicio").eq("activo", True).execute().data
+    filas.sort(key=lambda h: (DIAS_ORDEN.index(h["dia_semana"]), h["hora_inicio"]))
+    return [{"id": h["id"], "texto": f"{nombre_dia(h['dia_semana'])} {h['hora_inicio'][:5]}"} for h in filas]
+
+
+def validar_bloqueo(sb: Client, desde: date | None, hasta: date | None, id_horario: int | None,
+                    motivo: str) -> list[str]:
+    hoy = ahora().date()
+    errores = []
+    if desde is None or hasta is None:
+        errores.append("Elegí la fecha de inicio y la de finalización.")
+    elif desde < hoy:
+        errores.append("La fecha de inicio no puede ser anterior a hoy.")
+    elif hasta < desde:
+        errores.append("La fecha de finalización no puede ser anterior a la de inicio.")
+    if not motivo.strip():
+        errores.append("Escribí el motivo del bloqueo.")
+    elif len(motivo.strip()) > LARGO_MAX_MOTIVO:
+        errores.append(f"El motivo puede tener como máximo {LARGO_MAX_MOTIVO} caracteres.")
+    if id_horario is not None and id_horario not in {h["id"] for h in horarios_para_elegir(sb)}:
+        errores.append("El horario elegido no existe o está inactivo.")
+    return errores
+
+
+def vista_previa_bloqueo(sb: Client, desde: date, hasta: date, id_horario: int | None) -> dict:
+    """Qué pasaría si se confirma el bloqueo. Solo lee: no modifica la base."""
+    consulta = (
+        sb.table("clase").select("id, fecha, hora_inicio, estado, id_horario")
+        .gte("fecha", desde.isoformat()).lte("fecha", hasta.isoformat())
+        .in_("estado", ["programada", "cancelada"])
+    )
+    if id_horario is not None:
+        consulta = consulta.eq("id_horario", id_horario)
+    filas = sorted(consulta.execute().data, key=lambda c: (c["fecha"], c["hora_inicio"]))
+    ahora_dt = ahora()
+    a_cancelar = [c for c in filas if c["estado"] == "programada" and _inicio_clase(c) > ahora_dt]
+    empezadas = [c for c in filas if c["estado"] == "programada" and _inicio_clase(c) <= ahora_dt]
+    ya_canceladas = [c for c in filas if c["estado"] == "cancelada"]
+
+    ids = [c["id"] for c in a_cancelar]
+    alumnas: dict[int, list[str]] = {i: [] for i in ids}
+    espera: dict[int, int] = {i: 0 for i in ids}
+    if ids:
+        for r in (sb.table("reserva").select("id_clase, profiles(nombre, apellido)")
+                  .in_("id_clase", ids).eq("estado", "confirmada").execute().data):
+            alumnas[r["id_clase"]].append(f"{r['profiles']['nombre']} {r['profiles']['apellido']}")
+        for e in (sb.table("listadeespera").select("id_clase")
+                  .in_("id_clase", ids).in_("estado", ["en_espera", "ofrecido"]).execute().data):
+            espera[e["id_clase"]] += 1
+
+    def item(c, **extra):
+        f = date.fromisoformat(c["fecha"])
+        return {"fecha_txt": fecha_corta(f), "hora": c["hora_inicio"][:5], **extra}
+
+    ultima = sb.table("clase").select("fecha").order("fecha", desc=True).limit(1).execute().data
+    ultima_generada = date.fromisoformat(ultima[0]["fecha"]) if ultima else None
+    return {
+        "a_cancelar": [item(c, alumnas=sorted(alumnas[c["id"]], key=str.lower), espera=espera[c["id"]]) for c in a_cancelar],
+        "empezadas": [item(c) for c in empezadas],
+        "ya_canceladas": [item(c) for c in ya_canceladas],
+        "total_reservas": sum(len(v) for v in alumnas.values()),
+        "total_espera": sum(espera.values()),
+        "faltan_generar": ultima_generada is None or hasta > ultima_generada,
+        "ultima_generada": fecha_corta(ultima_generada) if ultima_generada else "",
+    }
+
+
+def _plural(n: int, singular: str, plural: str) -> str:
+    return f"{n} {singular if n == 1 else plural}"
+
+
+def confirmar_bloqueo(sb: Client, desde: date, hasta: date, id_horario: int | None, motivo: str,
+                      reservas_previstas: int | None = None) -> tuple[bool, str]:
+    tipo = "puntual" if id_horario is not None or desde == hasta else "licencia"
+    r = sb.rpc("crear_bloqueo", {
+        "p_tipo": tipo, "p_desde": desde.isoformat(), "p_hasta": hasta.isoformat(),
+        "p_id_horario": id_horario, "p_motivo": motivo.strip(),
+    }).execute().data
+    if r["resultado"] != "ok":
+        return False, {
+            "no_autorizada": "Solo la profesora puede crear bloqueos.",
+            "fechas_invalidas": "Revisá las fechas: el inicio tiene que ser de hoy en adelante.",
+            "motivo_vacio": "Escribí el motivo del bloqueo.",
+            "horario_invalido": "El horario elegido no existe.",
+        }.get(r["resultado"], "No se pudo guardar el bloqueo.")
+    if r["clases"] == 0:
+        return True, ("Bloqueo guardado. No había clases para cancelar todavía; "
+                      "las que se generen en esas fechas ya van a quedar canceladas.")
+    texto = f"Bloqueo guardado. Se {'canceló' if r['clases'] == 1 else 'cancelaron'} {_plural(r['clases'], 'clase', 'clases')}"
+    if r["reservas"]:
+        texto += f" y {_plural(r['reservas'], 'reserva', 'reservas')} (las alumnas lo ven como cancelada por la profesora)"
+    if r["espera"]:
+        texto += f"; se cerró la lista de espera de {_plural(r['espera'], 'alumna', 'alumnas')}"
+    texto += "."
+    if reservas_previstas is not None and reservas_previstas != r["reservas"]:
+        texto += (f" Las reservas cambiaron desde la vista previa (había {reservas_previstas}): "
+                  "se cancelaron las que existían al confirmar.")
+    return True, texto
+
+
+def bloqueos(sb: Client) -> dict:
+    filas = sb.table("bloqueo").select("*, horario(dia_semana, hora_inicio)").order("fecha_desde").execute().data
+    hoy = ahora().date()
+    ahora_dt = ahora()
+    if not filas:
+        return {"vigentes": [], "finalizados": []}
+    desde_min = min(b["fecha_desde"] for b in filas)
+    hasta_max = max(b["fecha_hasta"] for b in filas)
+    canceladas = (
+        sb.table("clase").select("id, fecha, hora_inicio, id_horario").eq("estado", "cancelada")
+        .gte("fecha", desde_min).lte("fecha", hasta_max).execute().data
+    )
+    ids = [b["id"] for b in filas]
+    reservas = (
+        sb.table("reserva").select("id_bloqueo, id_clase").in_("id_bloqueo", ids)
+        .eq("estado", "cancelada").execute().data
+    )
+
+    def cubre(b, c):
+        return b["fecha_desde"] <= c["fecha"] <= b["fecha_hasta"] and b["id_horario"] in (None, c["id_horario"])
+
+    vigentes, finalizados = [], []
+    for b in filas:
+        desde, hasta = date.fromisoformat(b["fecha_desde"]), date.fromisoformat(b["fecha_hasta"])
+        propias = [c for c in canceladas if cubre(b, c)]
+        # Volverían al eliminarlo: clases futuras que ningún otro bloqueo cubre.
+        vuelven = {c["id"] for c in propias if _inicio_clase(c) > ahora_dt
+                   and not any(cubre(o, c) for o in filas if o["id"] != b["id"])}
+        estado = _estado_bloqueo(desde, hasta, hoy)
+        h = b["horario"]
+        item = {
+            "id": b["id"],
+            "estado": estado,
+            "estado_txt": ESTADOS_BLOQUEO[estado],
+            "rango_txt": _rango_texto(desde, hasta),
+            "alcance_txt": f"Solo {nombre_dia(h['dia_semana'])} {h['hora_inicio'][:5]}" if h else "Todas las clases",
+            "motivo": b["motivo"],
+            "clases": len(propias),
+            "reservas": sum(r["id_bloqueo"] == b["id"] for r in reservas),
+            "vuelven_clases": len(vuelven),
+            "vuelven_reservas": sum(r["id_bloqueo"] == b["id"] and r["id_clase"] in vuelven for r in reservas),
+        }
+        (finalizados if estado == "finalizado" else vigentes).append(item)
+    finalizados.reverse()
+    return {"vigentes": vigentes, "finalizados": finalizados}
+
+
+def eliminar_bloqueo(sb: Client, id_bloqueo: int) -> tuple[bool, str]:
+    r = sb.rpc("quitar_bloqueo", {"p_id": id_bloqueo}).execute().data
+    if r["resultado"] != "ok":
+        return False, {
+            "finalizado": "Los bloqueos finalizados se conservan como historial y no se pueden eliminar.",
+            "no_autorizada": "Solo la profesora puede eliminar bloqueos.",
+        }.get(r["resultado"], "No se encontró ese bloqueo.")
+    texto = f"Bloqueo eliminado. {_plural(r['clases'], 'clase vuelve', 'clases vuelven')} a estar disponible{'s' if r['clases'] != 1 else ''}"
+    if r["reservas"]:
+        texto += f" y se {'recuperó' if r['reservas'] == 1 else 'recuperaron'} {_plural(r['reservas'], 'reserva', 'reservas')}"
+    texto += "."
+    if r["sin_cupo"]:
+        texto += (f" {_plural(r['sin_cupo'], 'reserva no se pudo', 'reservas no se pudieron')} recuperar "
+                  "porque el cupo de la clase ahora es menor.")
+    return True, texto

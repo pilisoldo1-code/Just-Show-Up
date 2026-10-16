@@ -193,6 +193,37 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   cada clase pasada muestra **Presente** (verde), **Ausente** (rojo), **Sin
   registrar** (gris, la profesora no marcó) o **Cancelada**, y arriba un resumen
   "N clases asistidas · M ausencias". Probado con 10 casos + navegador.
+- **Planificación (hecha 2026-10-16)** — `/profesora/planificacion`, menú de la
+  profesora: Horarios · Clases · **Planificación** · Alumnas. La profesora crea
+  un **bloqueo** (fecha de inicio, de finalización, motivo y opcionalmente
+  "Solo este horario") para licencias, vacaciones o un médico.
+  - **Dos pasos**: "Revisar clases afectadas" muestra (sin escribir nada en la
+    base) qué clases se cancelan, cuántas reservas y **qué alumnas**, la lista de
+    espera, las clases que ya empezaron (no se tocan) y las que aún no se
+    generaron. Recién "Confirmar y cancelar N clases" ejecuta `crear_bloqueo`,
+    que bloquea las filas de `clase` como `reservar`: lo que se cancela es lo que
+    hay al confirmar (si cambió desde la vista previa, el aviso lo dice).
+  - Al confirmar: clases → `cancelada` (no se pueden reservar ni anotarse en
+    espera), reservas confirmadas → `cancelada` con **`reserva.id_bloqueo`** = el
+    bloqueo, lista de espera → `expirado`. Las clases que se generen dentro del
+    rango nacen canceladas (`generar_clases` consulta `bloqueo`).
+  - La alumna ve "Cancelada por la profesora" en la grilla (hora tachada), en el
+    día, en Mis inscripciones (sección propia) y en Mi historial. El motivo no se
+    le muestra (puede ser privado).
+  - **Eliminar** (con diálogo de confirmación): solo bloqueos *Próximo* o *En
+    curso*; los *Finalizado* quedan como historial (la base también lo
+    rechaza). `quitar_bloqueo` vuelve a habilitar las clases **futuras** que no
+    cubra otro bloqueo (incluidas las que se generaron canceladas) y **recupera
+    solo las reservas que canceló ese bloqueo**, sin duplicar y sin pasar el cupo
+    actual (en orden de reserva; las que no entran quedan canceladas y marcadas).
+    Las reservas de clases que siguen cubiertas por otro bloqueo pasan a ese
+    bloqueo. Las cancelaciones de las alumnas nunca se recuperan. La lista de
+    espera no se recupera.
+  - Seguridad: `bloqueo` solo la lee la profesora; nadie escribe directo; las
+    funciones verifican `es_profesora()`.
+  - Probado con 75 casos + 16 de concurrencia (8 alumnas reservando mientras se
+    crea el bloqueo) + navegador escritorio/celular; la base quedó idéntica
+    después de cada prueba. Pruebas con horarios de sábado (no hay clases reales).
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -238,6 +269,10 @@ Somos **3 personas** implementando sobre el mismo repo. Para no pisarnos:
 
 Se definieron como módulos verticales: cada uno entrega algo visible/probable
 en la web, no solo cambios de esquema.
+
+- **Planificación** (pedido del profesor) — **hecho** (licencias, vacaciones y
+  cancelaciones puntuales). Pendientes del mismo pedido: **Estadísticas** y
+  **Tipo de clase** (falta que el usuario pase los nombres de los tipos).
 
 1. **Autenticación y perfiles** — etapa 1 y olvidé mi contraseña hechos; etapa 2
    fase 1 hecha, falta la fase 2 (cerrar `anon`) y rotar claves (ver Gotchas).
@@ -290,6 +325,10 @@ Supabase Auth (no se reinventa autenticación).
 - Al liberarse un cupo, se notifica a la primera de la lista de espera, que
   tiene 30 minutos para confirmar antes de que se ofrezca a la siguiente.
 - Solo la profesora marca asistencia (presente/ausente).
+- **Qué se cobra (para el futuro resumen mensual)**: las reservas `confirmada`
+  de clases `programada` que ya pasaron (presente, ausente o sin registrar). No
+  se cobran las reservas `cancelada`: las canceló la alumna a tiempo
+  (`id_bloqueo` NULL) o la profesora (`id_bloqueo` con valor).
 - El resumen mensual se genera al cierre de mes; estado pendiente → pagado
   cuando la profesora registra el cobro.
 - La suscripción a clases grabadas es independiente de asistir a clases
@@ -351,6 +390,9 @@ Para cada módulo, en este orden:
   antes que de Vercel. Para evitarlo, entrar al sitio al menos una vez por
   semana (o programar un ping).
 
+- **ACTUALIZACIÓN 2026-10-16: el deploy oficial (theta) sí se actualiza solo al
+  mergear a `main`** (verificado: el deploy de producción coincide con el último
+  commit de `main`). Lo de abajo queda como historia por si vuelve a fallar.
 - **El deploy oficial (`just-show-up-theta.vercel.app`) NO auto-deploya al
   pushear a `main`**, pese a figurar "conectado" a GitHub en el dashboard de
   esa cuenta. Cada push hay que ir manualmente a Deployments → Redeploy para
@@ -375,6 +417,15 @@ Para cada módulo, en este orden:
   Function"** para `reservar`, `cancelar_reserva`, `anotar_en_espera`,
   `reservas_confirmadas`, `generar_clases`, `marcar_asistencia` y `es_profesora`:
   es intencional (son la única vía de escritura y validan adentro quién llama).
+- **`reserva.id_bloqueo` no tiene clave foránea a propósito**: si la tuviera, al
+  eliminar un bloqueo se perdería la marca de las reservas que no se recuperan
+  (clases pasadas) y no se podría distinguir quién canceló. NULL = canceló la
+  alumna (o está activa); con valor = la canceló la profesora con ese bloqueo.
+- **CSS: `.btn-secundario` está definido antes que `.btn`** en `style.css`, así
+  que en elementos con las dos clases gana el fondo verde de `.btn` (pasa en
+  "Semana anterior/siguiente" y en el "Volver" de los diálogos). Pendiente de
+  corregir; en Planificación se corrigió solo para esa pantalla
+  (`.acciones-confirmar`) para no cambiar el diseño del resto sin pedirlo.
 - **Cupos**: la fuente de verdad son las filas de `reserva` con
   `estado='confirmada'`; los "lugares disponibles" salen de la función
   `reservas_confirmadas` (las alumnas no pueden contar reservas ajenas por RLS).
