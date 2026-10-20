@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import auth, clases, validaciones
+from app import auth, clases, estadisticas, validaciones
 from app.auth import ErrorAuth, Redirigir, Usuario, requiere_alumna, requiere_login, requiere_profesora
 from app.clases import DIAS_ORDEN
 
@@ -701,3 +701,19 @@ def alumna_reiniciar(request: Request, alumna_id: str, usuario: Usuario = Depend
         titulo="Contraseña reiniciada", nombre=f"{a['nombre']} {a['apellido']}",
         mail=a["mail"], contrasena=contrasena,
     )
+
+
+# ---------- profesora: estadísticas ----------
+
+@app.get("/profesora/estadisticas")
+def profesora_estadisticas(request: Request, periodo: str = estadisticas.PERIODO_DEFECTO,
+                           usuario: Usuario = Depends(requiere_profesora)):
+    if periodo not in estadisticas.PERIODOS:
+        periodo = estadisticas.PERIODO_DEFECTO
+    try:
+        datos, aviso = estadisticas.estadisticas(_sb(usuario), periodo), ""
+    except Exception:
+        logging.exception("No se pudieron calcular las estadísticas")
+        datos, aviso = None, "No pudimos cargar las estadísticas. Probá de nuevo."
+    return _render(request, "profesora_estadisticas.html", usuario, datos=datos, periodo=periodo,
+                   periodos=estadisticas.PERIODOS, aviso=aviso, aviso_ok=False)

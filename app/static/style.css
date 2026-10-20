@@ -926,3 +926,62 @@ main.ancho {
     color: var(--text);
     border: 1px solid #2a2e37;
 }
+
+/* ---------- estadísticas ---------- */
+
+.est-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.est-tile {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.est-etiqueta {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.est-valor {
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.est-valor-texto {
+    font-size: 1.25rem;
+    color: var(--text);
+}
+
+.est-detalle {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.est-tops {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0 16px;
+}
+
+.est-ranking {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.est-ranking li {
+    padding: 6px 0;
+}
+
+.est-ranking .badge {
+    float: right;
+}
