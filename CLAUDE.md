@@ -224,6 +224,20 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   - Probado con 75 casos + 16 de concurrencia (8 alumnas reservando mientras se
     crea el bloqueo) + navegador escritorio/celular; la base quedó idéntica
     después de cada prueba. Pruebas con horarios de sábado (no hay clases reales).
+- **Estadísticas (hecha 2026-10-19, rama `modulo-estadisticas`)** —
+  `/profesora/estadisticas`, menú de la profesora: … · Alumnas · **Estadísticas**.
+  Filtro de período: **Este mes** (desde el 1°), **Últimos 3 meses** (el mes
+  actual y los dos anteriores, desde el 1°) y **Todo**; siempre hasta hoy (hora
+  de Montevideo). Muestra % de asistencia general, día de la semana, horario
+  (día + hora) y mes con más asistencias (si hay empate se listan todos), top 3
+  con más asistencias y top 3 con más faltas. "Asistencia" = fila de
+  `asistencia` en `presente`; "falta" = `ausente`; las clases sin registrar no
+  entran en el porcentaje y no se cuentan reservas canceladas. Solo lectura con
+  la sesión de la profesora (RLS), sin tablas nuevas; lógica en
+  `app/estadisticas.py` (`calcular` es pura, sin base). Pruebas sin tocar la
+  base: `python -m unittest tests.test_estadisticas -v` (20 casos, incluido que
+  una alumna no pueda entrar) + navegador escritorio/celular con datos simulados.
+  **Falta verificarla contra la base real** (no había `.env` en esa sesión).
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -271,8 +285,8 @@ Se definieron como módulos verticales: cada uno entrega algo visible/probable
 en la web, no solo cambios de esquema.
 
 - **Planificación** (pedido del profesor) — **hecho** (licencias, vacaciones y
-  cancelaciones puntuales). Pendientes del mismo pedido: **Estadísticas** y
-  **Tipo de clase** (falta que el usuario pase los nombres de los tipos).
+  cancelaciones puntuales). Estadísticas **hecha** (ver Estado actual).
+  Pendiente del mismo pedido: **Tipo de clase** (falta que el usuario pase los nombres de los tipos).
 
 1. **Autenticación y perfiles** — etapa 1 y olvidé mi contraseña hechos; etapa 2
    fase 1 hecha, falta la fase 2 (cerrar `anon`) y rotar claves (ver Gotchas).
@@ -452,6 +466,10 @@ Para cada módulo, en este orden:
   pasa a campos ocultos del formulario y limpia la URL. Para probar sin mandar
   mails: `auth.admin.generate_link({"type": "recovery", ...})` devuelve el link
   (abrirlo lo gasta: sirve una sola vez).
+- **Python local ≥ 3.10**: el código usa `str | None` en anotaciones, así que el
+  Python 3.9 que trae macOS no lo puede importar (Vercel usa 3.12). Con `uv`:
+  `uv venv --python 3.12 .venv && uv pip install -r requirements.txt httpx`
+  (`httpx` lo pide `TestClient` para las pruebas).
 - **Servidor local**: `uvicorn app.main:app --port 8000 --env-file .env` (la app
   no carga `.env` sola; sin `--env-file` da `KeyError: 'SUPABASE_URL'`). El
   panel de preview del desktop no puede ejecutar el venv dentro de `~/Desktop`

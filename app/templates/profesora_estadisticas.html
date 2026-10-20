@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Estadísticas</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>Estadísticas</h1>
+        <p class="subtitle">Cómo vienen las asistencias según lo que marcaste en cada clase.</p>
+
+        <nav class="dias-nav" aria-label="Período">
+            {% for clave, texto in periodos.items() %}
+            <a class="dia-chip {{ 'dia-chip-activo' if clave == periodo }}" href="/profesora/estadisticas?periodo={{ clave }}"
+               {% if clave == periodo %}aria-current="page"{% endif %}>{{ texto }}</a>
+            {% endfor %}
+        </nav>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        {% if datos %}
+        {% if datos.presentes or datos.ausentes %}
+        <div class="est-grid">
+            <div class="est-tile">
+                <span class="est-etiqueta">Asistencia general</span>
+                <span class="est-valor">{{ datos.porcentaje }}%</span>
+                <span class="est-detalle">{{ datos.presentes }} {{ 'presente' if datos.presentes == 1 else 'presentes' }} ·
+                    {{ datos.ausentes }} {{ 'ausente' if datos.ausentes == 1 else 'ausentes' }}</span>
+            </div>
+            <div class="est-tile">
+                <span class="est-etiqueta">Día con más asistencias</span>
+                <span class="est-valor est-valor-texto">{{ datos.dia or '—' }}</span>
+                {% if datos.dia %}<span class="est-detalle">{{ datos.dia_cantidad }} {{ 'asistencia' if datos.dia_cantidad == 1 else 'asistencias' }}</span>{% endif %}
+            </div>
+            <div class="est-tile">
+                <span class="est-etiqueta">Horario con más asistencias</span>
+                <span class="est-valor est-valor-texto">{{ datos.horario or '—' }}</span>
+                {% if datos.horario %}<span class="est-detalle">{{ datos.horario_cantidad }} {{ 'asistencia' if datos.horario_cantidad == 1 else 'asistencias' }}</span>{% endif %}
+            </div>
+            <div class="est-tile">
+                <span class="est-etiqueta">Mes con más asistencias</span>
+                <span class="est-valor est-valor-texto">{{ datos.mes or '—' }}</span>
+                {% if datos.mes %}<span class="est-detalle">{{ datos.mes_cantidad }} {{ 'asistencia' if datos.mes_cantidad == 1 else 'asistencias' }}</span>{% endif %}
+            </div>
+        </div>
+
+        <div class="est-tops">
+            <section class="panel">
+                <h2>Más asistencias</h2>
+                {% if datos.top_asistencias %}
+                <ol class="est-ranking">
+                    {% for a in datos.top_asistencias %}
+                    <li><span>{{ a.nombre }}</span><span class="badge badge-on">{{ a.cantidad }}</span></li>
+                    {% endfor %}
+                </ol>
+                {% else %}
+                <p class="vacio vacio-izq">Nadie tiene asistencias en este período.</p>
+                {% endif %}
+            </section>
+            <section class="panel">
+                <h2>Más faltas</h2>
+                {% if datos.top_faltas %}
+                <ol class="est-ranking">
+                    {% for a in datos.top_faltas %}
+                    <li><span>{{ a.nombre }}</span><span class="badge badge-ausente">{{ a.cantidad }}</span></li>
+                    {% endfor %}
+                </ol>
+                {% else %}
+                <p class="vacio vacio-izq">Nadie faltó en este período.</p>
+                {% endif %}
+            </section>
+        </div>
+        <p class="nota">Se cuentan solo las clases en las que marcaste Presente o Ausente; las que quedaron sin registrar no entran en el porcentaje.</p>
+        {% else %}
+        <p class="vacio vacio-izq">Todavía no hay asistencias marcadas en este período.</p>
+        {% endif %}
+        {% endif %}
+    </main>
+</body>
+</html>
