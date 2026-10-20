@@ -985,3 +985,27 @@ main.ancho {
 .est-ranking .badge {
     float: right;
 }
+
+/* ---------- lista de espera ---------- */
+
+.oferta-aviso {
+    background: rgba(110, 231, 183, 0.12);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+}
+
+.oferta-aviso strong {
+    display: block;
+    color: var(--accent);
+    margin-bottom: 2px;
+}
+
+.card-oferta {
+    border-color: var(--accent);
+}
+
+.lc-oferta {
+    border-color: var(--accent) !important;
+}

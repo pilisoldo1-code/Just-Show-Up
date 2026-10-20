@@ -54,18 +54,21 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
         return []
 
     ids = [c["id"] for c in clases]
+    ahora_dt = ahora()
+    # Vence ofertas pasadas de los 30 minutos y ofrece los lugares libres (la base lo hace
+    # con la clase bloqueada). Solo hace falta para las clases que todavía no empezaron.
+    futuras = [c["id"] for c in clases if c["estado"] == "programada" and _inicio_clase(c) > ahora_dt]
+    if futuras:
+        sb.rpc("actualizar_listas_espera", {"p_ids": futuras}).execute()
     inscriptas = {
         r["id_clase"]
         for r in sb.table("reserva").select("id_clase")
         .eq("id_alumna", alumna_id).eq("estado", "confirmada").in_("id_clase", ids)
         .execute().data
     }
-    en_espera = {
-        r["id_clase"]: r["posicion"]
-        for r in sb.table("listadeespera").select("id_clase, posicion")
-        .eq("id_alumna", alumna_id).in_("estado", ["en_espera", "ofrecido"]).in_("id_clase", ids)
-        .execute().data
-    }
+    # Posición actual (entre las que siguen en la lista) y oferta vigente de esta alumna.
+    en_espera = {r["id_clase"]: r for r in sb.rpc("mi_lista_espera", {"p_ids": ids}).execute().data}
+    ofertas = {r["id_clase"]: r["cantidad"] for r in sb.rpc("ofertas_vigentes", {"p_ids": ids}).execute().data}
 
     # Las alumnas solo ven sus propias reservas: el total por clase lo cuenta la base.
     confirmadas = {
@@ -73,12 +76,13 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
         for r in sb.rpc("reservas_confirmadas", {"p_ids": ids}).execute().data
     }
 
-    ahora_dt = ahora()
     tarjetas = []
     for c in clases:
         inicio_dt = _inicio_clase(c)
         cupo_max = c["horario"]["cupo_max"]
-        disponibles = max(0, cupo_max - confirmadas.get(c["id"], 0))
+        # Un lugar ofrecido a la lista de espera queda guardado: no se muestra como libre.
+        disponibles = max(0, cupo_max - confirmadas.get(c["id"], 0) - ofertas.get(c["id"], 0))
+        espera = en_espera.get(c["id"])
         fecha = date.fromisoformat(c["fecha"])
 
         if c["estado"] == "cancelada":
@@ -87,7 +91,9 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
             estado = "pasada"
         elif c["id"] in inscriptas:
             estado = "inscripta"
-        elif c["id"] in en_espera:
+        elif espera and espera["estado"] == "ofrecido":
+            estado = "oferta"
+        elif espera:
             estado = "espera"
         elif disponibles == 0:
             estado = "completa"
@@ -106,7 +112,8 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
                 "cupo_max": cupo_max,
                 "disponibles": disponibles,
                 "estado": estado,
-                "posicion_espera": en_espera.get(c["id"]),
+                "posicion_espera": espera["posicion"] if espera else None,
+                "oferta_vence": _hora_local(espera["oferta_vence_en"]) if espera and espera["oferta_vence_en"] else "",
                 "puede_cancelar": ahora_dt <= inicio_dt - timedelta(hours=HORAS_LIMITE_CANCELACION),
             }
         )
@@ -132,6 +139,7 @@ def agrupar_por_dia(clases: list[dict]) -> list[dict]:
                 "horas": [],
                 "inscripta_en": [],
                 "espera_en": [],
+                "oferta_en": [],
                 "canceladas_en": [],
                 "todas_pasadas": True,
                 "sin_clases_disponibles": True,
@@ -148,6 +156,8 @@ def agrupar_por_dia(clases: list[dict]) -> list[dict]:
             d["inscripta_en"].append(c["hora"])
         if c["estado"] == "espera":
             d["espera_en"].append(c["hora"])
+        if c["estado"] == "oferta":
+            d["oferta_en"].append(c["hora"])
     return list(dias.values())
 
 
@@ -181,6 +191,34 @@ def anotar_en_espera(sb: Client, clase_id: int) -> tuple[bool, str]:
         "ya_reservada": "Ya tenés esta clase reservada.",
         "ya_en_espera": "Ya estás en la lista de espera.",
     }.get(r["resultado"], "La clase ya no está disponible.")
+
+
+def confirmar_oferta(sb: Client, clase_id: int) -> tuple[bool, str]:
+    resultado = sb.rpc("confirmar_oferta", {"p_id_clase": clase_id}).execute().data
+    return {
+        "ok": (True, "¡Listo! Confirmaste tu lugar en la clase."),
+        "ya_reservada": (False, "Ya tenés esta clase reservada."),
+        "vencida": (False, "La oferta venció: pasaron los 30 minutos y el lugar se ofreció a la siguiente de la lista."),
+        "sin_oferta": (False, "No tenés un lugar ofrecido en esta clase."),
+    }.get(resultado, (False, "La clase ya no está disponible."))
+
+
+def rechazar_oferta(sb: Client, clase_id: int) -> tuple[bool, str]:
+    resultado = sb.rpc("rechazar_oferta", {"p_id_clase": clase_id}).execute().data
+    if resultado == "ok":
+        return True, "Listo, liberaste el lugar para la siguiente de la lista. Saliste de la lista de espera."
+    return False, "No tenés un lugar ofrecido en esta clase (puede que la oferta ya haya vencido)."
+
+
+def salir_lista_espera(sb: Client, clase_id: int) -> tuple[bool, str]:
+    resultado = sb.rpc("salir_lista_espera", {"p_id_clase": clase_id}).execute().data
+    if resultado == "ok":
+        return True, "Saliste de la lista de espera."
+    return False, "No estabas en la lista de espera de esta clase."
+
+
+def _hora_local(iso: str) -> str:
+    return datetime.fromisoformat(iso).astimezone(TZ).strftime("%H:%M")
 
 
 def _item_clase(c: dict, **extra) -> dict:
@@ -221,12 +259,17 @@ def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
         sb.table("reserva").select(f"id, estado, fecha_cancelacion, id_bloqueo, asistencia(estado), {columnas_clase}")
         .eq("id_alumna", alumna_id).execute().data
     )
-    espera = (
-        sb.table("listadeespera").select(f"posicion, {columnas_clase}")
-        .eq("id_alumna", alumna_id).in_("estado", ["en_espera", "ofrecido"]).execute().data
-    )
+    mias = sb.table("listadeespera").select("id_clase").eq("id_alumna", alumna_id).in_(
+        "estado", ["en_espera", "ofrecido"]).execute().data
+    if mias:
+        sb.rpc("actualizar_listas_espera", {"p_ids": [m["id_clase"] for m in mias]}).execute()
+    espera = sb.rpc("mi_lista_espera", {}).execute().data
+    datos_clase = {
+        c["id"]: c for c in (sb.table("clase").select("id, fecha, hora_inicio, duracion, precio")
+                             .in_("id", [e["id_clase"] for e in espera]).execute().data if espera else [])
+    }
     ahora_dt = ahora()
-    proximas, historial, en_espera, canceladas_profesora = [], [], [], []
+    proximas, historial, en_espera, canceladas_profesora, ofertas = [], [], [], [], []
     for r in reservas:
         item = _item_clase(r["clase"], estado=r["estado"])
         if r["estado"] == "confirmada" and item["inicio"] > ahora_dt:
@@ -237,15 +280,21 @@ def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
             item["estado_txt"], item["badge"] = _estado_historial(r)
             historial.append(item)
     for e in espera:
-        item = _item_clase(e["clase"], posicion=e["posicion"])
-        if item["inicio"] > ahora_dt:
-            en_espera.append(item)
+        c = datos_clase.get(e["id_clase"])
+        if not c:
+            continue
+        item = _item_clase(c, id=c["id"], posicion=e["posicion"],
+                           oferta_vence=_hora_local(e["oferta_vence_en"]) if e["oferta_vence_en"] else "")
+        if item["inicio"] <= ahora_dt:
+            continue
+        (ofertas if e["estado"] == "ofrecido" else en_espera).append(item)
     proximas.sort(key=lambda i: i["inicio"])
     en_espera.sort(key=lambda i: i["inicio"])
+    ofertas.sort(key=lambda i: i["inicio"])
     canceladas_profesora.sort(key=lambda i: i["inicio"])
     historial.sort(key=lambda i: i["inicio"], reverse=True)
     return {"proximas": proximas, "en_espera": en_espera, "historial": historial,
-            "canceladas_profesora": canceladas_profesora}
+            "canceladas_profesora": canceladas_profesora, "ofertas": ofertas}
 
 
 # ---------- profesora: clases del día y asistencia ----------
@@ -314,6 +363,17 @@ def clase_con_asistencia(sb: Client, clase_id: int) -> dict | None:
         })
     alumnas.sort(key=lambda a: a["nombre"].lower())
     fecha = date.fromisoformat(c["fecha"])
+    if c["estado"] == "programada" and _inicio_clase(c) > ahora():
+        sb.rpc("actualizar_listas_espera", {"p_ids": [c["id"]]}).execute()
+    filas_espera = (
+        sb.table("listadeespera").select("posicion, estado, oferta_vence_en, profiles(nombre, apellido)")
+        .eq("id_clase", clase_id).in_("estado", ["en_espera", "ofrecido"]).order("posicion").execute().data
+    )
+    espera = [
+        {"posicion": i, "nombre": f"{e['profiles']['nombre']} {e['profiles']['apellido']}",
+         "oferta_vence": _hora_local(e["oferta_vence_en"]) if e["estado"] == "ofrecido" else ""}
+        for i, e in enumerate(filas_espera, start=1)
+    ]
     return {
         "id": c["id"],
         "fecha": fecha,
@@ -324,6 +384,7 @@ def clase_con_asistencia(sb: Client, clase_id: int) -> dict | None:
         "alumnas": alumnas,
         "presentes": sum(a["estado"] == "presente" for a in alumnas),
         "ausentes": sum(a["estado"] == "ausente" for a in alumnas),
+        "espera": espera,
     }
 
 

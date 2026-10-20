@@ -15,6 +15,19 @@
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
+        {% if ofertas %}
+        <h2 class="seccion">¡Se liberó un lugar para vos!</h2>
+        <ul class="lista-clases">
+            {% for c in ofertas %}
+            <li class="lc-oferta">
+                <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
+                <div class="lc-detalle">Confirmalo antes de las {{ c.oferta_vence }}</div>
+                <a class="lc-accion" href="/dia/{{ c.fecha }}">Confirmar o liberar ›</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
         {% if canceladas_profesora %}
         <h2 class="seccion">Canceladas por la profesora</h2>
         <p class="nota">Estas clases que tenías reservadas no se van a dictar y no se cobran.</p>
@@ -51,7 +64,7 @@
             <li>
                 <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
                 <div class="lc-detalle">Posición {{ c.posicion }} en la lista</div>
-                <a class="lc-accion" href="/dia/{{ c.fecha }}">Ver ›</a>
+                <a class="lc-accion" href="/dia/{{ c.fecha }}">Ver o salir ›</a>
             </li>
             {% endfor %}
         </ul>

@@ -30,7 +30,8 @@
                     <li>Cupo máximo: {{ c.cupo_max }}</li>
                     {% if c.estado != 'cancelada' %}
                     <li>
-                        {% if c.disponibles == 0 %}Clase completa
+                        {% if c.estado == 'oferta' %}Hay un lugar guardado para vos
+                        {% elif c.disponibles == 0 %}Clase completa
                         {% elif c.disponibles == 1 %}1 lugar disponible
                         {% else %}{{ c.disponibles }} lugares disponibles{% endif %}
                     </li>
@@ -83,8 +84,48 @@
                     <span class="badge badge-espera">Cancelada por la profesora</span>
                     <p class="nota">Esta clase no se va a dictar. Si la tenías reservada, no se cobra.</p>
 
+                    {% elif c.estado == 'oferta' %}
+                    <div class="oferta-aviso">
+                        <strong>¡Se liberó un lugar para vos!</strong>
+                        Confirmalo antes de las {{ c.oferta_vence }}; si no, pasa a la siguiente de la lista.
+                    </div>
+                    <form action="/clases/{{ c.id }}/confirmar-oferta" method="post">
+                        <input type="hidden" name="fecha" value="{{ fecha }}" />
+                        <button type="submit" class="btn btn-block">Confirmar lugar</button>
+                    </form>
+                    <button type="button" class="btn btn-block btn-peligro"
+                            onclick="document.getElementById('rechazar-{{ c.id }}').showModal()">No me interesa</button>
+                    <dialog id="rechazar-{{ c.id }}" class="modal">
+                        <form action="/clases/{{ c.id }}/rechazar-oferta" method="post">
+                            <input type="hidden" name="fecha" value="{{ fecha }}" />
+                            <h2>Liberar el lugar</h2>
+                            <p class="modal-clase">{{ titulo_dia }} · {{ c.hora }}</p>
+                            <p class="modal-texto">El lugar se le ofrece a la siguiente de la lista y vos salís de la lista de espera.</p>
+                            <div class="modal-botones">
+                                <button type="button" class="btn btn-secundario"
+                                        onclick="this.closest('dialog').close()">Volver</button>
+                                <button type="submit" class="btn btn-peligro-solido">Liberar lugar</button>
+                            </div>
+                        </form>
+                    </dialog>
+
                     {% elif c.estado == 'espera' %}
                     <span class="badge badge-espera">En lista de espera · posición {{ c.posicion_espera }}</span>
+                    <button type="button" class="btn btn-block btn-peligro"
+                            onclick="document.getElementById('salir-{{ c.id }}').showModal()">Salir de la lista</button>
+                    <dialog id="salir-{{ c.id }}" class="modal">
+                        <form action="/clases/{{ c.id }}/salir-espera" method="post">
+                            <input type="hidden" name="fecha" value="{{ fecha }}" />
+                            <h2>Salir de la lista de espera</h2>
+                            <p class="modal-clase">{{ titulo_dia }} · {{ c.hora }}</p>
+                            <p class="modal-texto">Si después querés volver a anotarte, quedás al final de la lista.</p>
+                            <div class="modal-botones">
+                                <button type="button" class="btn btn-secundario"
+                                        onclick="this.closest('dialog').close()">Volver</button>
+                                <button type="submit" class="btn btn-peligro-solido">Salir de la lista</button>
+                            </div>
+                        </form>
+                    </dialog>
 
                     {% else %}
                     <span class="badge badge-off">Finalizada</span>

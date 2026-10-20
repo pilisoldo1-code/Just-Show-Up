@@ -54,6 +54,7 @@
                     {% else %}
                         {% if d.canceladas_en %}<span class="badge badge-espera">Cancelada {{ d.canceladas_en | join(', ') }}</span>{% endif %}
                         {% for h in d.inscripta_en %}<span class="badge badge-on">Reservada {{ h }}</span>{% endfor %}
+                        {% for h in d.oferta_en %}<span class="badge badge-on">¡Lugar disponible! {{ h }}</span>{% endfor %}
                         {% for h in d.espera_en %}<span class="badge badge-espera">En espera {{ h }}</span>{% endfor %}
                         <span class="ver-dia">Ver clases ›</span>
                     {% endif %}
