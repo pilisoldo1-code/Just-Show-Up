@@ -1,0 +1,154 @@
+"""Pruebas de Resúmenes y pagos (sin tocar la base: se mockea app.pagos).
+
+Uso: python -m unittest tests.test_pagos -v
+"""
+
+import unittest
+from datetime import date
+from unittest import mock
+
+from fastapi.testclient import TestClient
+
+from app import auth, main, pagos
+from app.auth import Usuario
+
+PROFESORA = Usuario(id="p", mail="profe@prueba.invalid", nombre="Profe", apellido="Prueba", rol="profesora", token="t")
+ALUMNA = Usuario(id="a", mail="alumna@prueba.invalid", nombre="Ana", apellido="Prueba", rol="alumna", token="t")
+
+RESUMEN_PENDIENTE = {
+    "id": 1, "alumna": "Ana Uno", "cantidad_clases": 2, "total": 1600.0,
+    "estado": "pendiente", "pago": None,
+}
+RESUMEN_PAGADO = {
+    "id": 2, "alumna": "Bea Dos", "cantidad_clases": 1, "total": 800.0,
+    "estado": "pagado", "pago": {"monto": 800.0, "medio": "Efectivo", "fecha": "2026-10-05"},
+}
+HOY = date(2026, 10, 20)
+
+
+class Helpers(unittest.TestCase):
+    def test_mes_anterior_cruza_anio(self):
+        self.assertEqual(pagos.mes_anterior(1, 2026), (12, 2025))
+        self.assertEqual(pagos.mes_anterior(5, 2026), (4, 2026))
+
+    def test_mes_siguiente_cruza_anio(self):
+        self.assertEqual(pagos.mes_siguiente(12, 2026), (1, 2027))
+        self.assertEqual(pagos.mes_siguiente(5, 2026), (6, 2026))
+
+
+class Pantalla(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(main.app)
+        p = mock.patch.object(main, "_sb", return_value=None)
+        p.start()
+        self.addCleanup(p.stop)
+        p = mock.patch.object(main.clases, "ahora", return_value=mock.Mock(date=lambda: HOY))
+        p.start()
+        self.addCleanup(p.stop)
+
+    def como(self, usuario):
+        p = mock.patch.object(auth, "_usuario_cacheado", return_value=usuario)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_sin_sesion_va_al_login(self):
+        self.como(None)
+        r = self.client.get("/profesora/resumenes", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertTrue(r.headers["location"].startswith("/login"))
+
+    def test_alumna_no_puede_entrar(self):
+        self.como(ALUMNA)
+        with mock.patch.object(pagos, "resumenes") as resumenes:
+            r = self.client.get("/profesora/resumenes", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertTrue(r.headers["location"].startswith("/?"))
+        resumenes.assert_not_called()
+
+    def test_profesora_ve_la_pantalla(self):
+        self.como(PROFESORA)
+        with mock.patch.object(pagos, "resumenes", return_value=[RESUMEN_PENDIENTE, RESUMEN_PAGADO]):
+            r = self.client.get("/profesora/resumenes")
+        self.assertEqual(r.status_code, 200)
+        for texto in ("Resúmenes mensuales", "Ana Uno", "$1600.00", "Pendiente", "Bea Dos", "Pagado", "Efectivo"):
+            self.assertIn(texto, r.text)
+
+    def test_mes_futuro_vuelve_al_actual(self):
+        self.como(PROFESORA)
+        with mock.patch.object(pagos, "resumenes", return_value=[]) as resumenes:
+            self.client.get("/profesora/resumenes?mes=3&anio=2027")
+        resumenes.assert_called_once()
+        self.assertEqual(resumenes.call_args.args[1:], (10, 2026))
+
+    def test_sin_resumenes_muestra_vacio(self):
+        self.como(PROFESORA)
+        with mock.patch.object(pagos, "resumenes", return_value=[]):
+            r = self.client.get("/profesora/resumenes")
+        self.assertIn("Todavía no se generaron resúmenes", r.text)
+
+    def test_error_de_base_muestra_aviso(self):
+        self.como(PROFESORA)
+        with mock.patch.object(pagos, "resumenes", side_effect=RuntimeError("caída")), \
+                self.assertLogs(level="ERROR"):
+            r = self.client.get("/profesora/resumenes")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("No pudimos cargar los resúmenes", r.text)
+
+    def test_generar_ok(self):
+        self.como(PROFESORA)
+        with mock.patch.object(pagos, "generar", return_value=(True, "Se generaron 3 resúmenes.")):
+            r = self.client.post("/profesora/resumenes/generar", data={"mes": 10, "anio": 2026},
+                                  follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertIn("Se+generaron+3+res%C3%BAmenes", r.headers["location"].replace("%2E", "."))
+
+    def test_alumna_no_puede_generar(self):
+        self.como(ALUMNA)
+        with mock.patch.object(pagos, "generar") as generar:
+            r = self.client.post("/profesora/resumenes/generar", data={"mes": 10, "anio": 2026},
+                                  follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        generar.assert_not_called()
+
+    def test_registrar_pago_ok(self):
+        self.como(PROFESORA)
+        with mock.patch.object(pagos, "registrar_pago", return_value=(True, "Pago registrado.")) as rp:
+            r = self.client.post(
+                "/profesora/resumenes/1/pagar",
+                data={"mes": 10, "anio": 2026, "monto": "1600.00", "medio_pago": "efectivo", "fecha": "2026-10-20"},
+                follow_redirects=False,
+            )
+        self.assertEqual(r.status_code, 303)
+        self.assertIn("ok=1", r.headers["location"])
+        rp.assert_called_once()
+        self.assertEqual(rp.call_args.args[1:3], (1, 1600.0))
+
+    def test_registrar_pago_ya_pagado(self):
+        self.como(PROFESORA)
+        with mock.patch.object(pagos, "registrar_pago", return_value=(False, "Ese resumen ya estaba pagado.")):
+            r = self.client.post(
+                "/profesora/resumenes/2/pagar",
+                data={"mes": 10, "anio": 2026, "monto": "800", "medio_pago": "efectivo", "fecha": "2026-10-20"},
+                follow_redirects=False,
+            )
+        self.assertIn("ok=0", r.headers["location"])
+
+    def test_registrar_pago_fecha_invalida(self):
+        self.como(PROFESORA)
+        with mock.patch.object(pagos, "registrar_pago") as rp:
+            r = self.client.post(
+                "/profesora/resumenes/1/pagar",
+                data={"mes": 10, "anio": 2026, "monto": "100", "medio_pago": "efectivo", "fecha": "no-es-fecha"},
+                follow_redirects=False,
+            )
+        self.assertIn("ok=0", r.headers["location"])
+        rp.assert_not_called()
+
+    def test_menu_profesora_tiene_resumenes(self):
+        self.como(PROFESORA)
+        with mock.patch.object(pagos, "resumenes", return_value=[]):
+            self.assertIn('href="/profesora/resumenes"', self.client.get("/profesora/resumenes").text)
+
+
+if __name__ == "__main__":
+    unittest.main()
