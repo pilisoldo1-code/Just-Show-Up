@@ -281,6 +281,96 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 - Existe un segundo deploy "oficial" conectado por GitHub a otra cuenta de
   Vercel (la de la dueña del repo) — ver Gotchas.
 
+## Plan del equipo hasta el martes 20/10/2026
+
+> **Para Claude Code**: leé esta sección antes de empezar. Cada integrante trabaja en
+> **un módulo distinto, en su propia rama**. No toques módulos de otra persona.
+
+### Estado al viernes 16/10 (lo que hay que saber antes de arrancar)
+- `main` = commit `e5760f9` (incluye Planificación). theta y **amber** ya tienen ese código.
+  amber se desplegó desde una copia limpia de `main` (sin `.env`); vuelta atrás:
+  `vercel rollback dpl_H4KXxxhVEtVBqKbmrHDPrdM1yQp8`.
+- **Rotación de claves EN CURSO**: ya existen las claves nuevas (`sb_publishable_...` y
+  la secret `servidor_app`, `sb_secret_...`). Julieta ya las tiene en su `.env` y la app
+  pasa todas las pruebas con ellas. amber y theta **todavía usan las claves viejas**,
+  que siguen activas. **Nadie desactive las claves viejas** hasta que Julieta lo coordine.
+- **Fase 2 de seguridad (RLS) NO aplicada todavía**: sin sesión se puede leer y escribir
+  `horario`, `clase`, `reserva` y `listadeespera`. No crear tablas nuevas con acceso `anon`.
+- **Licencia "Vacaciones" 20–26/10 (era una prueba)**: la eliminó por error una prueba
+  automática el 16/10 (tomaba "el primer bloqueo de la tabla"). Volvieron las 10 clases y
+  las 22 reservas de demo. **Decisión pendiente de Julieta**: recrearla o dejarla así.
+  No la recreen ni toquen bloqueos reales hasta que Julieta decida.
+- Datos de demo cargados (8 alumnas `@demo.invalid`) y cuentas de prueba `@prueba.invalid`.
+
+### Metas por integrante (para el martes 20/10)
+
+> La **seguridad (rotación de claves y fase 2 RLS) queda en pausa** y se retoma después
+> del martes. Mientras tanto: **nadie desactiva las claves viejas, nadie aplica
+> `supabase/pendientes/auth_etapa2_cerrar_anon.sql` y nadie cambia variables de Vercel.**
+> Las claves viejas siguen funcionando, así que el `.env` de cada una sigue sirviendo.
+
+**Pilar — Estadísticas** (pedido del profesor) · rama `modulo-estadisticas`
+- Pantalla de la profesora `/profesora/estadisticas` (opción "Estadísticas" en su menú) con
+  filtro de período (este mes / últimos 3 meses / todo): día de la semana con más
+  asistencias, horario con más asistencias, top 3 alumnas con más asistencias, top 3 con
+  más faltas, mes con más asistencias y % de asistencia general.
+- "Asistencia" = fila de `asistencia` con estado `presente`; "falta" = `ausente`.
+- **No necesita tablas nuevas**: solo lectura con la sesión de la profesora (RLS ya lo
+  permite). Lógica en `app/estadisticas.py`. Con los datos de demo ya hay números.
+- **Listo cuando**: pantalla funcionando, probada en celular, pruebas (incluido que una
+  alumna no pueda entrar), PR abierto.
+
+**Integrante 3 — Resumen mensual y pagos (módulo 6, sin Mercado Pago)** · rama `modulo-6-resumen`
+- **Necesita autorización de Julieta para crear tablas**: `resumenmensual` y `pago` con los
+  atributos del modelo de datos (tabla más abajo), con RLS desde el inicio (profesora
+  todo; alumna solo lo suyo; **sin acceso anon**). Avisar en el grupo antes de la migración.
+- Regla de cobro (ver "Reglas de negocio"): reservas `confirmada` de clases `programada`
+  ya dictadas en el mes. No se cobran las canceladas (por la alumna ni por la profesora).
+- Profesora: pantalla "Resúmenes" (elegir mes → por alumna: cantidad de clases, total,
+  estado pendiente/pagado), botón "Generar resumen del mes" y "Registrar pago"
+  (efectivo/transferencia) que lo pasa a pagado.
+- Alumna: **Mis facturas** (hoy vacía) muestra sus resúmenes y el detalle de clases.
+- Lógica en `app/resumen.py`.
+- **Listo cuando**: migración aplicada con RLS verificado, pantallas de profesora y alumna,
+  pruebas con datos de prueba que se limpian, PR abierto.
+
+**Julieta — Lista de espera completa (módulo 4)** · rama `modulo-4-lista-espera`
+- Hoy solo se puede anotarse y ver la posición. Falta (reglas de negocio): **cuando se
+  libera un lugar, se le ofrece a la primera de la lista, que tiene 30 minutos para
+  confirmar; si no confirma, pasa a la siguiente**. Y poder **salir de la lista**.
+- **No necesita tablas nuevas**: `listadeespera` ya tiene los estados `ofrecido`,
+  `confirmado`, `expirado` y la columna `oferta_vence_en` (hoy sin uso). Sí hay que
+  **modificar funciones de la base** (`cancelar_reserva`, `reservar`, `anotar_en_espera`)
+  y agregar alguna nueva (confirmar oferta, salir de la lista, vencer ofertas): avisar en el
+  grupo antes de aplicarlas.
+- Sin mails todavía: el aviso es **dentro de la app** (en el día, en la grilla y en Mis
+  inscripciones: "Se liberó un lugar: confirmá antes de las HH:MM"). Mientras la oferta
+  está vigente, ese lugar no lo puede tomar otra alumna. Las ofertas vencidas se procesan
+  al consultar (no hay tareas programadas).
+- Cuidado con Planificación: si la profesora cancela la clase, las ofertas se cierran.
+- Decisión pendiente de Julieta (de antes): recrear o no la licencia "Vacaciones".
+- **Listo cuando**: oferta, confirmación, vencimiento y salida funcionando, con pruebas de
+  concurrencia (dos alumnas intentando el mismo lugar) y PR abierto.
+
+**Para después del martes**: cerrar la seguridad (rotación de claves + fase 2 RLS +
+desactivar claves viejas; ver estado arriba y Gotchas), Tipo de clase (faltan los nombres
+de los tipos), mails con Resend, suscripción y videos (modalidad sin decidir).
+
+### Reglas para no pisarse
+- Antes de arrancar: `git pull` en `main`, `pip install -r requirements.txt` y
+  `pip uninstall gotrue` (la librería de Supabase se actualizó a 2.32).
+- Cada una en su rama y PR a `main`; merge recién cuando la dueña del módulo lo pruebe.
+- Archivos compartidos (`app/main.py`, `app/templates/_menu.html`, `app/static/style.css`,
+  `CLAUDE.md`): agregar código en **una sección propia al final** (rutas al final de
+  `main.py`, CSS al final con un comentario `/* ---------- módulo ---------- */`). La lógica
+  nueva va en **un archivo propio** (`app/estadisticas.py`, `app/resumen.py`), no en
+  `app/clases.py`. En `CLAUDE.md`, cada una edita solo la sección de su módulo.
+- **Base de datos compartida**: avisar en el grupo antes de cualquier migración; nunca
+  borrar ni modificar datos reales ni de demo; las pruebas crean y borran solo lo suyo.
+- Las cuentas de prueba están en `.env.cuentas-prueba` de Julieta (no está en git):
+  pedírselas por privado. Nunca pegar claves ni contraseñas en el chat ni en el repo.
+- Si el sitio da error 500 en todos lados: Supabase pausado (ver Gotchas).
+
 ## Trabajo en equipo
 
 Somos **3 personas** implementando sobre el mismo repo. Para no pisarnos:
@@ -466,6 +556,11 @@ Para cada módulo, en este orden:
   "Semana anterior/siguiente" y en el "Volver" de los diálogos). Pendiente de
   corregir; en Planificación se corrigió solo para esa pantalla
   (`.acciones-confirmar`) para no cambiar el diseño del resto sin pedirlo.
+- **Las pruebas automáticas NUNCA deben elegir "el primer registro" de una tabla
+  compartida** (16/10: una prueba tomó el primer bloqueo creyendo que era el suyo y eliminó
+  una licencia real). Identificar lo propio por un marcador (`motivo` que empieza con
+  `PRUEBA`, horarios de prueba con precio 1, mails `@prueba.invalid`) y abortar si se va a
+  tocar algo que no lo tiene. Comparar una "foto" (hash) de las tablas antes y después.
 - **Cupos**: la fuente de verdad son las filas de `reserva` con
   `estado='confirmada'`; los "lugares disponibles" salen de la función
   `reservas_confirmadas` (las alumnas no pueden contar reservas ajenas por RLS).
