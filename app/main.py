@@ -313,7 +313,8 @@ def mis_inscripciones(request: Request, usuario: Usuario = Depends(requiere_alum
         aviso = ""
     except Exception:
         logging.exception("No se pudieron cargar las inscripciones")
-        datos, aviso = {"proximas": [], "en_espera": [], "historial": []}, "No pudimos cargar tus inscripciones. Probá de nuevo."
+        datos = {"proximas": [], "en_espera": [], "historial": [], "ofertas": [], "canceladas_profesora": []}
+        aviso = "No pudimos cargar tus inscripciones. Probá de nuevo."
     return _render(request, "mis_inscripciones.html", usuario, aviso=aviso, aviso_ok=False, **datos)
 
 
@@ -352,6 +353,24 @@ def cancelar_inscripcion(clase_id: int, fecha: str = Form(""), usuario: Usuario 
 @app.post("/clases/{clase_id}/lista-espera")
 def anotarse_en_espera(clase_id: int, fecha: str = Form(""), usuario: Usuario = Depends(requiere_alumna)):
     ok, aviso = _ejecutar(clases.anotar_en_espera, usuario, clase_id)
+    return _volver(fecha, ok, aviso)
+
+
+@app.post("/clases/{clase_id}/confirmar-oferta")
+def confirmar_oferta(clase_id: int, fecha: str = Form(""), usuario: Usuario = Depends(requiere_alumna)):
+    ok, aviso = _ejecutar(clases.confirmar_oferta, usuario, clase_id)
+    return _volver(fecha, ok, aviso)
+
+
+@app.post("/clases/{clase_id}/rechazar-oferta")
+def rechazar_oferta(clase_id: int, fecha: str = Form(""), usuario: Usuario = Depends(requiere_alumna)):
+    ok, aviso = _ejecutar(clases.rechazar_oferta, usuario, clase_id)
+    return _volver(fecha, ok, aviso)
+
+
+@app.post("/clases/{clase_id}/salir-espera")
+def salir_lista_espera(clase_id: int, fecha: str = Form(""), usuario: Usuario = Depends(requiere_alumna)):
+    ok, aviso = _ejecutar(clases.salir_lista_espera, usuario, clase_id)
     return _volver(fecha, ok, aviso)
 
 

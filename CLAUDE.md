@@ -244,8 +244,34 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   de plazo vencido y el servidor también lo rechaza (reserva intacta, cupo sin
   liberar, queda cobrable para el resumen mensual futuro). Clase iniciada: sin
   botón y el servidor la rechaza. Probado con 29 casos (ver Gotchas: cupos).
-- Lo que NO hace todavía la lista de espera: ofrecer el cupo liberado a la
-  primera de la lista (ventana de 30 min), mails, ni salir de la lista.
+- **Lista de espera completa (módulo 4, hecho 2026-10-20)**. Migración
+  `*_lista_espera_ofertas.sql`. Decisiones del usuario: rechazar con botón, la
+  profesora ve la lista (solo lectura), estado nuevo `retirado`.
+  - Cuando se libera un lugar (cancela una alumna, la profesora sube el cupo,
+    etc.) se le **ofrece a la primera** de la lista: estado `ofrecido` y
+    `oferta_vence_en` = ahora + 30 min **o el inicio de la clase, lo que pase
+    primero**. Mientras la oferta está vigente el lugar queda guardado: las demás
+    ven la clase completa y `reservar` devuelve `completa`.
+  - La alumna ve el aviso **dentro de la app** (día: "Se liberó un lugar para vos:
+    confirmá antes de las HH:MM" con **Confirmar lugar** / **No me interesa**;
+    grilla: "¡Lugar disponible!"; Mis inscripciones: sección propia). Sin mails.
+  - Confirmar → reserva `confirmada`, espera `confirmado`. No me interesa →
+    `retirado` y pasa enseguida a la siguiente. Vence sin respuesta → `expirado`
+    y pasa a la siguiente. **Salir de la lista** (con confirmación) → `retirado`;
+    si vuelve a anotarse queda al final.
+  - **No hay tareas programadas**: `_procesar_lista_espera(clase)` (interna) vence
+    ofertas y ofrece lugares libres; la llaman `reservar`, `cancelar_reserva`,
+    `anotar_en_espera`, `confirmar_oferta`, `rechazar_oferta`,
+    `salir_lista_espera` y `actualizar_listas_espera(ids)` (que la app llama al
+    abrir la grilla, el día, Mis inscripciones y el detalle de la profesora).
+    Todas bloquean la fila de la clase. No toca clases canceladas ni empezadas.
+  - `posicion` guardada = máximo histórico + 1 (nunca se repite, define el orden);
+    la posición que se muestra es la actual (`mi_lista_espera`). Lugares guardados:
+    `ofertas_vigentes(ids)` (sin revelar para quién).
+  - Planificación: un bloqueo cierra las ofertas (`expirado`) y al quitarlo no se
+    reabren.
+  - Probado con 49 casos (incluye concurrencia: dos cancelaciones a la vez, carreras
+    entre la alumna con oferta y otras, anotaciones simultáneas) + navegador.
 - Panel de profesora en `/profesora/horarios`: listado completo (activos e
   inactivos), alta (`/profesora/horarios/nuevo`), edición
   (`/profesora/horarios/{id}/editar`) y activar/desactivar
@@ -298,8 +324,8 @@ en la web, no solo cambios de esquema.
 3. **Grilla y reservas (Alumna)** — **hecho con alumna provisoria**: inscribirse,
    cancelar (hasta 1 h antes), cupos en vivo. Falta el mail de confirmación y
    "mis próximas reservas".
-4. **Lista de espera** — **parcial**: anotarse y ver la posición. Falta ofrecer
-   el cupo liberado (30 min), notificar y salir de la lista.
+4. **Lista de espera** — **hecho** (oferta de 30 min dentro de la app, confirmar,
+   rechazar, salir; vista de la profesora). Falta solo el aviso por mail (Resend).
 5. **Asistencia** — **hecho** (profesora marca; la alumna lo ve en Mi historial).
 6. **Resumen mensual y pagos** — cálculo automático + registro de pagos
    (Mercado Pago para pagos, ver Stack).

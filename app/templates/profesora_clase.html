@@ -59,6 +59,21 @@
         {% else %}
         <p class="vacio">Nadie reservó esta clase.</p>
         {% endif %}
+        {% if clase.espera %}
+        <h2 class="seccion">Lista de espera</h2>
+        <ul class="lista-clases">
+            {% for e in clase.espera %}
+            <li>
+                <div class="lc-fecha"><strong>{{ e.posicion }}.</strong> {{ e.nombre }}</div>
+                {% if e.oferta_vence %}
+                <span class="badge badge-on">Lugar ofrecido · confirma hasta las {{ e.oferta_vence }}</span>
+                {% else %}
+                <span class="badge badge-espera">En espera</span>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
     </main>
 </body>
 </html>
