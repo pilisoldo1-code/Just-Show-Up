@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import auth, clases, estadisticas, validaciones
+from app import auth, clases, estadisticas, pagos, validaciones
 from app.auth import ErrorAuth, Redirigir, Usuario, requiere_alumna, requiere_login, requiere_profesora
 from app.clases import DIAS_ORDEN
 from app import tipos_clase
@@ -337,7 +337,12 @@ def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
 
 @app.get("/mis-facturas")
 def mis_facturas(request: Request, usuario: Usuario = Depends(requiere_alumna)):
-    return _render(request, "mis_facturas.html", usuario)
+    try:
+        facturas, aviso = pagos.mis_facturas(_sb(usuario), usuario.id), ""
+    except Exception:
+        logging.exception("No se pudieron cargar las facturas")
+        facturas, aviso = [], "No pudimos cargar tus facturas. Probá de nuevo."
+    return _render(request, "mis_facturas.html", usuario, facturas=facturas, aviso=aviso, aviso_ok=False)
 
 
 @app.post("/clases/{clase_id}/inscribirse")
@@ -916,3 +921,76 @@ def profesora_estadisticas(request: Request, periodo: str = estadisticas.PERIODO
         datos, aviso = None, "No pudimos cargar las estadísticas. Probá de nuevo."
     return _render(request, "profesora_estadisticas.html", usuario, datos=datos, periodo=periodo,
                    periodos=estadisticas.PERIODOS, aviso=aviso, aviso_ok=False)
+
+
+# ---------- profesora: resúmenes y pagos ----------
+
+def _mes_anio(mes: int, anio: int) -> tuple[int, int]:
+    """Normaliza mes/año: si no vienen usa el actual, y nunca deja ir a un mes futuro."""
+    hoy = clases.ahora().date()
+    if not mes or not anio:
+        return hoy.month, hoy.year
+    if (anio, mes) > (hoy.year, hoy.month):
+        return hoy.month, hoy.year
+    return mes, anio
+
+
+@app.get("/profesora/resumenes")
+def profesora_resumenes(request: Request, mes: int = 0, anio: int = 0, ok: int = 0, aviso: str = "",
+                        usuario: Usuario = Depends(requiere_profesora)):
+    mes, anio = _mes_anio(mes, anio)
+    hoy = clases.ahora().date()
+    try:
+        datos, aviso_final = pagos.resumenes(_sb(usuario), mes, anio), aviso
+    except Exception:
+        logging.exception("No se pudieron cargar los resúmenes")
+        datos, aviso_final = [], "No pudimos cargar los resúmenes. Probá de nuevo."
+    ant_mes, ant_anio = pagos.mes_anterior(mes, anio)
+    sig_mes, sig_anio = pagos.mes_siguiente(mes, anio)
+    return _render(
+        request, "profesora_resumenes.html", usuario,
+        resumenes=datos, mes=mes, anio=anio, mes_txt=f"{pagos.MESES[mes].capitalize()} {anio}",
+        ant_mes=ant_mes, ant_anio=ant_anio, sig_mes=sig_mes, sig_anio=sig_anio,
+        hay_siguiente=(anio, mes) < (hoy.year, hoy.month),
+        hoy_iso=hoy.isoformat(), medios_pago=pagos.MEDIOS_PAGO,
+        aviso=aviso_final, aviso_ok=bool(ok),
+    )
+
+
+@app.post("/profesora/resumenes/generar")
+def profesora_resumenes_generar(mes: int = Form(...), anio: int = Form(...),
+                                usuario: Usuario = Depends(requiere_profesora)):
+    try:
+        ok, aviso = pagos.generar(_sb(usuario), mes, anio)
+    except Exception:
+        logging.exception("Error al generar resúmenes")
+        ok, aviso = False, "Ocurrió un error, probá de nuevo."
+    return RedirectResponse(
+        url=f"/profesora/resumenes?" + urlencode({"mes": mes, "anio": anio, "ok": int(ok), "aviso": aviso}),
+        status_code=303,
+    )
+
+
+@app.post("/profesora/resumenes/{resumen_id}/pagar")
+def profesora_resumenes_pagar(
+    resumen_id: int,
+    mes: int = Form(...),
+    anio: int = Form(...),
+    monto: float = Form(...),
+    medio_pago: str = Form(...),
+    fecha: str = Form(...),
+    usuario: Usuario = Depends(requiere_profesora),
+):
+    f = _parse_fecha(fecha)
+    if f is None:
+        ok, aviso = False, "Fecha inválida."
+    else:
+        try:
+            ok, aviso = pagos.registrar_pago(_sb(usuario), resumen_id, monto, medio_pago, f)
+        except Exception:
+            logging.exception("Error al registrar pago")
+            ok, aviso = False, "Ocurrió un error, probá de nuevo."
+    return RedirectResponse(
+        url=f"/profesora/resumenes?" + urlencode({"mes": mes, "anio": anio, "ok": int(ok), "aviso": aviso}),
+        status_code=303,
+    )
