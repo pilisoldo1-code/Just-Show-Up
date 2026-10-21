@@ -1044,6 +1044,11 @@ main.ancho {
     background: var(--bg);
 }
 
+.tipo-card .tipo-imagen {
+    aspect-ratio: auto;
+    height: 140px;
+}
+
 .tipo-imagen-vacia {
     display: grid;
     place-content: center;

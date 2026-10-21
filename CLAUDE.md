@@ -238,8 +238,8 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   base: `python -m unittest tests.test_estadisticas -v` (20 casos, incluido que
   una alumna no pueda entrar) + navegador escritorio/celular con datos simulados.
   **Falta verificarla contra la base real** (no había `.env` en esa sesión).
-- **Tipos de clase (en rama `modulo-tipos-clase`, 2026-10-21; migración PREPARADA,
-  todavía NO aplicada en Supabase)**. Tabla `tipo_clase` (nombre único, descripción,
+- **Tipos de clase (rama `modulo-tipos-clase`, 2026-10-21; migración
+  `20261021002249_tipos_de_clase` APLICADA en Supabase el 21/10; código en PR)**. Tabla `tipo_clase` (nombre único, descripción,
   `imagen_url`, `duracion`, `precio_presencial`, `cupo_max`, `activo`; nunca se borra,
   se desactiva). Tipo inicial **Gimnasia** (60 min, $800, cupo 7) para los 10 horarios.
   - `horario.id_tipo_clase` obligatorio. Las columnas viejas `duracion`/`cupo_max`/`precio`
@@ -268,6 +268,11 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   - Probado en un **Postgres local** (pgserver) que reconstruye el esquema con todas las
     migraciones + copia de los datos: 89 casos de la migración y funciones (incluye
     concurrencia y permisos) y compatibilidad con la migración del resumen (PR #13).
+    Después de aplicarla: 42 casos de la app (incluye subir imágenes a Storage), todas las
+    pruebas de los demás módulos con el código nuevo y con el de theta y amber (que siguen
+    funcionando con la base nueva), navegador escritorio/celular. Antes de aplicarla se
+    hizo un respaldo de todos los datos y un script de vuelta atrás probado (deja las 6
+    funciones modificadas idénticas byte a byte a las de producción).
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -591,6 +596,17 @@ Para cada módulo, en este orden:
   una licencia real). Identificar lo propio por un marcador (`motivo` que empieza con
   `PRUEBA`, horarios de prueba con precio 1, mails `@prueba.invalid`) y abortar si se va a
   tocar algo que no lo tiene. Comparar una "foto" (hash) de las tablas antes y después.
+- **Desde Tipos de clase, el cupo/precio/duración de un horario los define su tipo**: un
+  trigger pisa lo que se escriba en `horario.duracion/cupo_max/precio`. Las pruebas que
+  necesiten un cupo particular tienen que crear un tipo propio (`PRUEBA-...`) y, para
+  "cambiar el cupo" de una clase ya generada, actualizar `clase.cupo_max` (cada clase guarda
+  el suyo). Las pruebas deben recordar los ids de lo que crean: buscar "los horarios del
+  tipo de prueba" falla si la prueba misma les cambió el tipo (pasó el 21/10).
+- **Imágenes de Storage: la URL pública puede seguir respondiendo un rato después de borrar
+  el archivo** (caché del CDN). Para verificar que se borró, listar el bucket, no pedir la URL.
+- **Los archivos de migración del repo tienen comentarios dentro de las funciones, pero en
+  Supabase se aplicaron sin ellos** (planificación y lista de espera): `pg_get_functiondef`
+  difiere solo en esas líneas. Para comparar o restaurar, sacar las líneas `--`.
 - **Cupos**: la fuente de verdad son las filas de `reserva` con
   `estado='confirmada'`; los "lugares disponibles" salen de la función
   `reservas_confirmadas` (las alumnas no pueden contar reservas ajenas por RLS).
