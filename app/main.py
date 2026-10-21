@@ -337,12 +337,18 @@ def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
 
 @app.get("/mis-facturas")
 def mis_facturas(request: Request, usuario: Usuario = Depends(requiere_alumna)):
+    ahora = clases.ahora()
+    en_curso = None
     try:
-        facturas, aviso = pagos.mis_facturas(_sb(usuario), usuario.id), ""
+        sb = _sb(usuario)
+        facturas, aviso = pagos.mis_facturas(sb, usuario.id), ""
+        propio = pagos.provisorio(sb, ahora.month, ahora.year, ahora, alumna_id=usuario.id)
+        en_curso = propio[0] if propio else None
     except Exception:
         logging.exception("No se pudieron cargar las facturas")
         facturas, aviso = [], "No pudimos cargar tus facturas. Probá de nuevo."
-    return _render(request, "mis_facturas.html", usuario, facturas=facturas, aviso=aviso, aviso_ok=False)
+    return _render(request, "mis_facturas.html", usuario, facturas=facturas, en_curso=en_curso,
+                   mes_en_curso=pagos.mes_txt(ahora.month, ahora.year), aviso=aviso, aviso_ok=False)
 
 
 @app.post("/clases/{clase_id}/inscribirse")
@@ -928,31 +934,46 @@ def profesora_estadisticas(request: Request, periodo: str = estadisticas.PERIODO
 def _mes_anio(mes: int, anio: int) -> tuple[int, int]:
     """Normaliza mes/año: si no vienen usa el actual, y nunca deja ir a un mes futuro."""
     hoy = clases.ahora().date()
-    if not mes or not anio:
+    if not 1 <= mes <= 12 or not 2024 <= anio:
         return hoy.month, hoy.year
     if (anio, mes) > (hoy.year, hoy.month):
         return hoy.month, hoy.year
     return mes, anio
 
 
+def _volver_resumenes(mes: int, anio: int, ok: bool, aviso: str) -> RedirectResponse:
+    return RedirectResponse(
+        url="/profesora/resumenes?" + urlencode({"mes": mes, "anio": anio, "ok": int(ok), "aviso": aviso}),
+        status_code=303,
+    )
+
+
 @app.get("/profesora/resumenes")
 def profesora_resumenes(request: Request, mes: int = 0, anio: int = 0, ok: int = 0, aviso: str = "",
                         usuario: Usuario = Depends(requiere_profesora)):
     mes, anio = _mes_anio(mes, anio)
-    hoy = clases.ahora().date()
+    ahora = clases.ahora()
+    hoy = ahora.date()
+    cerrado = pagos.mes_cerrado(mes, anio, hoy)
+    datos, provisorio, aviso_final = [], [], aviso
     try:
-        datos, aviso_final = pagos.resumenes(_sb(usuario), mes, anio), aviso
+        if cerrado:
+            datos = pagos.resumenes(_sb(usuario), mes, anio)
+        else:
+            provisorio = pagos.provisorio(_sb(usuario), mes, anio, ahora)
     except Exception:
         logging.exception("No se pudieron cargar los resúmenes")
-        datos, aviso_final = [], "No pudimos cargar los resúmenes. Probá de nuevo."
+        aviso_final, ok = "No pudimos cargar los resúmenes. Probá de nuevo.", 0
     ant_mes, ant_anio = pagos.mes_anterior(mes, anio)
     sig_mes, sig_anio = pagos.mes_siguiente(mes, anio)
     return _render(
         request, "profesora_resumenes.html", usuario,
-        resumenes=datos, mes=mes, anio=anio, mes_txt=f"{pagos.MESES[mes].capitalize()} {anio}",
+        resumenes=datos, provisorio=provisorio, cerrado=cerrado,
+        mes=mes, anio=anio, mes_txt=pagos.mes_txt(mes, anio),
         ant_mes=ant_mes, ant_anio=ant_anio, sig_mes=sig_mes, sig_anio=sig_anio,
         hay_siguiente=(anio, mes) < (hoy.year, hoy.month),
-        hoy_iso=hoy.isoformat(), medios_pago=pagos.MEDIOS_PAGO,
+        hoy_iso=hoy.isoformat(), hoy_txt=f"{hoy.day}/{hoy.month}", medios_pago=pagos.MEDIOS_PAGO,
+        motivo_min=pagos.MOTIVO_MIN, motivo_max=pagos.MOTIVO_MAX,
         aviso=aviso_final, aviso_ok=bool(ok),
     )
 
@@ -960,15 +981,14 @@ def profesora_resumenes(request: Request, mes: int = 0, anio: int = 0, ok: int =
 @app.post("/profesora/resumenes/generar")
 def profesora_resumenes_generar(mes: int = Form(...), anio: int = Form(...),
                                 usuario: Usuario = Depends(requiere_profesora)):
+    if not pagos.mes_cerrado(mes, anio, clases.ahora().date()):
+        return _volver_resumenes(mes, anio, False, "El mes todavía no terminó: los resúmenes se generan cuando cierra el mes.")
     try:
         ok, aviso = pagos.generar(_sb(usuario), mes, anio)
     except Exception:
         logging.exception("Error al generar resúmenes")
         ok, aviso = False, "Ocurrió un error, probá de nuevo."
-    return RedirectResponse(
-        url=f"/profesora/resumenes?" + urlencode({"mes": mes, "anio": anio, "ok": int(ok), "aviso": aviso}),
-        status_code=303,
-    )
+    return _volver_resumenes(mes, anio, ok, aviso)
 
 
 @app.post("/profesora/resumenes/{resumen_id}/pagar")
@@ -976,21 +996,45 @@ def profesora_resumenes_pagar(
     resumen_id: int,
     mes: int = Form(...),
     anio: int = Form(...),
-    monto: float = Form(...),
+    monto: str = Form(...),
     medio_pago: str = Form(...),
     fecha: str = Form(...),
     usuario: Usuario = Depends(requiere_profesora),
 ):
     f = _parse_fecha(fecha)
+    importe = pagos.parsear_monto(monto)
     if f is None:
         ok, aviso = False, "Fecha inválida."
+    elif f > clases.ahora().date():
+        ok, aviso = False, "La fecha del pago no puede ser posterior a hoy."
+    elif importe is None:
+        ok, aviso = False, "Monto inválido."
+    elif medio_pago not in pagos.MEDIOS_PAGO:
+        ok, aviso = False, "Elegí efectivo o transferencia."
     else:
         try:
-            ok, aviso = pagos.registrar_pago(_sb(usuario), resumen_id, monto, medio_pago, f)
+            ok, aviso = pagos.registrar_pago(_sb(usuario), resumen_id, importe, medio_pago, f)
         except Exception:
             logging.exception("Error al registrar pago")
             ok, aviso = False, "Ocurrió un error, probá de nuevo."
-    return RedirectResponse(
-        url=f"/profesora/resumenes?" + urlencode({"mes": mes, "anio": anio, "ok": int(ok), "aviso": aviso}),
-        status_code=303,
-    )
+    return _volver_resumenes(mes, anio, ok, aviso)
+
+
+@app.post("/profesora/resumenes/pagos/{pago_id}/anular")
+def profesora_resumenes_anular(
+    pago_id: int,
+    mes: int = Form(...),
+    anio: int = Form(...),
+    motivo: str = Form(""),
+    usuario: Usuario = Depends(requiere_profesora),
+):
+    motivo = " ".join(motivo.split())
+    if not pagos.MOTIVO_MIN <= len(motivo) <= pagos.MOTIVO_MAX:
+        ok, aviso = False, f"Escribí el motivo de la anulación ({pagos.MOTIVO_MIN} a {pagos.MOTIVO_MAX} caracteres)."
+    else:
+        try:
+            ok, aviso = pagos.anular_pago(_sb(usuario), pago_id, motivo)
+        except Exception:
+            logging.exception("Error al anular pago")
+            ok, aviso = False, "Ocurrió un error, probá de nuevo."
+    return _volver_resumenes(mes, anio, ok, aviso)

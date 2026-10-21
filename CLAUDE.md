@@ -99,8 +99,7 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     clases (con link a `/dia/{fecha}` para cancelar) y lista de espera con
     posición. **Mi historial** (`/mi-historial`, pantalla aparte por decisión
     del usuario): clases canceladas y clases pasadas. **Mis facturas**
-    (`/mis-facturas`): pantalla vacía explicativa hasta que exista el módulo de
-    resumen mensual y pagos.
+    (`/mis-facturas`): resúmenes mensuales con detalle de clases (ver módulo 6).
   - **Foto de perfil: pendiente de decisión.** Hoy el avatar son las iniciales
     porque no existe dónde guardar fotos. Para fotos reales haría falta una
     columna `foto_url` en `profiles` + un bucket de Supabase Storage con sus
@@ -273,6 +272,37 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     funcionando con la base nueva), navegador escritorio/celular. Antes de aplicarla se
     hizo un respaldo de todos los datos y un script de vuelta atrás probado (deja las 6
     funciones modificadas idénticas byte a byte a las de producción).
+- **Resumen mensual y pagos (módulo 6, rama `modulo-6-resumen-correcciones`,
+  2026-10-21; migración `20261021150000_resumen_mensual_pagos.sql` SIN APLICAR en
+  Supabase)**. Parte del PR #13 de Josefina (su rama `modulo-6-resumen` queda intacta)
+  con correcciones pedidas por Julieta. Sin Mercado Pago.
+  - Tablas: `resumen_mensual` (único por alumna+mes+año, pendiente/pagado),
+    `resumen_mensual_detalle` (foto de cada clase cobrada: reserva, fecha, hora, tipo,
+    precio; lo que ve la alumna no cambia aunque cambien tipos o precios) y `pago`
+    (`estado` vigente/anulado, `registrado_por`, `anulado_en`, `anulado_por`,
+    `motivo_anulacion`). Nadie escribe directo (ni la profesora): solo las funciones
+    `generar_resumenes`, `registrar_pago` y `anular_pago`. Lectura: profesora todo,
+    alumna lo suyo, `anon` nada.
+  - Regla de cobro en una sola función interna `_cobrables(mes, anio)`.
+  - **Solo meses cerrados** (`_mes_cerrado`, hora de Montevideo): el mes en curso no se
+    genera ni se cobra; la app lo muestra **provisorio** calculado en vivo
+    (`pagos.armar_provisorio`, misma regla, sin guardar nada): "hasta hoy" + "reservadas
+    para lo que queda del mes". Profesora: pantalla de Resúmenes; alumna: Mis facturas.
+  - **Pago = total exacto** (sin parciales; el formulario no deja escribir el monto) y
+    fecha no futura (la base lo frena con un trigger). Índice único parcial: como mucho
+    **un pago vigente por resumen** (doble click / dos pestañas: probado con 10 a la vez).
+    `registrar_pago` bloquea el resumen (`for update`); orden de bloqueo en todo el módulo:
+    resumen y después pago.
+  - **Anular** (con diálogo y motivo obligatorio): el pago queda como `anulado` con fecha,
+    responsable y motivo (nunca se borra) y el resumen vuelve a pendiente. Un pago nuevo
+    es otra fila (Pago #N): los dos quedan identificados en el historial.
+  - Regenerar es idempotente; no toca resúmenes pagados, su detalle ni sus pagos. Un
+    pendiente sí se recalcula (no es definitivo).
+  - Probado: 85 casos en un Postgres local descartable (reglas, concurrencia, anulación,
+    permisos de alumna/profesora/anon, compatibilidad con Tipos de clase y reservas),
+    cálculo provisorio de Python = regla de la base, 38 tests unitarios
+    (`tests.test_pagos` adaptado + `tests.test_pagos_correcciones`) y navegador con datos
+    simulados (escritorio y 375 px).
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -452,8 +482,9 @@ en la web, no solo cambios de esquema.
 4. **Lista de espera** — **hecho** (oferta de 30 min dentro de la app, confirmar,
    rechazar, salir; vista de la profesora). Falta solo el aviso por mail (Resend).
 5. **Asistencia** — **hecho** (profesora marca; la alumna lo ve en Mi historial).
-6. **Resumen mensual y pagos** — cálculo automático + registro de pagos
-   (Mercado Pago para pagos, ver Stack).
+6. **Resumen mensual y pagos** — **desarrollado sin Mercado Pago** en la rama
+   `modulo-6-resumen-correcciones` (trabajo de Josefina del PR #13 + correcciones);
+   migración **sin aplicar** todavía (ver Estado actual). Mercado Pago queda para después.
 7. **Suscripción y clases grabadas** — biblioteca de videos con gate de
    acceso. Modalidad (suscripción mensual vs. compra individual con vigencia)
    **todavía no está decidida** — no implementar hasta que se defina.
@@ -490,7 +521,7 @@ Supabase Auth (no se reinventa autenticación).
 - Al liberarse un cupo, se notifica a la primera de la lista de espera, que
   tiene 30 minutos para confirmar antes de que se ofrezca a la siguiente.
 - Solo la profesora marca asistencia (presente/ausente).
-- **Qué se cobra (para el futuro resumen mensual)**: las reservas `confirmada`
+- **Qué se cobra (resumen mensual)**: las reservas `confirmada`
   de clases `programada` que ya pasaron (presente, ausente o sin registrar). No
   se cobran las reservas `cancelada`: las canceló la alumna a tiempo
   (`id_bloqueo` NULL) o la profesora (`id_bloqueo` con valor).
@@ -591,6 +622,14 @@ Para cada módulo, en este orden:
   "Semana anterior/siguiente" y en el "Volver" de los diálogos). Pendiente de
   corregir; en Planificación se corrigió solo para esa pantalla
   (`.acciones-confirmar`) para no cambiar el diseño del resto sin pedirlo.
+- **No aplicar `20261021000000_resumen_mensual_pagos.sql` (rama de Josefina, PR #13)**:
+  la reemplaza `20261021150000_resumen_mensual_pagos.sql`, que agrega las protecciones
+  (pago único, mes cerrado, monto exacto, anulación). Aplicar las dos crearía conflicto.
+- **Mientras no se aplique la fase 2 de seguridad, `anon` puede modificar `clase` y
+  `reserva`** (verificado 2026-10-21 en la base local: cambiar el precio de una clase pasada,
+  cancelar una reserva cobrable o crear una reserva confirmada en una clase pasada). Eso
+  altera lo que se cobra en los resúmenes **pendientes** (los pagados quedan fijos por el
+  detalle). Las alumnas con sesión no pueden. Se cierra con `auth_etapa2_cerrar_anon.sql`.
 - **Las pruebas automáticas NUNCA deben elegir "el primer registro" de una tabla
   compartida** (16/10: una prueba tomó el primer bloqueo creyendo que era el suyo y eliminó
   una licencia real). Identificar lo propio por un marcador (`motivo` que empieza con

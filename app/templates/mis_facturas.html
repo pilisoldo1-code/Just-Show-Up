@@ -16,10 +16,27 @@
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
+        {% if en_curso %}
+        {% set a = en_curso %}
+        <ul class="lista-clases">
+            <li class="resumen-item">
+                <div class="lc-fecha"><strong>{{ mes_en_curso }}</strong> (en curso)</div>
+                <div class="lc-detalle">
+                    Hasta hoy: {{ a.dictadas }} {{ 'clase' if a.dictadas == 1 else 'clases' }} · ${{ '%.2f'|format(a.total_dictadas) }}
+                    {% if a.proximas %}<br />Reservadas para lo que queda del mes: {{ a.proximas }} · ${{ '%.2f'|format(a.total_proximas) }}{% endif %}
+                </div>
+                <span class="badge badge-espera">Provisorio</span>
+                {% include "_resumen_detalle.html" %}
+            </li>
+        </ul>
+        <p class="nota nota-separada">El mes en curso es provisorio: el resumen se cierra cuando termina el mes.</p>
+        {% endif %}
+
         {% if facturas %}
         <ul class="lista-clases">
             {% for f in facturas %}
-            <li>
+            {% set a = f %}
+            <li class="resumen-item">
                 <div class="lc-fecha"><strong>{{ f.mes_txt }}</strong></div>
                 <div class="lc-detalle">
                     {{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · ${{ '%.2f'|format(f.total) }}
@@ -32,10 +49,11 @@
                 {% else %}
                 <span class="badge badge-espera">Pendiente</span>
                 {% endif %}
+                {% include "_resumen_detalle.html" %}
             </li>
             {% endfor %}
         </ul>
-        {% else %}
+        {% elif not en_curso %}
         <p class="vacio vacio-izq">
             Todavía no tenés facturas. Acá vas a ver tu resumen mensual con las clases que
             tomaste, el monto a pagar y si el pago está pendiente o realizado.

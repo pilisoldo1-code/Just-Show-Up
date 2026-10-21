@@ -1158,3 +1158,66 @@ main.ancho {
     font-size: 1rem;
     resize: vertical;
 }
+
+/* ---------- módulo 6: resúmenes y pagos ---------- */
+.resumen-detalle,
+.pagos-anulados {
+    flex: 1 1 100%;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.resumen-detalle summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.resumen-detalle table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+
+.resumen-detalle th,
+.resumen-detalle td {
+    text-align: left;
+    padding: 4px 6px;
+    border-bottom: 1px solid #2a2e37;
+}
+
+.resumen-detalle .num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.resumen-detalle tfoot td {
+    color: var(--text);
+    font-weight: 600;
+    border-bottom: none;
+}
+
+.resumen-detalle .detalle-proxima {
+    opacity: 0.6;
+}
+
+.pagos-anulados ul {
+    margin: 4px 0 0;
+    padding-left: 18px;
+}
+
+.lista-clases .pagos-anulados li {
+    display: list-item;
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 2px 0;
+}
+
+.nota-chica {
+    font-size: 0.8rem;
+}
+
+.nota-separada {
+    margin: 6px 0 16px;
+}
