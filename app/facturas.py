@@ -179,6 +179,7 @@ def _factura(f: dict, nombres: dict) -> dict:
         "total": plata(f["total"]),
         "descuento_txt": _descuento_txt(f),
         "confirmada_txt": _fecha_txt(f.get("confirmada_en")),
+        "anulada_txt": _fecha_txt(f.get("anulada_en")),
     }
 
 
@@ -284,9 +285,11 @@ def factura(sb: Client, factura_id: int) -> dict | None:
         "en": _momento_txt(h["en"]), "por": nombres.get(h["por"], ""), "accion": _ACCIONES.get(h["accion"], h["accion"]),
         "texto": _historial_txt(h), "motivo": h.get("motivo") or "",
     } for h in historial]
-    por_id = {r["id"]: r for r in relacionadas}
-    salida["reemplazada_por"] = next((r for r in relacionadas if r["reemplaza_a"] == f["id"]), None)
-    salida["reemplaza"] = por_id.get(f.get("reemplaza_a"))
+    nueva = next((r for r in relacionadas if r["reemplaza_a"] == f["id"]), None)
+    vieja = next((r for r in relacionadas if r["id"] == f.get("reemplaza_a")), None)
+    salida["reemplazada_por_id"], salida["reemplaza_id"] = (nueva or {}).get("id"), (vieja or {}).get("id")
+    salida["reemplazada_por"] = nueva and (nueva["numero"] or "un borrador nuevo")
+    salida["reemplaza"] = vieja and vieja["numero"]
     return salida
 
 
@@ -378,6 +381,14 @@ def registrar_pago(sb: Client, factura_id: int, monto: Decimal, medio: str, fech
     r = _codigo(sb, "registrar_pago", {"p_id_resumen": factura_id, "p_monto": str(monto), "p_medio": medio,
                                        "p_fecha": fecha.isoformat()})
     return _resultado(r, "Pago registrado.")
+
+
+def anular_factura(sb: Client, factura_id: int, motivo: str) -> tuple[bool, str, int | None]:
+    r = _codigo(sb, "anular_factura", {"p_id": factura_id, "p_motivo": motivo})
+    if r.get("resultado") == "ok":
+        return True, ("Factura anulada. Se creó un borrador que la reemplaza, con las mismas clases y ajustes: "
+                      "corregilo y confirmalo."), r["id_nueva"]
+    return False, mensaje(r.get("resultado", "")), None
 
 
 def anular_pago(sb: Client, pago_id: int, motivo: str):

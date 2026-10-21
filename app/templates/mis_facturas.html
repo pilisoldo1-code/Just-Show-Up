@@ -40,6 +40,7 @@
             {% set interno = false %}
             {% include "_factura_lineas.html" %}
             {% if f.pago %}<p class="nota">Pagada el {{ f.pago.fecha }} · {{ f.pago.medio }}</p>{% endif %}
+            <a class="btn btn-chico" href="/mis-facturas/{{ f.id }}/pdf">Descargar PDF</a>
         </section>
         {% endfor %}
         {% else %}

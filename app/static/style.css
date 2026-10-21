@@ -1339,3 +1339,18 @@ main.ancho {
 .panel-facturacion .btn {
     margin-top: 12px;
 }
+
+@media (max-width: 560px) {
+    .factura-tabla {
+        font-size: 0.78rem;
+    }
+
+    .factura-tabla th,
+    .factura-tabla td {
+        padding: 5px 3px;
+    }
+
+    .factura-alumna {
+        padding: 14px 10px;
+    }
+}

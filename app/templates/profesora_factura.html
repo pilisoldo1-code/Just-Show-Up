@@ -18,12 +18,21 @@
         <h1>Factura de {{ f.alumna }}</h1>
         <p class="subtitle">{{ f.mes_txt }}{% if f.numero %} · {{ f.numero }}{% endif %}{% if f.confirmada_txt %} · confirmada el {{ f.confirmada_txt }}{% endif %}</p>
 
+        <p><a class="btn btn-chico btn-secundario" href="/profesora/resumenes/{{ f.id }}/pdf">{{ 'Vista previa del PDF' if f.estado_factura == 'borrador' else 'Descargar PDF' }}</a></p>
         <div class="factura-estados">
             <span class="badge {{ 'badge-espera' if f.estado_factura == 'borrador' else ('badge-off' if f.estado_factura == 'anulada' else 'badge-on') }}">{{ f.estado_factura_txt }}</span>
             {% if f.estado_factura == 'confirmada' %}
             <span class="badge {{ 'badge-on' if f.estado_pago != 'pendiente' else 'badge-espera' }}">{{ f.estado_pago_txt }}</span>
             {% endif %}
         </div>
+
+        {% if f.estado_factura == 'anulada' %}
+        <div class="aviso aviso-error">Factura anulada el {{ f.anulada_txt }}.
+            {% if f.reemplazada_por_id %}Reemplazada por <a class="lc-accion" href="/profesora/resumenes/{{ f.reemplazada_por_id }}">{{ f.reemplazada_por }}</a>.{% endif %}</div>
+        {% endif %}
+        {% if f.reemplaza_id %}
+        <p class="nota">Reemplaza a la factura <a class="lc-accion" href="/profesora/resumenes/{{ f.reemplaza_id }}">{{ f.reemplaza }}</a>.</p>
+        {% endif %}
 
         {% set editable = f.estado_factura == 'borrador' %}
         {% set interno = true %}
@@ -142,6 +151,36 @@
                     {% endfor %}
                 </ul>
             </div>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        {% if f.estado_factura == 'confirmada' %}
+        <section class="panel">
+            <h2>Corregir la factura</h2>
+            <p class="nota">Una factura confirmada no se modifica. Para corregirla se anula (queda en el historial con el motivo)
+                y se crea un borrador nuevo con las mismas clases y ajustes, que después se confirma con otro número.
+                Si la alumna ya la veía, va a ver la anulada marcada como tal y la nueva cuando la confirmes.</p>
+            {% if f.pago %}
+            <p class="nota"><strong>Tiene un pago registrado:</strong> primero anulá el pago.</p>
+            {% else %}
+            <button type="button" class="btn btn-chico btn-peligro" onclick="document.getElementById('anular-factura').showModal()">Anular y reemitir</button>
+            <dialog id="anular-factura" class="modal">
+                <form action="/profesora/resumenes/{{ f.id }}/anular" method="post" class="horario-form"
+                      onsubmit="this.querySelector('button[type=submit]').disabled = true">
+                    <h2>Anular la factura {{ f.numero }}</h2>
+                    <p class="modal-clase">{{ f.alumna }} · {{ f.mes_txt }} · ${{ f.total }}</p>
+                    <p>La factura queda anulada (no se borra) y se crea un borrador que la reemplaza.</p>
+                    <label>
+                        Motivo (interno)
+                        <textarea name="motivo" rows="3" minlength="{{ motivo_min }}" maxlength="{{ motivo_max }}" required></textarea>
+                    </label>
+                    <div class="modal-botones">
+                        <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                        <button type="submit" class="btn btn-peligro-solido">Anular y crear borrador</button>
+                    </div>
+                </form>
+            </dialog>
             {% endif %}
         </section>
         {% endif %}

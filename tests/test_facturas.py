@@ -40,7 +40,8 @@ def factura(**cambios):
         "version": 7, "numero": None, "confirmada_txt": "", "lineas": LINEAS, "pago": None, "pagos_anulados": [],
         "historial": [{"en": "30/06/2026 12:00", "por": "Profe Prueba", "accion": "Ajuste de clase",
                        "texto": "Lunes 29/6 08:00: $800.00 → $600.00", "motivo": "llegó tarde"}],
-        "reemplazada_por": None, "reemplaza": None, "reemplaza_a": None,
+        "reemplazada_por": None, "reemplaza": None, "reemplaza_a": None, "reemplazada_por_id": None, "reemplaza_id": None,
+        "anulada_txt": "",
     }
     f.update(cambios)
     return f
@@ -306,6 +307,92 @@ class MisFacturas(Base):
         self.como(ALUMNA)
         with mock.patch.object(facturas, "mis_facturas", return_value=[]):
             self.assertIn("Todavía no tenés facturas", self.client.get("/mis-facturas").text)
+
+
+def _texto_pdf(datos: bytes) -> str:
+    import re
+    import zlib
+    return "\n".join(zlib.decompress(m.group(1)).decode("latin-1")
+                     for m in re.finditer(rb"stream\r?\n(.*?)\r?\nendstream", datos, re.S))
+
+
+class Pdf(Base):
+    def test_alumna_descarga_su_factura(self):
+        self.como(ALUMNA)
+        f = factura(estado_factura="confirmada", numero="JSU-2026-06-0001")
+        with mock.patch.object(facturas, "mi_factura", return_value=f) as mf:
+            r = self.client.get("/mis-facturas/1/pdf")
+        mf.assert_called_once_with("SB", "a", 1)
+        self.assertEqual(r.headers["content-type"], "application/pdf")
+        self.assertIn('filename="factura-JSU-2026-06-0001.pdf"', r.headers["content-disposition"])
+        self.assertEqual(r.headers["cache-control"], "no-store")
+        t = _texto_pdf(r.content)
+        for texto in ("Just Show Up", "Factura mensual", "JSU-2026-06-0001", "Ana Prueba", "Junio 2026", "$ 1.395,00",
+                      "-$ 200,00", "Documento simulado"):
+            self.assertIn(texto, t)
+        self.assertNotIn("tarde", t)
+        self.assertNotIn("BORRADOR", t)
+
+    def test_alumna_sin_acceso_vuelve_a_mis_facturas(self):
+        self.como(ALUMNA)
+        with mock.patch.object(facturas, "mi_factura", return_value=None):
+            r = self.client.get("/mis-facturas/99/pdf", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertTrue(r.headers["location"].startswith("/mis-facturas?"))
+
+    def test_roles_cruzados(self):
+        self.como(ALUMNA)
+        with mock.patch.object(facturas, "factura") as fa:
+            r = self.client.get("/profesora/resumenes/1/pdf", follow_redirects=False)
+        fa.assert_not_called()
+        self.assertEqual(r.status_code, 303)
+        self.como(PROFESORA)
+        with mock.patch.object(facturas, "mi_factura") as mf:
+            self.client.get("/mis-facturas/1/pdf", follow_redirects=False)
+        mf.assert_not_called()
+
+    def test_profesora_borrador_y_anulada_marcados(self):
+        self.como(PROFESORA)
+        for estado, marca in (("borrador", "BORRADOR"), ("anulada", "ANULADA")):
+            with mock.patch.object(facturas, "factura", return_value=factura(estado_factura=estado, numero="JSU-9")):
+                self.assertIn(marca, _texto_pdf(self.client.get("/profesora/resumenes/1/pdf").content))
+
+
+class AnularFactura(Base):
+    def setUp(self):
+        super().setUp()
+        self.como(PROFESORA)
+
+    def test_exige_motivo_y_lleva_al_borrador_nuevo(self):
+        with mock.patch.object(facturas, "anular_factura", return_value=(True, "ok", 8)) as af:
+            r = self.post("/profesora/resumenes/1/anular", {"motivo": "x"})
+            self.assertIn("ok=0", r.headers["location"])
+            r = self.post("/profesora/resumenes/1/anular", {"motivo": "se cobró de más"})
+        af.assert_called_once_with("SB", 1, "se cobró de más")
+        self.assertTrue(r.headers["location"].startswith("/profesora/resumenes/8?ok=1"))
+
+    def test_error_vuelve_a_la_misma(self):
+        with mock.patch.object(facturas, "anular_factura", return_value=(False, "tiene pago", None)):
+            r = self.post("/profesora/resumenes/1/anular", {"motivo": "se cobró de más"})
+        self.assertTrue(r.headers["location"].startswith("/profesora/resumenes/1?ok=0"))
+
+    def ver(self, f):
+        with mock.patch.object(facturas, "factura", return_value=f), \
+                mock.patch.object(facturas, "previsualizar_mes", return_value={"periodo_finalizado": True}):
+            return self.client.get("/profesora/resumenes/1").text
+
+    def test_pantallas(self):
+        t = self.ver(factura(estado_factura="confirmada", numero="JSU-1"))
+        self.assertIn("Anular y reemitir", t)
+        pago = {"id": 5, "monto": D("1"), "medio": "Efectivo", "fecha": "x", "registrado_en": "x", "registrado_por": "x"}
+        t = self.ver(factura(estado_factura="confirmada", numero="JSU-1", estado_pago="pagado", pago=pago))
+        self.assertNotIn("Anular y reemitir", t)
+        self.assertIn("primero anulá el pago", t)
+        t = self.ver(factura(estado_factura="anulada", numero="JSU-1", anulada_txt="01/07/2026",
+                             reemplazada_por_id=8, reemplazada_por="JSU-2"))
+        self.assertIn('Reemplazada por <a class="lc-accion" href="/profesora/resumenes/8">JSU-2</a>', t)
+        self.assertNotIn("Ajustar", t)
+        self.assertNotIn("Registrar pago", t)
 
 
 class Logica(unittest.TestCase):

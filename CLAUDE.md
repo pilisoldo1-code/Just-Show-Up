@@ -272,37 +272,51 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     funcionando con la base nueva), navegador escritorio/celular. Antes de aplicarla se
     hizo un respaldo de todos los datos y un script de vuelta atrás probado (deja las 6
     funciones modificadas idénticas byte a byte a las de producción).
-- **Resumen mensual y pagos (módulo 6, rama `modulo-6-resumen-correcciones`,
+- **Facturación mensual y pagos (módulo 6, rama `modulo-6-resumen-correcciones`,
   2026-10-21; migración `20261021150000_resumen_mensual_pagos.sql` SIN APLICAR en
-  Supabase)**. Parte del PR #13 de Josefina (su rama `modulo-6-resumen` queda intacta)
-  con correcciones pedidas por Julieta. Sin Mercado Pago.
-  - Tablas: `resumen_mensual` (único por alumna+mes+año, pendiente/pagado),
-    `resumen_mensual_detalle` (foto de cada clase cobrada: reserva, fecha, hora, tipo,
-    precio; lo que ve la alumna no cambia aunque cambien tipos o precios) y `pago`
-    (`estado` vigente/anulado, `registrado_por`, `anulado_en`, `anulado_por`,
-    `motivo_anulacion`). Nadie escribe directo (ni la profesora): solo las funciones
-    `generar_resumenes`, `registrar_pago` y `anular_pago`. Lectura: profesora todo,
-    alumna lo suyo, `anon` nada.
-  - Regla de cobro en una sola función interna `_cobrables(mes, anio)`.
-  - **Solo meses cerrados** (`_mes_cerrado`, hora de Montevideo): el mes en curso no se
-    genera ni se cobra; la app lo muestra **provisorio** calculado en vivo
-    (`pagos.armar_provisorio`, misma regla, sin guardar nada): "hasta hoy" + "reservadas
-    para lo que queda del mes". Profesora: pantalla de Resúmenes; alumna: Mis facturas.
-  - **Pago = total exacto** (sin parciales; el formulario no deja escribir el monto) y
-    fecha no futura (la base lo frena con un trigger). Índice único parcial: como mucho
-    **un pago vigente por resumen** (doble click / dos pestañas: probado con 10 a la vez).
-    `registrar_pago` bloquea el resumen (`for update`); orden de bloqueo en todo el módulo:
-    resumen y después pago.
-  - **Anular** (con diálogo y motivo obligatorio): el pago queda como `anulado` con fecha,
-    responsable y motivo (nunca se borra) y el resumen vuelve a pendiente. Un pago nuevo
-    es otra fila (Pago #N): los dos quedan identificados en el historial.
-  - Regenerar es idempotente; no toca resúmenes pagados, su detalle ni sus pagos. Un
-    pendiente sí se recalcula (no es definitivo).
-  - Probado: 85 casos en un Postgres local descartable (reglas, concurrencia, anulación,
-    permisos de alumna/profesora/anon, compatibilidad con Tipos de clase y reservas),
-    cálculo provisorio de Python = regla de la base, 38 tests unitarios
-    (`tests.test_pagos` adaptado + `tests.test_pagos_correcciones`) y navegador con datos
-    simulados (escritorio y 375 px).
+  Supabase)**. Parte del PR #13 de Josefina (su rama `modulo-6-resumen` queda intacta),
+  rediseñado con Julieta. **Simulación educativa**: sin requisitos fiscales, numeración
+  oficial ni pasarela de pagos (sin Mercado Pago); los pagos los marca la profesora.
+  - Tablas: `resumen_mensual` = la factura (`estado_factura` borrador/confirmada/anulada y
+    `estado_pago` pendiente/pagado/sin_cargo, importes, `version`, `numero` JSU-AAAA-MM-NNNN
+    al confirmar, `reemplaza_a`); `resumen_mensual_detalle` = una línea por clase cobrada
+    (foto: fecha, hora, tipo, `precio_original`, `ajuste_tipo`, `importe_final`);
+    `factura_historial` y `pago_anulacion` (motivos internos, **solo los lee la profesora**);
+    `pago` (vigente/anulado). Nadie escribe directo: solo funciones que validan rol, fechas,
+    versión e importes. Una sola factura no anulada por alumna y mes; un solo pago vigente.
+  - **Fechas (Montevideo)**: durante el mes la profesora ve un **provisorio** (lo calcula la
+    app, no se guarda). Desde el **último día del mes** se arman **borradores**
+    (`sincronizar_borradores`, se llama sola al abrir el mes; agrega/quita clases sin perder
+    los ajustes; solo clases ya empezadas). **Confirmar** exige que hayan terminado todas las
+    clases programadas del mes (`_periodo_finalizado`) y que el borrador esté al día con las
+    reservas (`_factura_al_dia`). La alumna ve sus facturas confirmadas **desde el día 1 del
+    mes siguiente, 00:00** (lo aplica RLS, no la pantalla); nunca ve borradores.
+  - **Ajustes** (solo en borrador, con motivo): bonificar una clase o cobrarle menos (entre $0
+    y el precio original), y descuento general en monto o porcentaje. El total se recalcula
+    en la base. La alumna ve "Descuento"/"Bonificada", no el motivo.
+  - **Confirmación individual y masiva**: la masiva muestra antes cantidad y total y es todo o
+    nada (si algo cambió desde la vista previa, no confirma ninguna: compara una "firma" de
+    ids+versiones). Toda modificación lleva la `version` que la profesora tenía en pantalla.
+  - **Corregir una factura confirmada**: "Anular y reemitir" (con motivo; si tiene pago
+    vigente, primero anular el pago). La anulada queda en el historial y se crea un borrador
+    con las mismas clases, ajustes y motivos, que se confirma con otro número. La alumna ve
+    la anulada solo si ya estaba publicada, marcada "reemplazada por…".
+  - **Pagos simulados**: solo facturas confirmadas, total exacto, fecha no futura, uno vigente
+    (índice único + bloqueo), anulación con motivo/responsable/fecha en `pago_anulacion`.
+    Factura en $0 = "sin cargo".
+  - **PDF** (`app/factura_pdf.py`, `fpdf2`): "Factura mensual – Just Show Up", generado al
+    descargar con los datos guardados (no cambia si cambian precios). Alumna:
+    `/mis-facturas/{id}/pdf`; profesora: `/profesora/resumenes/{id}/pdf` (borrador marcado).
+  - Pantallas: menú de la profesora "Facturación" (`/profesora/resumenes`, detalle
+    `/profesora/resumenes/{id}`, vista previa `/profesora/resumenes/confirmar-mes`); alumna:
+    Mis facturas.
+  - Orden de bloqueo: factura → líneas → pago; sincronizar, confirmar y anular facturas toman
+    además un candado por mes. Todo "ahora" de estas funciones pasa por `public._ahora()`.
+  - Probado: 153 casos en un Postgres local con reloj simulado (fechas de cierre y
+    publicación, cambio de año, concurrencia, permisos, PDF y el código real de
+    `app/facturas.py`), 37 tests unitarios (`tests.test_facturas`) y navegador
+    escritorio/celular contra la base local. Falta probar contra Supabase real (necesita
+    aplicar la migración).
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -482,9 +496,9 @@ en la web, no solo cambios de esquema.
 4. **Lista de espera** — **hecho** (oferta de 30 min dentro de la app, confirmar,
    rechazar, salir; vista de la profesora). Falta solo el aviso por mail (Resend).
 5. **Asistencia** — **hecho** (profesora marca; la alumna lo ve en Mi historial).
-6. **Resumen mensual y pagos** — **desarrollado sin Mercado Pago** en la rama
-   `modulo-6-resumen-correcciones` (trabajo de Josefina del PR #13 + correcciones);
-   migración **sin aplicar** todavía (ver Estado actual). Mercado Pago queda para después.
+6. **Facturación mensual y pagos** — **desarrollado** (simulado, sin Mercado Pago) en la rama
+   `modulo-6-resumen-correcciones` (trabajo de Josefina del PR #13 + rediseño); migración
+   **sin aplicar** todavía (ver Estado actual).
 7. **Suscripción y clases grabadas** — biblioteca de videos con gate de
    acceso. Modalidad (suscripción mensual vs. compra individual con vigencia)
    **todavía no está decidida** — no implementar hasta que se defina.
@@ -623,8 +637,17 @@ Para cada módulo, en este orden:
   corregir; en Planificación se corrigió solo para esa pantalla
   (`.acciones-confirmar`) para no cambiar el diseño del resto sin pedirlo.
 - **No aplicar `20261021000000_resumen_mensual_pagos.sql` (rama de Josefina, PR #13)**:
-  la reemplaza `20261021150000_resumen_mensual_pagos.sql`, que agrega las protecciones
-  (pago único, mes cerrado, monto exacto, anulación). Aplicar las dos crearía conflicto.
+  la reemplaza `20261021150000_resumen_mensual_pagos.sql` (facturación completa con sus
+  protecciones). Aplicar las dos crearía conflicto.
+- **`public._ahora()`** es el único "ahora" de la facturación: las pruebas locales lo
+  reemplazan para simular fechas (último día del mes, día 1, cambio de año). No usar `now()`
+  directo en funciones nuevas de facturación (sí en `default` de columnas de auditoría).
+- **PDF con fuentes estándar (Helvetica)**: solo Latin-1. `factura_pdf._txt` cambia "−", "—",
+  "→" y similares; un carácter nuevo fuera de Latin-1 saldría como "?". Para probar el texto
+  de un PDF hay que descomprimir los streams (y los paréntesis aparecen escapados: `\(`).
+- **La app de facturación no usa "embeds" de PostgREST** (`tabla(campos)` dentro del select):
+  solo filtros simples. Así se pudo probar el código real contra un Postgres local con un
+  cliente falso (sin PostgREST). Si se agregan embeds, esa prueba deja de cubrirlos.
 - **Mientras no se aplique la fase 2 de seguridad, `anon` puede modificar `clase` y
   `reserva`** (verificado 2026-10-21 en la base local: cambiar el precio de una clase pasada,
   cancelar una reserva cobrable o crear una reserva confirmada en una clase pasada). Eso

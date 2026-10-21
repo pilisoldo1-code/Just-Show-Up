@@ -6,11 +6,11 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import auth, clases, estadisticas, facturas, validaciones
+from app import auth, clases, estadisticas, factura_pdf, facturas, validaciones
 from app.auth import ErrorAuth, Redirigir, Usuario, requiere_alumna, requiere_login, requiere_profesora
 from app.clases import DIAS_ORDEN
 from app import tipos_clase
@@ -336,13 +336,33 @@ def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
 
 
 @app.get("/mis-facturas")
-def mis_facturas(request: Request, usuario: Usuario = Depends(requiere_alumna)):
+def mis_facturas(request: Request, aviso: str = "", usuario: Usuario = Depends(requiere_alumna)):
     try:
-        lista, aviso = facturas.mis_facturas(_sb(usuario), usuario.id), ""
+        lista = facturas.mis_facturas(_sb(usuario), usuario.id)
     except Exception:
         logging.exception("No se pudieron cargar las facturas")
         lista, aviso = [], "No pudimos cargar tus facturas. Probá de nuevo."
     return _render(request, "mis_facturas.html", usuario, facturas=lista, aviso=aviso, aviso_ok=False)
+
+
+def _pdf(f: dict, alumna: str, marca: str | None) -> Response:
+    contenido = factura_pdf.generar(f, alumna, clases.ahora(), marca)
+    return Response(contenido, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{factura_pdf.nombre_archivo(f)}"',
+        "Cache-Control": "no-store",
+    })
+
+
+@app.get("/mis-facturas/{factura_id}/pdf")
+def mi_factura_pdf(factura_id: int, usuario: Usuario = Depends(requiere_alumna)):
+    try:
+        f = facturas.mi_factura(_sb(usuario), usuario.id, factura_id)
+    except Exception:
+        logging.exception("No se pudo armar el PDF")
+        return RedirectResponse(url="/mis-facturas?" + urlencode({"aviso": "No pudimos generar el PDF. Probá de nuevo."}), status_code=303)
+    if f is None:
+        return RedirectResponse(url="/mis-facturas?" + urlencode({"aviso": "No encontramos esa factura."}), status_code=303)
+    return _pdf(f, f"{usuario.nombre} {usuario.apellido}", "ANULADA" if f["estado_factura"] == "anulada" else None)
 
 
 @app.post("/clases/{clase_id}/inscribirse")
@@ -1037,6 +1057,19 @@ def profesora_factura(request: Request, factura_id: int, ok: int = 0, aviso: str
                    aviso=aviso, aviso_ok=bool(ok))
 
 
+@app.get("/profesora/resumenes/{factura_id}/pdf")
+def profesora_factura_pdf(factura_id: int, usuario: Usuario = Depends(requiere_profesora)):
+    try:
+        f = facturas.factura(_sb(usuario), factura_id)
+    except Exception:
+        logging.exception("No se pudo armar el PDF")
+        return _volver_factura(factura_id, False, "No pudimos generar el PDF. Probá de nuevo.")
+    if f is None:
+        return _volver_mes(0, 0, False, "No encontramos esa factura.")
+    marca = {"borrador": "BORRADOR - vista previa, todavía no confirmada", "anulada": "ANULADA"}.get(f["estado_factura"])
+    return _pdf(f, f["alumna"], marca)
+
+
 @app.post("/profesora/resumenes/{factura_id}/lineas/{linea_id}/ajustar")
 def profesora_ajustar_linea(factura_id: int, linea_id: int, version: int = Form(...), tipo: str = Form(...),
                             importe: str = Form(""), motivo: str = Form(""), usuario: Usuario = Depends(requiere_profesora)):
@@ -1099,6 +1132,19 @@ def profesora_registrar_pago(factura_id: int, monto: str = Form(...), medio_pago
     else:
         ok, aviso = _ejecutar_factura(facturas.registrar_pago, _sb(usuario), factura_id, importe, medio_pago, f)
     return _volver_factura(factura_id, ok, aviso)
+
+
+@app.post("/profesora/resumenes/{factura_id}/anular")
+def profesora_anular_factura(factura_id: int, motivo: str = Form(""), usuario: Usuario = Depends(requiere_profesora)):
+    texto = _motivo(motivo)
+    if texto is None:
+        return _volver_factura(factura_id, False, facturas.mensaje("motivo_invalido"))
+    try:
+        ok, aviso, nueva = facturas.anular_factura(_sb(usuario), factura_id, texto)
+    except Exception:
+        logging.exception("Error al anular factura")
+        ok, aviso, nueva = False, "Ocurrió un error, probá de nuevo.", None
+    return _volver_factura(nueva if ok else factura_id, ok, aviso)
 
 
 @app.post("/profesora/resumenes/{factura_id}/pagos/{pago_id}/anular")

@@ -5,3 +5,4 @@ python-multipart==0.0.9
 supabase==2.32.0
 python-dotenv==1.0.1
 tzdata==2026.5
+fpdf2==2.8.9
