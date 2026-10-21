@@ -12,6 +12,12 @@
         <h1>{{ 'Editar horario' if horario else 'Nuevo horario' }}</h1>
         <p class="subtitle"><a href="/profesora/horarios">← Volver al listado</a></p>
 
+        {% if errores %}
+        <div class="aviso aviso-error">
+            <ul class="lista-errores">{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+
         <form action="{{ accion }}" method="post" class="horario-form">
             <label>
                 Día de la semana
@@ -27,26 +33,22 @@
             <label>
                 Hora de inicio
                 <input type="time" name="hora_inicio"
-                       value="{{ horario.hora_inicio[:5] if horario else '' }}" required />
+                       value="{{ horario.hora_inicio[:5] if horario and horario.hora_inicio else '' }}" required />
             </label>
 
             <label>
-                Duración (minutos)
-                <input type="number" name="duracion" min="1"
-                       value="{{ horario.duracion if horario else 60 }}" required />
+                Tipo de clase
+                <select name="id_tipo_clase" id="tipo-select" required>
+                    {% if not tipos %}<option value="">No hay tipos de clase activos</option>{% endif %}
+                    {% for t in tipos %}
+                    <option value="{{ t.id }}" data-duracion="{{ t.duracion }}" data-cupo="{{ t.cupo_max }}"
+                            data-precio="{{ '%g'|format(t.precio_presencial|float) }}"
+                            {{ 'selected' if horario and horario.id_tipo_clase == t.id else '' }}>{{ t.nombre }}</option>
+                    {% endfor %}
+                </select>
             </label>
-
-            <label>
-                Cupo máximo
-                <input type="number" name="cupo_max" min="1"
-                       value="{{ horario.cupo_max if horario else '' }}" required />
-            </label>
-
-            <label>
-                Precio
-                <input type="number" name="precio" min="0" step="0.01"
-                       value="{{ horario.precio if horario else '' }}" required />
-            </label>
+            <p class="nota" id="tipo-detalle">La duración, el precio y el cupo los define el tipo de clase.</p>
+            <p class="nota"><a href="/profesora/tipos-clase">Ver o editar los tipos de clase ›</a></p>
 
             <label class="checkbox-label">
                 <input type="checkbox" name="activo" value="true"
@@ -57,5 +59,19 @@
             <button type="submit" class="btn">Guardar</button>
         </form>
     </main>
+    <script>
+        (function () {
+            var sel = document.getElementById("tipo-select");
+            var detalle = document.getElementById("tipo-detalle");
+            function mostrar() {
+                var o = sel.options[sel.selectedIndex];
+                if (!o || !o.dataset.duracion) return;
+                detalle.textContent = o.text + ": " + o.dataset.duracion + " min · $" + o.dataset.precio +
+                    " · cupo " + o.dataset.cupo + " (se define en el tipo de clase)";
+            }
+            sel.addEventListener("change", mostrar);
+            mostrar();
+        })();
+    </script>
 </body>
 </html>

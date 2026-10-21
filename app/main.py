@@ -1,15 +1,16 @@
 import logging
+import re
 import uuid
 from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import urlencode
 
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import auth, clases, estadisticas, validaciones
+from app import auth, clases, estadisticas, tipos_clase, validaciones
 from app.auth import ErrorAuth, Redirigir, Usuario, requiere_alumna, requiere_login, requiere_profesora
 from app.clases import DIAS_ORDEN
 
@@ -389,87 +390,265 @@ def health():
 @app.get("/profesora/horarios")
 def profesora_horarios(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_profesora)):
     supabase = _sb(usuario)
-    result = supabase.table(TABLE).select("*").execute()
+    result = supabase.table(TABLE).select("*, tipo_clase(nombre, activo)").execute()
     horarios = sorted(result.data, key=_orden_horario)
     return _render(request, "profesora_horarios.html", usuario, horarios=horarios,
                    aviso=aviso, aviso_ok=bool(ok))
 
 
+def _form_horario(request: Request, usuario: Usuario, horario: dict | None, accion: str,
+                  errores: list[str] | None = None, status_code: int = 200):
+    return _render(
+        request, "profesora_horario_form.html", usuario, status_code=status_code,
+        horario=horario, dias=DIAS_ORDEN, accion=accion, errores=errores or [],
+        tipos=tipos_clase.activos(_sb(usuario)),
+    )
+
+
+def _validar_horario(sb, dia_semana: str, hora_inicio: str, id_tipo_clase: str) -> tuple[dict, list[str]]:
+    errores = []
+    if dia_semana not in DIAS_ORDEN:
+        errores.append("Elegí un día de la semana.")
+    if not re.fullmatch(r"\d{2}:\d{2}", hora_inicio or ""):
+        errores.append("Elegí la hora de inicio.")
+    tipo = tipos_clase.obtener(sb, int(id_tipo_clase)) if id_tipo_clase.isdigit() else None
+    if tipo is None or not tipo["activo"]:
+        errores.append("Elegí un tipo de clase activo.")
+    return {"dia_semana": dia_semana, "hora_inicio": hora_inicio, "id_tipo_clase": tipo["id"] if tipo else None}, errores
+
+
 @app.get("/profesora/horarios/nuevo")
 def nuevo_horario_form(request: Request, usuario: Usuario = Depends(requiere_profesora)):
-    return _render(
-        request, "profesora_horario_form.html", usuario,
-        horario=None, dias=DIAS_ORDEN, accion="/profesora/horarios/nuevo",
-    )
+    return _form_horario(request, usuario, None, "/profesora/horarios/nuevo")
 
 
 @app.post("/profesora/horarios/nuevo")
 def crear_horario(
-    dia_semana: str = Form(...),
-    hora_inicio: str = Form(...),
-    duracion: int = Form(...),
-    cupo_max: int = Form(...),
-    precio: float = Form(...),
+    request: Request,
+    dia_semana: str = Form(""),
+    hora_inicio: str = Form(""),
+    id_tipo_clase: str = Form(""),
     activo: bool = Form(False),
     usuario: Usuario = Depends(requiere_profesora),
 ):
     supabase = _sb(usuario)
-    supabase.table(TABLE).insert(
-        {
-            "dia_semana": dia_semana,
-            "hora_inicio": hora_inicio,
-            "duracion": duracion,
-            "cupo_max": cupo_max,
-            "precio": precio,
-            "activo": activo,
-        }
-    ).execute()
-    return RedirectResponse(url="/profesora/horarios", status_code=303)
+    datos, errores = _validar_horario(supabase, dia_semana, hora_inicio, id_tipo_clase)
+    if errores:
+        return _form_horario(request, usuario, {**datos, "activo": activo}, "/profesora/horarios/nuevo", errores, 400)
+    # Duración, cupo y precio los completa la base a partir del tipo de clase.
+    supabase.table(TABLE).insert({**datos, "activo": activo}).execute()
+    return RedirectResponse(
+        url="/profesora/horarios?" + urlencode({"ok": 1, "aviso": "Horario creado."}), status_code=303
+    )
 
 
 @app.get("/profesora/horarios/{horario_id}/editar")
 def editar_horario_form(request: Request, horario_id: int, usuario: Usuario = Depends(requiere_profesora)):
     supabase = _sb(usuario)
-    result = supabase.table(TABLE).select("*").eq("id", horario_id).single().execute()
-    return _render(
-        request, "profesora_horario_form.html", usuario,
-        horario=result.data, dias=DIAS_ORDEN, accion=f"/profesora/horarios/{horario_id}/editar",
-    )
+    filas = supabase.table(TABLE).select("*").eq("id", horario_id).execute().data
+    if not filas:
+        return RedirectResponse(url="/profesora/horarios", status_code=303)
+    return _form_horario(request, usuario, filas[0], f"/profesora/horarios/{horario_id}/editar")
 
 
 @app.post("/profesora/horarios/{horario_id}/editar")
 def actualizar_horario(
+    request: Request,
     horario_id: int,
-    dia_semana: str = Form(...),
-    hora_inicio: str = Form(...),
-    duracion: int = Form(...),
-    cupo_max: int = Form(...),
-    precio: float = Form(...),
+    dia_semana: str = Form(""),
+    hora_inicio: str = Form(""),
+    id_tipo_clase: str = Form(""),
     activo: bool = Form(False),
     usuario: Usuario = Depends(requiere_profesora),
 ):
     supabase = _sb(usuario)
-    supabase.table(TABLE).update(
-        {
-            "dia_semana": dia_semana,
-            "hora_inicio": hora_inicio,
-            "duracion": duracion,
-            "cupo_max": cupo_max,
-            "precio": precio,
-            "activo": activo,
-        }
-    ).eq("id", horario_id).execute()
-    return RedirectResponse(url="/profesora/horarios", status_code=303)
+    filas = supabase.table(TABLE).select("*").eq("id", horario_id).execute().data
+    if not filas:
+        return RedirectResponse(url="/profesora/horarios", status_code=303)
+    actual = filas[0]
+    datos, errores = _validar_horario(supabase, dia_semana, hora_inicio, id_tipo_clase)
+    if errores:
+        return _form_horario(request, usuario, {**actual, **datos, "activo": activo},
+                             f"/profesora/horarios/{horario_id}/editar", errores, 400)
+    if datos["id_tipo_clase"] != actual["id_tipo_clase"]:
+        # Cambiar el tipo afecta clases ya generadas: primero se muestra la vista previa.
+        return _render(
+            request, "profesora_horario_revisar_tipo.html", usuario,
+            horario=actual, datos={**datos, "activo": activo},
+            tipo_actual=tipos_clase.obtener(supabase, actual["id_tipo_clase"]),
+            tipo_nuevo=tipos_clase.obtener(supabase, datos["id_tipo_clase"]),
+            previa=tipos_clase.vista_previa_horario(supabase, horario_id, datos["id_tipo_clase"]),
+        )
+    supabase.table(TABLE).update({"dia_semana": datos["dia_semana"], "hora_inicio": datos["hora_inicio"],
+                                  "activo": activo}).eq("id", horario_id).execute()
+    return RedirectResponse(
+        url="/profesora/horarios?" + urlencode({"ok": 1, "aviso": "Horario actualizado."}), status_code=303
+    )
+
+
+@app.post("/profesora/horarios/{horario_id}/confirmar-tipo")
+def confirmar_tipo_horario(
+    horario_id: int,
+    dia_semana: str = Form(""),
+    hora_inicio: str = Form(""),
+    id_tipo_clase: str = Form(""),
+    activo: bool = Form(False),
+    usuario: Usuario = Depends(requiere_profesora),
+):
+    supabase = _sb(usuario)
+    datos, errores = _validar_horario(supabase, dia_semana, hora_inicio, id_tipo_clase)
+    if errores:
+        return RedirectResponse(
+            url="/profesora/horarios?" + urlencode({"ok": 0, "aviso": errores[0]}), status_code=303
+        )
+    try:
+        ok, aviso = tipos_clase.cambiar_tipo_horario(supabase, horario_id, datos["id_tipo_clase"])
+        if ok:
+            supabase.table(TABLE).update({"dia_semana": datos["dia_semana"], "hora_inicio": datos["hora_inicio"],
+                                          "activo": activo}).eq("id", horario_id).execute()
+    except Exception:
+        logging.exception("Error al cambiar el tipo del horario")
+        ok, aviso = False, "Ocurrió un error, probá de nuevo."
+    return RedirectResponse(
+        url="/profesora/horarios?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303
+    )
 
 
 @app.post("/profesora/horarios/{horario_id}/toggle")
 def toggle_horario(horario_id: int, usuario: Usuario = Depends(requiere_profesora)):
     supabase = _sb(usuario)
-    actual = supabase.table(TABLE).select("activo").eq("id", horario_id).single().execute()
-    supabase.table(TABLE).update({"activo": not actual.data["activo"]}).eq(
-        "id", horario_id
-    ).execute()
+    actual = supabase.table(TABLE).select("activo, tipo_clase(activo, nombre)").eq("id", horario_id).single().execute().data
+    if not actual["activo"] and not actual["tipo_clase"]["activo"]:
+        aviso = (f"No se puede activar: el tipo de clase \"{actual['tipo_clase']['nombre']}\" está desactivado. "
+                 "Activalo o cambiá el tipo del horario.")
+        return RedirectResponse(url="/profesora/horarios?" + urlencode({"ok": 0, "aviso": aviso}), status_code=303)
+    supabase.table(TABLE).update({"activo": not actual["activo"]}).eq("id", horario_id).execute()
     return RedirectResponse(url="/profesora/horarios", status_code=303)
+
+
+# ---------- profesora: tipos de clase ----------
+
+def _form_tipo(request: Request, usuario: Usuario, tipo: dict | None, datos: dict | None = None,
+               errores: list[str] | None = None, status_code: int = 200, aviso: str = "", aviso_ok: bool = False):
+    return _render(
+        request, "profesora_tipo_clase_form.html", usuario, status_code=status_code,
+        tipo=tipo, datos=datos or tipo or {"duracion": 60, "cupo_max": 7, "precio_presencial": 800},
+        errores=errores or [], aviso=aviso, aviso_ok=aviso_ok,
+    )
+
+
+def _redirigir_tipos(ok: bool, aviso: str) -> RedirectResponse:
+    return RedirectResponse(
+        url="/profesora/tipos-clase?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303
+    )
+
+
+@app.get("/profesora/tipos-clase")
+def profesora_tipos_clase(request: Request, ok: int = 0, aviso: str = "",
+                          usuario: Usuario = Depends(requiere_profesora)):
+    return _render(request, "profesora_tipos_clase.html", usuario,
+                   tipos=tipos_clase.listar(_sb(usuario)), aviso=aviso, aviso_ok=bool(ok))
+
+
+@app.get("/profesora/tipos-clase/nuevo")
+def nuevo_tipo_form(request: Request, usuario: Usuario = Depends(requiere_profesora)):
+    return _form_tipo(request, usuario, None)
+
+
+@app.post("/profesora/tipos-clase/nuevo")
+async def crear_tipo(request: Request, imagen: UploadFile | None = File(None),
+                     usuario: Usuario = Depends(requiere_profesora)):
+    form = dict(await request.form())
+    datos, errores = tipos_clase.validar(form)
+    contenido = await imagen.read(tipos_clase.TAMANO_MAX_IMAGEN + 1) if imagen and imagen.filename else b""
+    if contenido:
+        problema = tipos_clase.validar_imagen(contenido)
+        if problema[0] is None:
+            errores.append(problema[1])
+    if errores:
+        return _form_tipo(request, usuario, None, datos, errores, 400)
+    sb = _sb(usuario)
+    ok, aviso, tipo_id = tipos_clase.crear(sb, datos)
+    if not ok:
+        return _form_tipo(request, usuario, None, datos, [aviso], 400)
+    if contenido:
+        ok_img, aviso_img = tipos_clase.subir_imagen(sb, tipos_clase.obtener(sb, tipo_id), contenido)
+        if not ok_img:
+            aviso += f" La imagen no se pudo guardar: {aviso_img}"
+    return _redirigir_tipos(True, aviso)
+
+
+@app.get("/profesora/tipos-clase/{tipo_id}/editar")
+def editar_tipo_form(request: Request, tipo_id: int, ok: int = 0, aviso: str = "",
+                     usuario: Usuario = Depends(requiere_profesora)):
+    tipo = tipos_clase.obtener(_sb(usuario), tipo_id)
+    if tipo is None:
+        return _redirigir_tipos(False, "No se encontró ese tipo de clase.")
+    return _form_tipo(request, usuario, tipo, aviso=aviso, aviso_ok=bool(ok))
+
+
+@app.post("/profesora/tipos-clase/{tipo_id}/revisar")
+async def revisar_tipo(request: Request, tipo_id: int, usuario: Usuario = Depends(requiere_profesora)):
+    sb = _sb(usuario)
+    tipo = tipos_clase.obtener(sb, tipo_id)
+    if tipo is None:
+        return _redirigir_tipos(False, "No se encontró ese tipo de clase.")
+    datos, errores = tipos_clase.validar(dict(await request.form()))
+    if errores:
+        return _form_tipo(request, usuario, tipo, datos, errores, 400)
+    previa = tipos_clase.vista_previa(sb, tipo, datos) if tipos_clase.cambian_valores(tipo, datos) else None
+    if not previa or (previa["futuras"] == 0 and previa["horarios"] == 0):
+        ok, aviso = tipos_clase.aplicar(sb, tipo_id, datos)
+        if not ok:
+            return _form_tipo(request, usuario, tipo, datos, [aviso], 400)
+        return _redirigir_tipos(True, aviso)
+    return _render(request, "profesora_tipo_clase_revisar.html", usuario, tipo=tipo, datos=datos, previa=previa)
+
+
+@app.post("/profesora/tipos-clase/{tipo_id}/confirmar")
+async def confirmar_tipo(request: Request, tipo_id: int, usuario: Usuario = Depends(requiere_profesora)):
+    sb = _sb(usuario)
+    datos, errores = tipos_clase.validar(dict(await request.form()))
+    if errores:
+        return _redirigir_tipos(False, errores[0])
+    try:
+        ok, aviso = tipos_clase.aplicar(sb, tipo_id, datos)
+    except Exception:
+        logging.exception("Error al aplicar cambios del tipo de clase")
+        ok, aviso = False, "Ocurrió un error, probá de nuevo."
+    return _redirigir_tipos(ok, aviso)
+
+
+@app.post("/profesora/tipos-clase/{tipo_id}/estado")
+def estado_tipo(tipo_id: int, activo: bool = Form(False), usuario: Usuario = Depends(requiere_profesora)):
+    ok, aviso = tipos_clase.cambiar_estado(_sb(usuario), tipo_id, activo)
+    return _redirigir_tipos(ok, aviso)
+
+
+@app.post("/profesora/tipos-clase/{tipo_id}/imagen")
+async def imagen_tipo(tipo_id: int, imagen: UploadFile | None = File(None),
+                      usuario: Usuario = Depends(requiere_profesora)):
+    sb = _sb(usuario)
+    tipo = tipos_clase.obtener(sb, tipo_id)
+    if tipo is None:
+        return _redirigir_tipos(False, "No se encontró ese tipo de clase.")
+    contenido = await imagen.read(tipos_clase.TAMANO_MAX_IMAGEN + 1) if imagen and imagen.filename else b""
+    ok, aviso = tipos_clase.subir_imagen(sb, tipo, contenido)
+    return RedirectResponse(
+        url=f"/profesora/tipos-clase/{tipo_id}/editar?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303
+    )
+
+
+@app.post("/profesora/tipos-clase/{tipo_id}/quitar-imagen")
+def quitar_imagen_tipo(tipo_id: int, usuario: Usuario = Depends(requiere_profesora)):
+    sb = _sb(usuario)
+    tipo = tipos_clase.obtener(sb, tipo_id)
+    if tipo is None:
+        return _redirigir_tipos(False, "No se encontró ese tipo de clase.")
+    ok, aviso = tipos_clase.quitar_imagen(sb, tipo)
+    return RedirectResponse(
+        url=f"/profesora/tipos-clase/{tipo_id}/editar?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303
+    )
 
 
 # ---------- profesora: clases y asistencia ----------

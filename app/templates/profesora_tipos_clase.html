@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Tipos de clase</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+        <div class="header-row">
+            <h1>Tipos de clase</h1>
+            <a class="btn" href="/profesora/tipos-clase/nuevo">+ Nuevo tipo</a>
+        </div>
+        <p class="subtitle"><a href="/profesora/horarios">‹ Volver a los horarios</a> · Cada horario pertenece a un tipo: de acá salen su duración, precio y cupo.</p>
+
+        <div class="tipos-grid">
+            {% for t in tipos %}
+            <article class="card tipo-card {{ '' if t.activo else 'card-pasada' }}">
+                {% if t.imagen_url %}
+                <img class="tipo-imagen" src="{{ t.imagen_url }}" alt="{{ t.nombre }}" loading="lazy" />
+                {% else %}
+                <div class="tipo-imagen tipo-imagen-vacia" aria-hidden="true">{{ t.nombre[:1] | upper }}</div>
+                {% endif %}
+                <div class="tipo-cuerpo">
+                    <div class="tipo-titulo">
+                        <h2>{{ t.nombre }}</h2>
+                        <span class="badge {{ 'badge-on' if t.activo else 'badge-off' }}">{{ 'Activo' if t.activo else 'Inactivo' }}</span>
+                    </div>
+                    {% if t.descripcion %}<p class="nota">{{ t.descripcion }}</p>{% endif %}
+                    <p class="tipo-datos">{{ t.duracion }} min · ${{ '%g'|format(t.precio_presencial|float) }} · cupo {{ t.cupo_max }}</p>
+                    <p class="nota">{{ t.horarios_activos }} {{ 'horario activo' if t.horarios_activos == 1 else 'horarios activos' }}{% if t.horarios > t.horarios_activos %} · {{ t.horarios - t.horarios_activos }} inactivo{{ 's' if t.horarios - t.horarios_activos != 1 }}{% endif %}</p>
+                    <div class="tipo-acciones">
+                        <a class="btn btn-chico" href="/profesora/tipos-clase/{{ t.id }}/editar">Editar</a>
+                        <form action="/profesora/tipos-clase/{{ t.id }}/estado" method="post">
+                            {% if not t.activo %}<input type="hidden" name="activo" value="true" />{% endif %}
+                            <button type="submit" class="btn btn-chico {{ 'btn-peligro' if t.activo else 'btn-secundario-claro' }}">{{ 'Desactivar' if t.activo else 'Activar' }}</button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+            {% else %}
+            <p class="vacio vacio-izq">Todavía no hay tipos de clase.</p>
+            {% endfor %}
+        </div>
+    </main>
+</body>
+</html>

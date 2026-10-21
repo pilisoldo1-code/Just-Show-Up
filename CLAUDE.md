@@ -238,6 +238,36 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   base: `python -m unittest tests.test_estadisticas -v` (20 casos, incluido que
   una alumna no pueda entrar) + navegador escritorio/celular con datos simulados.
   **Falta verificarla contra la base real** (no había `.env` en esa sesión).
+- **Tipos de clase (en rama `modulo-tipos-clase`, 2026-10-21; migración PREPARADA,
+  todavía NO aplicada en Supabase)**. Tabla `tipo_clase` (nombre único, descripción,
+  `imagen_url`, `duracion`, `precio_presencial`, `cupo_max`, `activo`; nunca se borra,
+  se desactiva). Tipo inicial **Gimnasia** (60 min, $800, cupo 7) para los 10 horarios.
+  - `horario.id_tipo_clase` obligatorio. Las columnas viejas `duracion`/`cupo_max`/`precio`
+    de `horario` **siguen existiendo** (el código desplegado las lee): un trigger
+    (`_horario_desde_tipo`) las mantiene iguales a las del tipo. Se borran en una fase 2,
+    cuando amber y theta tengan este código.
+  - `clase` guarda su foto: `precio`, `duracion` (ya existían), **`cupo_max` e
+    `id_tipo_clase`** (nuevas). Todas las funciones de reservas / lista de espera /
+    bloqueos leen `clase.cupo_max` (antes `horario.cupo_max`). El resumen mensual usa
+    `clase.precio`: no se ve afectado.
+  - Editar un tipo (`aplicar_cambio_tipo`, con vista previa `previsualizar_cambio_tipo`):
+    clases futuras **sin reservas ni ofertas** toman precio, duración y cupo nuevos; **con
+    reservas u ofertas** conservan precio y duración y toman el cupo nuevo; las pasadas no
+    cambian. Bajar el cupo **nunca cancela reservas ni ofertas vigentes** (solo deja de
+    aceptar nuevas); subirlo hace que la lista de espera ofrezca en orden.
+  - Cambiar el tipo de un horario (`cambiar_tipo_horario`, con vista previa): las clases
+    futuras sin reservas pasan al tipo nuevo; las que tienen reservas quedan como estaban.
+  - No se puede desactivar un tipo con horarios activos ni activar un horario de un tipo
+    inactivo. Imágenes: bucket público `tipos-clase` (JPG/PNG/WebP, 2 MB; solo la profesora
+    sube; el servidor valida el contenido real del archivo). Pensado para On Demand: un
+    futuro `video.id_tipo_clase` reusa nombre, descripción e imagen; los precios de On
+    Demand van aparte.
+  - Pantallas: Horarios muestra Día · Hora · Tipo · Estado y tiene el botón "Tipos de
+    clase" (`/profesora/tipos-clase`: crear, editar con vista previa, activar/desactivar,
+    imagen). Alumna: "08:00 · Gimnasia" en la grilla y tipo + imagen en el día.
+  - Probado en un **Postgres local** (pgserver) que reconstruye el esquema con todas las
+    migraciones + copia de los datos: 89 casos de la migración y funciones (incluye
+    concurrencia y permisos) y compatibilidad con la migración del resumen (PR #13).
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje

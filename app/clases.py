@@ -41,7 +41,7 @@ def generar_clases(sb: Client, inicio_semana: date) -> None:
 def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[dict]:
     clases = (
         sb.table("clase")
-        .select("*, horario(cupo_max, activo, dia_semana)")
+        .select("*, horario(activo, dia_semana), tipo_clase(nombre, imagen_url)")
         .gte("fecha", inicio.isoformat())
         .lte("fecha", fin.isoformat())
         .in_("estado", ["programada", "cancelada"])
@@ -79,7 +79,7 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
     tarjetas = []
     for c in clases:
         inicio_dt = _inicio_clase(c)
-        cupo_max = c["horario"]["cupo_max"]
+        cupo_max = c["cupo_max"]   # cada clase guarda su cupo (no cambia si se edita el tipo)
         # Un lugar ofrecido a la lista de espera queda guardado: no se muestra como libre.
         disponibles = max(0, cupo_max - confirmadas.get(c["id"], 0) - ofertas.get(c["id"], 0))
         espera = en_espera.get(c["id"])
@@ -110,6 +110,8 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
                 "duracion": c["duracion"],
                 "precio": c["precio"],
                 "cupo_max": cupo_max,
+                "tipo": c["tipo_clase"]["nombre"] if c.get("tipo_clase") else "",
+                "imagen": c["tipo_clase"]["imagen_url"] if c.get("tipo_clase") else None,
                 "disponibles": disponibles,
                 "estado": estado,
                 "posicion_espera": espera["posicion"] if espera else None,
@@ -146,6 +148,7 @@ def agrupar_por_dia(clases: list[dict]) -> list[dict]:
             },
         )
         d["horas"].append(c["hora"])
+        d.setdefault("tipos", {})[c["hora"]] = c["tipo"]
         if c["estado"] != "pasada":
             d["todas_pasadas"] = False
         if c["estado"] not in ("pasada", "cancelada"):
@@ -321,7 +324,7 @@ def dias_con_clases(sb: Client, desde: date, hasta: date) -> list[date]:
 
 def clases_del_dia(sb: Client, fecha: date) -> list[dict]:
     filas = (
-        sb.table("clase").select("*, horario(cupo_max, activo)")
+        sb.table("clase").select("*, horario(activo), tipo_clase(nombre)")
         .eq("fecha", fecha.isoformat()).eq("estado", "programada")
         .order("hora_inicio").execute().data
     )
@@ -337,7 +340,8 @@ def clases_del_dia(sb: Client, fecha: date) -> list[dict]:
             "id": c["id"],
             "hora": c["hora_inicio"][:5],
             "duracion": c["duracion"],
-            "cupo_max": c["horario"]["cupo_max"],
+            "cupo_max": c["cupo_max"],
+            "tipo": c["tipo_clase"]["nombre"] if c.get("tipo_clase") else "",
             "reservadas": confirmadas.get(c["id"], 0),
             "ventana": _ventana_asistencia(c),
         }
@@ -346,7 +350,7 @@ def clases_del_dia(sb: Client, fecha: date) -> list[dict]:
 
 
 def clase_con_asistencia(sb: Client, clase_id: int) -> dict | None:
-    filas = sb.table("clase").select("*").eq("id", clase_id).execute().data
+    filas = sb.table("clase").select("*, tipo_clase(nombre)").eq("id", clase_id).execute().data
     if not filas:
         return None
     c = filas[0]
@@ -377,7 +381,8 @@ def clase_con_asistencia(sb: Client, clase_id: int) -> dict | None:
     return {
         "id": c["id"],
         "fecha": fecha,
-        "titulo": f"{nombre_dia(fecha)} {fecha.day}/{fecha.month} · {c['hora_inicio'][:5]}",
+        "titulo": f"{nombre_dia(fecha)} {fecha.day}/{fecha.month} · {c['hora_inicio'][:5]}"
+                  + (f" · {c['tipo_clase']['nombre']}" if c.get("tipo_clase") else ""),
         "hora_fin": (_inicio_clase(c) + timedelta(minutes=c["duracion"])).strftime("%H:%M"),
         "hora": c["hora_inicio"][:5],
         "ventana": _ventana_asistencia(c),

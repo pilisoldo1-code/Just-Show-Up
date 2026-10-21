@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Revisar cambios</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>Revisar antes de guardar</h1>
+        <p class="subtitle"><a href="/profesora/tipos-clase/{{ tipo.id }}/editar">‹ Volver a editar {{ tipo.nombre }}</a></p>
+
+        <section class="panel">
+            <dl class="datos-perfil">
+                <div><dt>Duración</dt><dd>{{ tipo.duracion }} min → <strong>{{ datos.duracion }} min</strong></dd></div>
+                <div><dt>Precio presencial</dt><dd>${{ '%g'|format(tipo.precio_presencial|float) }} → <strong>${{ '%g'|format(datos.precio_presencial) }}</strong></dd></div>
+                <div><dt>Cupo máximo</dt><dd>{{ tipo.cupo_max }} → <strong>{{ datos.cupo_max }}</strong></dd></div>
+            </dl>
+        </section>
+
+        <div class="aviso aviso-ok">
+            <ul class="lista-errores">
+                <li>Las clases que ya pasaron <strong>no cambian</strong>.</li>
+                <li>{{ previa.horarios }} {{ 'horario usa' if previa.horarios == 1 else 'horarios usan' }} este tipo: las próximas clases que se generen toman los valores nuevos.</li>
+                {% if previa.futuras %}
+                <li>Clases ya generadas a futuro: <strong>{{ previa.actualizan_todo }}</strong> sin reservas toman los valores nuevos.</li>
+                {% if previa.conservan_precio %}<li><strong>{{ previa.conservan_precio }}</strong> con reservas conservan su precio y duración (las alumnas que ya reservaron no ven cambios).</li>{% endif %}
+                {% if previa.cambia_cupo %}<li>El cupo nuevo se aplica a todas las clases futuras. Nunca se cancela una reserva.</li>{% endif %}
+                {% if previa.con_lista_espera %}<li>{{ previa.con_lista_espera }} {{ 'clase tiene' if previa.con_lista_espera == 1 else 'clases tienen' }} lista de espera: los lugares nuevos se ofrecen en orden.</li>{% endif %}
+                {% endif %}
+            </ul>
+        </div>
+
+        {% if previa.excedidas %}
+        <div class="aviso aviso-error">
+            Con el cupo nuevo, estas clases quedan con <strong>más reservas que lugares</strong>. No se cancela ninguna reserva ni oferta vigente: solo dejan de aceptarse nuevas hasta que haya lugar.
+            <ul class="lista-errores">
+                {% for e in previa.excedidas %}<li>{{ e.fecha_txt }} {{ e.hora }}: {{ e.confirmadas }} reservadas{% if e.ofertas %} + {{ e.ofertas }} con lugar ofrecido{% endif %}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <form action="/profesora/tipos-clase/{{ tipo.id }}/confirmar" method="post" class="acciones-confirmar">
+            <input type="hidden" name="nombre" value="{{ datos.nombre }}" />
+            <input type="hidden" name="descripcion" value="{{ datos.descripcion }}" />
+            <input type="hidden" name="duracion" value="{{ datos.duracion }}" />
+            <input type="hidden" name="precio_presencial" value="{{ datos.precio_presencial }}" />
+            <input type="hidden" name="cupo_max" value="{{ datos.cupo_max }}" />
+            <a class="btn btn-secundario" href="/profesora/tipos-clase">Volver sin guardar</a>
+            <button type="submit" class="btn">Confirmar cambios</button>
+        </form>
+    </main>
+</body>
+</html>

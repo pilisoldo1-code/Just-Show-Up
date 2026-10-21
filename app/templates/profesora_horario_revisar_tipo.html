@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Cambiar tipo de clase</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>Revisar antes de guardar</h1>
+        <p class="subtitle"><a href="/profesora/horarios/{{ horario.id }}/editar">‹ Volver al horario</a></p>
+
+        <section class="panel">
+            <dl class="datos-perfil">
+                <div><dt>Horario</dt><dd>{{ datos.dia_semana | nombre_dia }} {{ datos.hora_inicio }}</dd></div>
+                <div><dt>Tipo actual</dt><dd>{{ tipo_actual.nombre }} · {{ tipo_actual.duracion }} min · ${{ '%g'|format(tipo_actual.precio_presencial|float) }} · cupo {{ tipo_actual.cupo_max }}</dd></div>
+                <div><dt>Tipo nuevo</dt><dd>{{ tipo_nuevo.nombre }} · {{ tipo_nuevo.duracion }} min · ${{ '%g'|format(tipo_nuevo.precio_presencial|float) }} · cupo {{ tipo_nuevo.cupo_max }}</dd></div>
+            </dl>
+        </section>
+
+        {% if previa.futuras %}
+        <div class="aviso aviso-ok">
+            Este horario ya tiene <strong>{{ previa.futuras }} {{ 'clase generada' if previa.futuras == 1 else 'clases generadas' }}</strong> a futuro:
+            <ul class="lista-errores">
+                <li>{{ previa.cambian }} sin reservas {{ 'pasa' if previa.cambian == 1 else 'pasan' }} a {{ tipo_nuevo.nombre }} con su precio, duración y cupo.</li>
+                {% if previa.conservan %}<li>{{ previa.conservan }} con reservas {{ 'queda' if previa.conservan == 1 else 'quedan' }} como {{ 'estaba' if previa.conservan == 1 else 'estaban' }} ({{ tipo_actual.nombre }}): las alumnas que ya reservaron no ven cambios.</li>{% endif %}
+            </ul>
+        </div>
+        {% else %}
+        <div class="aviso aviso-ok">No hay clases generadas a futuro: el cambio se aplica a las próximas que se generen.</div>
+        {% endif %}
+
+        <form action="/profesora/horarios/{{ horario.id }}/confirmar-tipo" method="post" class="acciones-confirmar">
+            <input type="hidden" name="dia_semana" value="{{ datos.dia_semana }}" />
+            <input type="hidden" name="hora_inicio" value="{{ datos.hora_inicio }}" />
+            <input type="hidden" name="id_tipo_clase" value="{{ datos.id_tipo_clase }}" />
+            {% if datos.activo %}<input type="hidden" name="activo" value="true" />{% endif %}
+            <a class="btn btn-secundario" href="/profesora/horarios">Volver sin guardar</a>
+            <button type="submit" class="btn">Confirmar cambio</button>
+        </form>
+    </main>
+</body>
+</html>
