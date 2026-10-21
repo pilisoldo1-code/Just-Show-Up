@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Confirmar facturas</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <p><a class="lc-accion" href="/profesora/resumenes?mes={{ mes }}&anio={{ anio }}">‹ Facturación de {{ mes_txt }}</a></p>
+        <h1>Confirmar las facturas de {{ mes_txt }}</h1>
+
+        {% if not previa.periodo_finalizado %}
+        <div class="aviso aviso-error">Todavía hay clases del mes sin terminar: se puede confirmar cuando termine la última.</div>
+        {% elif not facturas %}
+        <div class="aviso aviso-error">No hay borradores para confirmar.</div>
+        {% else %}
+        <section class="panel">
+            <p class="resumen-confirmacion">Vas a confirmar <strong>{{ previa.cantidad }} {{ 'factura' if previa.cantidad == 1 else 'facturas' }}</strong>
+                por un total de <strong>${{ previa.total }}</strong>.</p>
+            {% if previa.desactualizadas %}
+            <p class="aviso aviso-error">{{ previa.desactualizadas }} {{ 'factura tiene' if previa.desactualizadas == 1 else 'facturas tienen' }}
+                clases que cambiaron: volvé a la facturación del mes para actualizarlas antes de confirmar.</p>
+            {% endif %}
+            <p class="nota">Después de confirmarlas no se pueden modificar. Las alumnas las ven desde el día 1 del mes siguiente.
+                Si algo cambia mientras tanto, no se confirma ninguna y te avisamos.</p>
+            <form action="/profesora/resumenes/confirmar-mes" method="post" onsubmit="this.querySelector('button[type=submit]').disabled = true">
+                <input type="hidden" name="mes" value="{{ mes }}" />
+                <input type="hidden" name="anio" value="{{ anio }}" />
+                <input type="hidden" name="firma" value="{{ previa.firma }}" />
+                <div class="modal-botones acciones-confirmar">
+                    <a class="btn btn-secundario" href="/profesora/resumenes?mes={{ mes }}&anio={{ anio }}">Volver</a>
+                    <button type="submit" class="btn">Confirmar {{ previa.cantidad }} {{ 'factura' if previa.cantidad == 1 else 'facturas' }}</button>
+                </div>
+            </form>
+        </section>
+
+        <ul class="lista-clases">
+            {% for f in facturas %}
+            <li>
+                <div class="lc-fecha"><strong>{{ f.alumna }}</strong></div>
+                <div class="lc-detalle">{{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · <strong>${{ f.total }}</strong>
+                    {% if f.total != f.subtotal_original %}<br /><span class="nota-chica">Original: ${{ f.subtotal_original }}</span>{% endif %}</div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% if previa.sin_clases %}
+        <p class="nota">{{ previa.sin_clases }} {{ 'borrador queda' if previa.sin_clases == 1 else 'borradores quedan' }} afuera porque no tienen clases para cobrar.</p>
+        {% endif %}
+    </main>
+</body>
+</html>

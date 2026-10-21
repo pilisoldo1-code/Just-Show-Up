@@ -1,0 +1,73 @@
+{# Tabla de clases de una factura. Variables: f (factura), editable (bool), interno (bool: muestra motivos) #}
+<div class="tabla-scroll">
+<table class="factura-tabla">
+    <thead>
+        <tr><th>Fecha</th><th>Hora</th><th>Clase</th><th class="num">Precio</th><th class="num">Ajuste</th><th class="num">Importe</th>{% if editable %}<th></th>{% endif %}</tr>
+    </thead>
+    <tbody>
+        {% for l in f.lineas %}
+        <tr>
+            <td>{{ l.fecha_txt }}</td>
+            <td>{{ l.hora }}</td>
+            <td>{{ l.tipo }}</td>
+            <td class="num">${{ l.precio_original }}</td>
+            <td class="num">{% if l.ajuste_tipo != 'ninguno' %}{{ l.ajuste_txt }}{% if l.ajuste_tipo == 'importe' %} −${{ -l.ajuste }}{% endif %}{% if interno and l.motivo %}<br /><span class="nota-chica">«{{ l.motivo }}»</span>{% endif %}{% else %}—{% endif %}</td>
+            <td class="num">${{ l.importe_final }}</td>
+            {% if editable %}
+            <td class="num">
+                <button type="button" class="btn btn-chico btn-secundario" onclick="document.getElementById('ajustar-{{ l.id }}').showModal()">Ajustar</button>
+                <dialog id="ajustar-{{ l.id }}" class="modal">
+                    <form action="/profesora/resumenes/{{ f.id }}/lineas/{{ l.id }}/ajustar" method="post" class="horario-form"
+                          onsubmit="this.querySelector('button[type=submit]').disabled = true">
+                        <h2>Ajustar clase</h2>
+                        <p class="modal-clase">{{ l.fecha_txt }} · {{ l.hora }} · {{ l.tipo }} · precio original ${{ l.precio_original }}</p>
+                        <input type="hidden" name="version" value="{{ f.version }}" />
+                        <label class="opcion"><input type="radio" name="tipo" value="bonificada" required /> Bonificar la clase (importe $0)</label>
+                        <label class="opcion"><input type="radio" name="tipo" value="importe" /> Cobrar otro importe</label>
+                        <label>
+                            Importe nuevo (menor que ${{ l.precio_original }})
+                            <input type="number" name="importe" min="0" max="{{ l.precio_original }}" step="0.01" inputmode="decimal" />
+                        </label>
+                        <label>
+                            Motivo (interno, la alumna no lo ve)
+                            <textarea name="motivo" rows="2" minlength="{{ motivo_min }}" maxlength="{{ motivo_max }}" required></textarea>
+                        </label>
+                        <div class="modal-botones">
+                            <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                            <button type="submit" class="btn">Guardar ajuste</button>
+                        </div>
+                    </form>
+                </dialog>
+                {% if l.ajuste_tipo != 'ninguno' %}
+                <button type="button" class="btn btn-chico btn-peligro" onclick="document.getElementById('quitar-{{ l.id }}').showModal()">Quitar ajuste</button>
+                <dialog id="quitar-{{ l.id }}" class="modal">
+                    <form action="/profesora/resumenes/{{ f.id }}/lineas/{{ l.id }}/quitar-ajuste" method="post" class="horario-form"
+                          onsubmit="this.querySelector('button[type=submit]').disabled = true">
+                        <h2>Quitar ajuste</h2>
+                        <p class="modal-clase">{{ l.fecha_txt }} · {{ l.hora }}: vuelve a ${{ l.precio_original }}</p>
+                        <input type="hidden" name="version" value="{{ f.version }}" />
+                        <label>
+                            Motivo
+                            <textarea name="motivo" rows="2" minlength="{{ motivo_min }}" maxlength="{{ motivo_max }}" required></textarea>
+                        </label>
+                        <div class="modal-botones">
+                            <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                            <button type="submit" class="btn btn-peligro-solido">Quitar ajuste</button>
+                        </div>
+                    </form>
+                </dialog>
+                {% endif %}
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr><td colspan="5">Subtotal ({{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }})</td><td class="num">${{ f.total_lineas }}</td>{% if editable %}<td></td>{% endif %}</tr>
+        {% if f.descuento_tipo %}
+        <tr><td colspan="5">Descuento general ({{ f.descuento_txt }}){% if interno and f.descuento_motivo %} <span class="nota-chica">«{{ f.descuento_motivo }}»</span>{% endif %}</td><td class="num">−${{ f.descuento_monto }}</td>{% if editable %}<td></td>{% endif %}</tr>
+        {% endif %}
+        <tr class="factura-total"><td colspan="5">Total</td><td class="num">${{ f.total }}</td>{% if editable %}<td></td>{% endif %}</tr>
+    </tfoot>
+</table>
+</div>

@@ -10,53 +10,42 @@
     <main>
         {% include "_menu.html" %}
         <h1>Mis facturas</h1>
-        <p class="subtitle">Tu resumen mensual: las clases que tomaste, el monto y si el pago está pendiente o realizado.</p>
+        <p class="subtitle">Tus facturas mensuales: las clases que tomaste, los descuentos, el total y si está paga. Cada factura aparece el día 1 del mes siguiente.</p>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
-        {% if en_curso %}
-        {% set a = en_curso %}
-        <ul class="lista-clases">
-            <li class="resumen-item">
-                <div class="lc-fecha"><strong>{{ mes_en_curso }}</strong> (en curso)</div>
-                <div class="lc-detalle">
-                    Hasta hoy: {{ a.dictadas }} {{ 'clase' if a.dictadas == 1 else 'clases' }} · ${{ '%.2f'|format(a.total_dictadas) }}
-                    {% if a.proximas %}<br />Reservadas para lo que queda del mes: {{ a.proximas }} · ${{ '%.2f'|format(a.total_proximas) }}{% endif %}
-                </div>
-                <span class="badge badge-espera">Provisorio</span>
-                {% include "_resumen_detalle.html" %}
-            </li>
-        </ul>
-        <p class="nota nota-separada">El mes en curso es provisorio: el resumen se cierra cuando termina el mes.</p>
-        {% endif %}
-
         {% if facturas %}
-        <ul class="lista-clases">
-            {% for f in facturas %}
-            {% set a = f %}
-            <li class="resumen-item">
-                <div class="lc-fecha"><strong>{{ f.mes_txt }}</strong></div>
-                <div class="lc-detalle">
-                    {{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · ${{ '%.2f'|format(f.total) }}
-                    {% if f.pago %}
-                    <br />Pagado el {{ f.pago.fecha }} · {{ f.pago.medio }}
+        {% for f in facturas %}
+        <section class="panel factura-alumna{% if f.estado_factura == 'anulada' %} factura-anulada{% endif %}">
+            <div class="factura-cabecera">
+                <div>
+                    <h2>{{ f.mes_txt }}</h2>
+                    <span class="nota-chica">Factura {{ f.numero }}</span>
+                </div>
+                <div class="factura-estados">
+                    {% if f.estado_factura == 'anulada' %}
+                    <span class="badge badge-off">Anulada</span>
+                    {% else %}
+                    <span class="badge {{ 'badge-on' if f.estado_pago != 'pendiente' else 'badge-espera' }}">{{ f.estado_pago_txt }}</span>
                     {% endif %}
                 </div>
-                {% if f.estado == 'pagado' %}
-                <span class="badge badge-on">Pagado</span>
-                {% else %}
-                <span class="badge badge-espera">Pendiente</span>
-                {% endif %}
-                {% include "_resumen_detalle.html" %}
-            </li>
-            {% endfor %}
-        </ul>
-        {% elif not en_curso %}
+            </div>
+            {% if f.estado_factura == 'anulada' %}
+            <p class="nota">Esta factura fue anulada{% if f.reemplazada_por %} y reemplazada por la factura {{ f.reemplazada_por }}{% endif %}.</p>
+            {% endif %}
+            {% if f.reemplaza %}<p class="nota">Reemplaza a la factura {{ f.reemplaza }}.</p>{% endif %}
+            {% set editable = false %}
+            {% set interno = false %}
+            {% include "_factura_lineas.html" %}
+            {% if f.pago %}<p class="nota">Pagada el {{ f.pago.fecha }} · {{ f.pago.medio }}</p>{% endif %}
+        </section>
+        {% endfor %}
+        {% else %}
         <p class="vacio vacio-izq">
-            Todavía no tenés facturas. Acá vas a ver tu resumen mensual con las clases que
-            tomaste, el monto a pagar y si el pago está pendiente o realizado.
+            Todavía no tenés facturas. Cada factura aparece acá el día 1 del mes siguiente, con las clases
+            que tomaste, los descuentos, el total y el estado del pago.
         </p>
         {% endif %}
     </main>

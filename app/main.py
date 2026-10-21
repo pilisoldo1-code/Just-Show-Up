@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import auth, clases, estadisticas, pagos, validaciones
+from app import auth, clases, estadisticas, facturas, validaciones
 from app.auth import ErrorAuth, Redirigir, Usuario, requiere_alumna, requiere_login, requiere_profesora
 from app.clases import DIAS_ORDEN
 from app import tipos_clase
@@ -337,18 +337,12 @@ def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
 
 @app.get("/mis-facturas")
 def mis_facturas(request: Request, usuario: Usuario = Depends(requiere_alumna)):
-    ahora = clases.ahora()
-    en_curso = None
     try:
-        sb = _sb(usuario)
-        facturas, aviso = pagos.mis_facturas(sb, usuario.id), ""
-        propio = pagos.provisorio(sb, ahora.month, ahora.year, ahora, alumna_id=usuario.id)
-        en_curso = propio[0] if propio else None
+        lista, aviso = facturas.mis_facturas(_sb(usuario), usuario.id), ""
     except Exception:
         logging.exception("No se pudieron cargar las facturas")
-        facturas, aviso = [], "No pudimos cargar tus facturas. Probá de nuevo."
-    return _render(request, "mis_facturas.html", usuario, facturas=facturas, en_curso=en_curso,
-                   mes_en_curso=pagos.mes_txt(ahora.month, ahora.year), aviso=aviso, aviso_ok=False)
+        lista, aviso = [], "No pudimos cargar tus facturas. Probá de nuevo."
+    return _render(request, "mis_facturas.html", usuario, facturas=lista, aviso=aviso, aviso_ok=False)
 
 
 @app.post("/clases/{clase_id}/inscribirse")
@@ -929,7 +923,7 @@ def profesora_estadisticas(request: Request, periodo: str = estadisticas.PERIODO
                    periodos=estadisticas.PERIODOS, aviso=aviso, aviso_ok=False)
 
 
-# ---------- profesora: resúmenes y pagos ----------
+# ---------- profesora: facturación mensual ----------
 
 def _mes_anio(mes: int, anio: int) -> tuple[int, int]:
     """Normaliza mes/año: si no vienen usa el actual, y nunca deja ir a un mes futuro."""
@@ -941,11 +935,29 @@ def _mes_anio(mes: int, anio: int) -> tuple[int, int]:
     return mes, anio
 
 
-def _volver_resumenes(mes: int, anio: int, ok: bool, aviso: str) -> RedirectResponse:
+def _volver_mes(mes: int, anio: int, ok: bool, aviso: str) -> RedirectResponse:
     return RedirectResponse(
         url="/profesora/resumenes?" + urlencode({"mes": mes, "anio": anio, "ok": int(ok), "aviso": aviso}),
         status_code=303,
     )
+
+
+def _volver_factura(factura_id: int, ok: bool, aviso: str) -> RedirectResponse:
+    return RedirectResponse(url=f"/profesora/resumenes/{factura_id}?" + urlencode({"ok": int(ok), "aviso": aviso}),
+                            status_code=303)
+
+
+def _motivo(texto: str) -> str | None:
+    texto = " ".join(texto.split())
+    return texto if facturas.MOTIVO_MIN <= len(texto) <= facturas.MOTIVO_MAX else None
+
+
+def _ejecutar_factura(funcion, *args) -> tuple[bool, str]:
+    try:
+        return funcion(*args)
+    except Exception:
+        logging.exception("Error en facturación")
+        return False, "Ocurrió un error, probá de nuevo."
 
 
 @app.get("/profesora/resumenes")
@@ -954,87 +966,146 @@ def profesora_resumenes(request: Request, mes: int = 0, anio: int = 0, ok: int =
     mes, anio = _mes_anio(mes, anio)
     ahora = clases.ahora()
     hoy = ahora.date()
-    cerrado = pagos.mes_cerrado(mes, anio, hoy)
-    datos, provisorio, aviso_final = [], [], aviso
+    revision = facturas.en_revision(mes, anio, hoy)
+    lista, provisorio, previa, aviso_final = [], [], None, aviso
     try:
-        if cerrado:
-            datos = pagos.resumenes(_sb(usuario), mes, anio)
+        sb = _sb(usuario)
+        if revision:
+            facturas.sincronizar(sb, mes, anio)
+            lista = facturas.facturas_del_mes(sb, mes, anio)
+            previa = facturas.previsualizar_mes(sb, mes, anio)
         else:
-            provisorio = pagos.provisorio(_sb(usuario), mes, anio, ahora)
+            provisorio = facturas.provisorio(sb, mes, anio, ahora)
     except Exception:
-        logging.exception("No se pudieron cargar los resúmenes")
-        aviso_final, ok = "No pudimos cargar los resúmenes. Probá de nuevo.", 0
-    ant_mes, ant_anio = pagos.mes_anterior(mes, anio)
-    sig_mes, sig_anio = pagos.mes_siguiente(mes, anio)
+        logging.exception("No se pudo cargar la facturación")
+        aviso_final, ok = "No pudimos cargar la facturación. Probá de nuevo.", 0
+    ant_mes, ant_anio = facturas.mes_anterior(mes, anio)
+    sig_mes, sig_anio = facturas.mes_siguiente(mes, anio)
+    publica = facturas.primer_dia_siguiente(mes, anio)
     return _render(
         request, "profesora_resumenes.html", usuario,
-        resumenes=datos, provisorio=provisorio, cerrado=cerrado,
-        mes=mes, anio=anio, mes_txt=pagos.mes_txt(mes, anio),
+        facturas=lista, provisorio=provisorio, previa=previa, en_revision=revision,
+        mes=mes, anio=anio, mes_txt=facturas.mes_txt(mes, anio),
+        ultimo_dia_txt=f"{facturas.ultimo_dia(mes, anio).day}/{mes}", publica_txt=f"{publica.day}/{publica.month}/{publica.year}",
+        publicada=ahora >= facturas.inicio_publicacion(mes, anio),
         ant_mes=ant_mes, ant_anio=ant_anio, sig_mes=sig_mes, sig_anio=sig_anio,
-        hay_siguiente=(anio, mes) < (hoy.year, hoy.month),
-        hoy_iso=hoy.isoformat(), hoy_txt=f"{hoy.day}/{hoy.month}", medios_pago=pagos.MEDIOS_PAGO,
-        motivo_min=pagos.MOTIVO_MIN, motivo_max=pagos.MOTIVO_MAX,
+        hay_siguiente=(anio, mes) < (hoy.year, hoy.month), hoy_txt=f"{hoy.day}/{hoy.month}",
         aviso=aviso_final, aviso_ok=bool(ok),
     )
 
 
-@app.post("/profesora/resumenes/generar")
-def profesora_resumenes_generar(mes: int = Form(...), anio: int = Form(...),
-                                usuario: Usuario = Depends(requiere_profesora)):
-    if not pagos.mes_cerrado(mes, anio, clases.ahora().date()):
-        return _volver_resumenes(mes, anio, False, "El mes todavía no terminó: los resúmenes se generan cuando cierra el mes.")
+@app.get("/profesora/resumenes/confirmar-mes")
+def profesora_confirmar_mes(request: Request, mes: int = 0, anio: int = 0, usuario: Usuario = Depends(requiere_profesora)):
+    mes, anio = _mes_anio(mes, anio)
     try:
-        ok, aviso = pagos.generar(_sb(usuario), mes, anio)
+        sb = _sb(usuario)
+        previa = facturas.previsualizar_mes(sb, mes, anio)
+        lista = [f for f in facturas.facturas_del_mes(sb, mes, anio)
+                 if f["estado_factura"] == "borrador" and f["cantidad_clases"] > 0]
     except Exception:
-        logging.exception("Error al generar resúmenes")
-        ok, aviso = False, "Ocurrió un error, probá de nuevo."
-    return _volver_resumenes(mes, anio, ok, aviso)
+        logging.exception("No se pudo armar la vista previa")
+        return _volver_mes(mes, anio, False, "No pudimos armar la vista previa. Probá de nuevo.")
+    return _render(request, "profesora_confirmar_mes.html", usuario, previa=previa, facturas=lista,
+                   mes=mes, anio=anio, mes_txt=facturas.mes_txt(mes, anio))
 
 
-@app.post("/profesora/resumenes/{resumen_id}/pagar")
-def profesora_resumenes_pagar(
-    resumen_id: int,
-    mes: int = Form(...),
-    anio: int = Form(...),
-    monto: str = Form(...),
-    medio_pago: str = Form(...),
-    fecha: str = Form(...),
-    usuario: Usuario = Depends(requiere_profesora),
-):
+@app.post("/profesora/resumenes/confirmar-mes")
+def profesora_confirmar_mes_post(mes: int = Form(...), anio: int = Form(...), firma: str = Form(""),
+                                 usuario: Usuario = Depends(requiere_profesora)):
+    ok, aviso = _ejecutar_factura(facturas.confirmar_mes, _sb(usuario), mes, anio, firma)
+    return _volver_mes(mes, anio, ok, aviso)
+
+
+@app.get("/profesora/resumenes/{factura_id}")
+def profesora_factura(request: Request, factura_id: int, ok: int = 0, aviso: str = "",
+                      usuario: Usuario = Depends(requiere_profesora)):
+    periodo_finalizado = False
+    try:
+        sb = _sb(usuario)
+        f = facturas.factura(sb, factura_id)
+        if f and f["estado_factura"] == "borrador":
+            periodo_finalizado = facturas.previsualizar_mes(sb, f["mes"], f["anio"]).get("periodo_finalizado", False)
+    except Exception:
+        logging.exception("No se pudo cargar la factura")
+        f, aviso, ok = None, "No pudimos cargar la factura. Probá de nuevo.", 0
+    if f is None and not aviso:
+        return RedirectResponse(url="/profesora/resumenes?" + urlencode({"aviso": "No encontramos esa factura."}),
+                                status_code=303)
+    hoy = clases.ahora().date()
+    return _render(request, "profesora_factura.html", usuario, f=f, hoy_iso=hoy.isoformat(), periodo_finalizado=periodo_finalizado,
+                   medios_pago=facturas.MEDIOS_PAGO, motivo_min=facturas.MOTIVO_MIN, motivo_max=facturas.MOTIVO_MAX,
+                   aviso=aviso, aviso_ok=bool(ok))
+
+
+@app.post("/profesora/resumenes/{factura_id}/lineas/{linea_id}/ajustar")
+def profesora_ajustar_linea(factura_id: int, linea_id: int, version: int = Form(...), tipo: str = Form(...),
+                            importe: str = Form(""), motivo: str = Form(""), usuario: Usuario = Depends(requiere_profesora)):
+    texto = _motivo(motivo)
+    valor = facturas.parsear_importe(importe) if tipo == "importe" else None
+    if texto is None:
+        return _volver_factura(factura_id, False, facturas.mensaje("motivo_invalido"))
+    if tipo not in ("importe", "bonificada") or (tipo == "importe" and valor is None):
+        return _volver_factura(factura_id, False, facturas.mensaje("importe_invalido"))
+    ok, aviso = _ejecutar_factura(facturas.ajustar_linea, _sb(usuario), linea_id, tipo, valor, texto, version)
+    return _volver_factura(factura_id, ok, aviso)
+
+
+@app.post("/profesora/resumenes/{factura_id}/lineas/{linea_id}/quitar-ajuste")
+def profesora_quitar_ajuste(factura_id: int, linea_id: int, version: int = Form(...), motivo: str = Form(""),
+                            usuario: Usuario = Depends(requiere_profesora)):
+    texto = _motivo(motivo)
+    if texto is None:
+        return _volver_factura(factura_id, False, facturas.mensaje("motivo_invalido"))
+    ok, aviso = _ejecutar_factura(facturas.quitar_ajuste, _sb(usuario), linea_id, texto, version)
+    return _volver_factura(factura_id, ok, aviso)
+
+
+@app.post("/profesora/resumenes/{factura_id}/descuento")
+def profesora_descuento(factura_id: int, version: int = Form(...), tipo: str = Form(""), valor: str = Form(""),
+                        motivo: str = Form(""), usuario: Usuario = Depends(requiere_profesora)):
+    texto = _motivo(motivo)
+    if texto is None:
+        return _volver_factura(factura_id, False, facturas.mensaje("motivo_invalido"))
+    if tipo == "quitar":
+        tipo_db, numero = None, None
+    else:
+        numero = facturas.parsear_importe(valor)
+        if tipo not in ("monto", "porcentaje") or not numero:
+            return _volver_factura(factura_id, False, facturas.mensaje("descuento_invalido"))
+        tipo_db = tipo
+    ok, aviso = _ejecutar_factura(facturas.descuento, _sb(usuario), factura_id, tipo_db, numero, texto, version)
+    return _volver_factura(factura_id, ok, aviso)
+
+
+@app.post("/profesora/resumenes/{factura_id}/confirmar")
+def profesora_confirmar_factura(factura_id: int, version: int = Form(...), usuario: Usuario = Depends(requiere_profesora)):
+    ok, aviso = _ejecutar_factura(facturas.confirmar, _sb(usuario), factura_id, version)
+    return _volver_factura(factura_id, ok, aviso)
+
+
+@app.post("/profesora/resumenes/{factura_id}/pagar")
+def profesora_registrar_pago(factura_id: int, monto: str = Form(...), medio_pago: str = Form(...),
+                             fecha: str = Form(...), usuario: Usuario = Depends(requiere_profesora)):
     f = _parse_fecha(fecha)
-    importe = pagos.parsear_monto(monto)
+    importe = facturas.parsear_importe(monto)
     if f is None:
         ok, aviso = False, "Fecha inválida."
     elif f > clases.ahora().date():
-        ok, aviso = False, "La fecha del pago no puede ser posterior a hoy."
-    elif importe is None:
+        ok, aviso = False, facturas.mensaje("fecha_futura")
+    elif not importe:
         ok, aviso = False, "Monto inválido."
-    elif medio_pago not in pagos.MEDIOS_PAGO:
+    elif medio_pago not in facturas.MEDIOS_PAGO:
         ok, aviso = False, "Elegí efectivo o transferencia."
     else:
-        try:
-            ok, aviso = pagos.registrar_pago(_sb(usuario), resumen_id, importe, medio_pago, f)
-        except Exception:
-            logging.exception("Error al registrar pago")
-            ok, aviso = False, "Ocurrió un error, probá de nuevo."
-    return _volver_resumenes(mes, anio, ok, aviso)
+        ok, aviso = _ejecutar_factura(facturas.registrar_pago, _sb(usuario), factura_id, importe, medio_pago, f)
+    return _volver_factura(factura_id, ok, aviso)
 
 
-@app.post("/profesora/resumenes/pagos/{pago_id}/anular")
-def profesora_resumenes_anular(
-    pago_id: int,
-    mes: int = Form(...),
-    anio: int = Form(...),
-    motivo: str = Form(""),
-    usuario: Usuario = Depends(requiere_profesora),
-):
-    motivo = " ".join(motivo.split())
-    if not pagos.MOTIVO_MIN <= len(motivo) <= pagos.MOTIVO_MAX:
-        ok, aviso = False, f"Escribí el motivo de la anulación ({pagos.MOTIVO_MIN} a {pagos.MOTIVO_MAX} caracteres)."
-    else:
-        try:
-            ok, aviso = pagos.anular_pago(_sb(usuario), pago_id, motivo)
-        except Exception:
-            logging.exception("Error al anular pago")
-            ok, aviso = False, "Ocurrió un error, probá de nuevo."
-    return _volver_resumenes(mes, anio, ok, aviso)
+@app.post("/profesora/resumenes/{factura_id}/pagos/{pago_id}/anular")
+def profesora_anular_pago(factura_id: int, pago_id: int, motivo: str = Form(""),
+                          usuario: Usuario = Depends(requiere_profesora)):
+    texto = _motivo(motivo)
+    if texto is None:
+        return _volver_factura(factura_id, False, facturas.mensaje("motivo_invalido"))
+    ok, aviso = _ejecutar_factura(facturas.anular_pago, _sb(usuario), pago_id, texto)
+    return _volver_factura(factura_id, ok, aviso)

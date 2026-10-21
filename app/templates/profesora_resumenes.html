@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Just Show Up - Resúmenes</title>
+    <title>Just Show Up - Facturación mensual</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
     <main>
         {% include "_menu.html" %}
-        <h1>Resúmenes mensuales</h1>
+        <h1>Facturación mensual</h1>
         <p class="subtitle">Se cobran las clases tomadas (presente, ausente o sin registrar); las canceladas a tiempo o por vos no se cobran.</p>
 
         {% if aviso %}
@@ -26,11 +26,11 @@
             {% endif %}
         </div>
 
-        {% if not cerrado %}
+        {% if not en_revision %}
         <section class="panel">
             <span class="badge badge-espera">Provisorio</span>
-            <p class="nota">{{ mes_txt }} todavía no terminó: esto es lo que va del mes según las reservas vigentes
-                (hoy {{ hoy_txt }}). No se guarda nada y no se puede cobrar. Los resúmenes se generan cuando cierra el mes.</p>
+            <p class="nota">{{ mes_txt }} está en curso: esto es lo que va del mes según las reservas vigentes (hoy {{ hoy_txt }}).
+                No se guarda nada. Los borradores de las facturas se preparan desde el último día del mes ({{ ultimo_dia_txt }}).</p>
         </section>
 
         {% if provisorio %}
@@ -39,10 +39,24 @@
             <li class="resumen-item">
                 <div class="lc-fecha"><strong>{{ a.alumna }}</strong></div>
                 <div class="lc-detalle">
-                    Hasta hoy: {{ a.dictadas }} {{ 'clase' if a.dictadas == 1 else 'clases' }} · ${{ '%.2f'|format(a.total_dictadas) }}
-                    {% if a.proximas %}<br />Reservadas para lo que queda del mes: {{ a.proximas }} · ${{ '%.2f'|format(a.total_proximas) }}{% endif %}
+                    Hasta hoy: {{ a.dictadas }} {{ 'clase' if a.dictadas == 1 else 'clases' }} · ${{ a.total_dictadas }}
+                    {% if a.proximas %}<br />Reservadas para lo que queda del mes: {{ a.proximas }} · ${{ a.total_proximas }}{% endif %}
                 </div>
-                {% include "_resumen_detalle.html" %}
+                <details class="resumen-detalle">
+                    <summary>Ver clases</summary>
+                    <table>
+                        <thead><tr><th>Fecha</th><th>Clase</th><th class="num">Precio</th></tr></thead>
+                        <tbody>
+                            {% for d in a.detalle %}
+                            <tr{% if not d.dictada %} class="detalle-proxima"{% endif %}>
+                                <td>{{ d.fecha_txt }} · {{ d.hora }}</td>
+                                <td>{{ d.tipo }}{% if not d.dictada %} (todavía no se dictó){% endif %}</td>
+                                <td class="num">${{ d.precio }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </details>
             </li>
             {% endfor %}
         </ul>
@@ -51,103 +65,41 @@
         {% endif %}
 
         {% else %}
-        <section class="panel">
-            <form action="/profesora/resumenes/generar" method="post" onsubmit="this.querySelector('button').disabled = true">
-                <input type="hidden" name="mes" value="{{ mes }}" />
-                <input type="hidden" name="anio" value="{{ anio }}" />
-                <button type="submit" class="btn">Generar resúmenes de {{ mes_txt }}</button>
-            </form>
-            <p class="nota">Se puede repetir sin problema: no duplica y no modifica los resúmenes pagados ni sus pagos.</p>
+        <section class="panel panel-facturacion">
+            {% if previa and not previa.periodo_finalizado %}
+            <p class="nota"><strong>Todavía hay clases de {{ mes_txt }} sin terminar.</strong> Podés revisar y ajustar los
+                borradores; confirmar se habilita cuando termine la última clase del mes. Las facturas incluyen solo clases ya dictadas.</p>
+            {% endif %}
+            <p class="nota">Las alumnas ven sus facturas confirmadas desde el {{ publica_txt }}{% if publicada %} (ya publicadas){% endif %}.
+                Los borradores nunca se les muestran.</p>
+            {% if previa and previa.cantidad %}
+            {% if previa.periodo_finalizado %}
+            <a class="btn" href="/profesora/resumenes/confirmar-mes?mes={{ mes }}&anio={{ anio }}">Confirmar todas las facturas del mes ({{ previa.cantidad }})</a>
+            {% else %}
+            <span class="btn btn-disabled">Confirmar todas las facturas del mes ({{ previa.cantidad }})</span>
+            {% endif %}
+            {% endif %}
         </section>
 
-        {% if resumenes %}
+        {% if facturas %}
         <ul class="lista-clases">
-            {% for r in resumenes %}
-            {% set a = r %}
-            <li class="resumen-item">
-                <div class="lc-fecha"><strong>{{ r.alumna }}</strong></div>
+            {% for f in facturas %}
+            <li class="resumen-item{% if f.estado_factura == 'anulada' %} factura-anulada{% endif %}">
+                <div class="lc-fecha"><strong>{{ f.alumna }}</strong>{% if f.numero %}<br /><span class="nota-chica">{{ f.numero }}</span>{% endif %}</div>
                 <div class="lc-detalle">
-                    {{ r.cantidad_clases }} {{ 'clase' if r.cantidad_clases == 1 else 'clases' }} · ${{ '%.2f'|format(r.total) }}
-                    {% if r.pago %}
-                    <br />Pago #{{ r.pago.id }}: ${{ '%.2f'|format(r.pago.monto) }} · {{ r.pago.medio }} · {{ r.pago.fecha }}
-                    <br /><span class="nota-chica">Registrado el {{ r.pago.registrado_en }}{% if r.pago.registrado_por %} por {{ r.pago.registrado_por }}{% endif %}</span>
-                    {% endif %}
+                    {{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · <strong>${{ f.total }}</strong>
+                    {% if f.total != f.subtotal_original %}<br /><span class="nota-chica">Original: ${{ f.subtotal_original }}</span>{% endif %}
                 </div>
-                {% if r.estado == 'pagado' %}
-                <span class="badge badge-on">Pagado</span>
-                {% if r.pago %}
-                <button type="button" class="btn btn-chico btn-peligro" onclick="document.getElementById('anular-{{ r.pago.id }}').showModal()">Anular pago</button>
-                <dialog id="anular-{{ r.pago.id }}" class="modal">
-                    <form action="/profesora/resumenes/pagos/{{ r.pago.id }}/anular" method="post" class="horario-form"
-                          onsubmit="this.querySelector('button[type=submit]').disabled = true">
-                        <h2>Anular pago #{{ r.pago.id }}</h2>
-                        <p class="modal-clase">{{ r.alumna }} · {{ mes_txt }} · ${{ '%.2f'|format(r.pago.monto) }} · {{ r.pago.medio }} · {{ r.pago.fecha }}</p>
-                        <p>El pago no se borra: queda en el historial como anulado, con el motivo, la fecha y quién lo anuló. El resumen vuelve a <strong>pendiente</strong>.</p>
-                        <input type="hidden" name="mes" value="{{ mes }}" />
-                        <input type="hidden" name="anio" value="{{ anio }}" />
-                        <label>
-                            Motivo
-                            <textarea name="motivo" rows="3" minlength="{{ motivo_min }}" maxlength="{{ motivo_max }}" required
-                                      placeholder="Ej.: se registró con el medio de pago equivocado"></textarea>
-                        </label>
-                        <div class="modal-botones">
-                            <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
-                            <button type="submit" class="btn btn-peligro-solido">Confirmar anulación</button>
-                        </div>
-                    </form>
-                </dialog>
+                <span class="badge {{ 'badge-espera' if f.estado_factura == 'borrador' else ('badge-off' if f.estado_factura == 'anulada' else 'badge-on') }}">{{ f.estado_factura_txt }}</span>
+                {% if f.estado_factura == 'confirmada' %}
+                <span class="badge {{ 'badge-on' if f.estado_pago != 'pendiente' else 'badge-espera' }}">{{ f.estado_pago_txt }}</span>
                 {% endif %}
-                {% else %}
-                <span class="badge badge-espera">Pendiente</span>
-                {% if r.total > 0 %}
-                <button type="button" class="btn btn-chico" onclick="document.getElementById('pagar-{{ r.id }}').showModal()">Registrar pago</button>
-                <dialog id="pagar-{{ r.id }}" class="modal">
-                    <form action="/profesora/resumenes/{{ r.id }}/pagar" method="post" class="horario-form"
-                          onsubmit="this.querySelector('button[type=submit]').disabled = true">
-                        <h2>Registrar pago</h2>
-                        <p class="modal-clase">{{ r.alumna }} · {{ mes_txt }}</p>
-                        <input type="hidden" name="mes" value="{{ mes }}" />
-                        <input type="hidden" name="anio" value="{{ anio }}" />
-                        <input type="hidden" name="monto" value="{{ r.total_exacto }}" />
-                        <p>Monto: <strong>${{ '%.2f'|format(r.total) }}</strong> (el total del resumen; no hay pagos parciales)</p>
-                        <label>
-                            Medio de pago
-                            <select name="medio_pago" required>
-                                {% for valor, texto in medios_pago.items() %}
-                                <option value="{{ valor }}">{{ texto }}</option>
-                                {% endfor %}
-                            </select>
-                        </label>
-                        <label>
-                            Fecha
-                            <input type="date" name="fecha" value="{{ hoy_iso }}" max="{{ hoy_iso }}" required />
-                        </label>
-                        <div class="modal-botones">
-                            <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
-                            <button type="submit" class="btn">Registrar pago</button>
-                        </div>
-                    </form>
-                </dialog>
-                {% endif %}
-                {% endif %}
-                {% include "_resumen_detalle.html" %}
-                {% if r.anulados %}
-                <div class="pagos-anulados">
-                    <strong>Pagos anulados</strong>
-                    <ul>
-                        {% for p in r.anulados %}
-                        <li>Pago #{{ p.id }}: ${{ '%.2f'|format(p.monto) }} · {{ p.medio }} · {{ p.fecha }}
-                            (registrado el {{ p.registrado_en }}{% if p.registrado_por %} por {{ p.registrado_por }}{% endif %})
-                            — anulado el {{ p.anulado_en }}{% if p.anulado_por %} por {{ p.anulado_por }}{% endif %}: «{{ p.motivo }}»</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-                {% endif %}
+                <a class="btn btn-chico" href="/profesora/resumenes/{{ f.id }}">Ver factura</a>
             </li>
             {% endfor %}
         </ul>
         {% else %}
-        <p class="vacio vacio-izq">Todavía no se generaron resúmenes para {{ mes_txt }}. Generalos para ver quién tiene que pagar.</p>
+        <p class="vacio vacio-izq">No hay clases para facturar en {{ mes_txt }}.</p>
         {% endif %}
         {% endif %}
     </main>
