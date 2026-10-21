@@ -10,7 +10,8 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import auth, clases, estadisticas, tipos_clase, validaciones
+from app import auth, clases, estadisticas, validaciones
+from app import tipos_clase
 from app.auth import ErrorAuth, Redirigir, Usuario, requiere_alumna, requiere_login, requiere_profesora
 from app.clases import DIAS_ORDEN
 
