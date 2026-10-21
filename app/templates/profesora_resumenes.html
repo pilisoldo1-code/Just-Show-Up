@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Resúmenes</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>Resúmenes mensuales</h1>
+        <p class="subtitle">Lo que se cobra son las clases tomadas (presente, ausente o sin registrar); las canceladas a tiempo o por vos no se cobran.</p>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        <div class="semana-nav">
+            <a class="btn btn-secundario" href="/profesora/resumenes?mes={{ ant_mes }}&anio={{ ant_anio }}">‹ Mes anterior</a>
+            <span class="semana-rango">{{ mes_txt }}</span>
+            {% if hay_siguiente %}
+            <a class="btn btn-secundario" href="/profesora/resumenes?mes={{ sig_mes }}&anio={{ sig_anio }}">Mes siguiente ›</a>
+            {% else %}
+            <span class="btn btn-secundario btn-disabled">Mes siguiente ›</span>
+            {% endif %}
+        </div>
+
+        <section class="panel">
+            <form action="/profesora/resumenes/generar" method="post">
+                <input type="hidden" name="mes" value="{{ mes }}" />
+                <input type="hidden" name="anio" value="{{ anio }}" />
+                <button type="submit" class="btn">Generar resúmenes de {{ mes_txt }}</button>
+            </form>
+            <p class="nota">Se puede repetir sin problema: no duplica ni modifica los resúmenes que ya están pagados.</p>
+        </section>
+
+        {% if resumenes %}
+        <ul class="lista-clases">
+            {% for r in resumenes %}
+            <li>
+                <div class="lc-fecha"><strong>{{ r.alumna }}</strong></div>
+                <div class="lc-detalle">
+                    {{ r.cantidad_clases }} {{ 'clase' if r.cantidad_clases == 1 else 'clases' }} · ${{ '%.2f'|format(r.total) }}
+                    {% if r.pago %}
+                    <br />Pagado el {{ r.pago.fecha }} · {{ r.pago.medio }}{% if r.pago.monto != r.total %} · ${{ '%.2f'|format(r.pago.monto) }}{% endif %}
+                    {% endif %}
+                </div>
+                {% if r.estado == 'pagado' %}
+                <span class="badge badge-on">Pagado</span>
+                {% else %}
+                <span class="badge badge-espera">Pendiente</span>
+                <button type="button" class="btn btn-chico" onclick="document.getElementById('pagar-{{ r.id }}').showModal()">Registrar pago</button>
+
+                <dialog id="pagar-{{ r.id }}" class="modal">
+                    <form action="/profesora/resumenes/{{ r.id }}/pagar" method="post" class="horario-form">
+                        <h2>Registrar pago</h2>
+                        <p class="modal-clase">{{ r.alumna }} · {{ mes_txt }}</p>
+                        <input type="hidden" name="mes" value="{{ mes }}" />
+                        <input type="hidden" name="anio" value="{{ anio }}" />
+                        <label>
+                            Monto
+                            <input type="number" name="monto" min="0" step="0.01" value="{{ r.total }}" required />
+                        </label>
+                        <label>
+                            Medio de pago
+                            <select name="medio_pago" required>
+                                {% for valor, texto in medios_pago.items() %}
+                                <option value="{{ valor }}">{{ texto }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>
+                            Fecha
+                            <input type="date" name="fecha" value="{{ hoy_iso }}" max="{{ hoy_iso }}" required />
+                        </label>
+                        <div class="modal-botones">
+                            <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                            <button type="submit" class="btn">Registrar pago</button>
+                        </div>
+                    </form>
+                </dialog>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="vacio vacio-izq">Todavía no se generaron resúmenes para {{ mes_txt }}. Generalos para ver quién tiene que pagar.</p>
+        {% endif %}
+    </main>
+</body>
+</html>

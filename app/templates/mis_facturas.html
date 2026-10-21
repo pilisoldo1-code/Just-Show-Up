@@ -10,12 +10,37 @@
     <main>
         {% include "_menu.html" %}
         <h1>Mis facturas</h1>
-        <section class="panel">
-            <p class="vacio vacio-izq">
-                Todavía no tenés facturas. Acá vas a ver tu resumen mensual con las clases que
-                tomaste, el monto a pagar y si el pago está pendiente o realizado.
-            </p>
-        </section>
+        <p class="subtitle">Tu resumen mensual: las clases que tomaste, el monto y si el pago está pendiente o realizado.</p>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        {% if facturas %}
+        <ul class="lista-clases">
+            {% for f in facturas %}
+            <li>
+                <div class="lc-fecha"><strong>{{ f.mes_txt }}</strong></div>
+                <div class="lc-detalle">
+                    {{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · ${{ '%.2f'|format(f.total) }}
+                    {% if f.pago %}
+                    <br />Pagado el {{ f.pago.fecha }} · {{ f.pago.medio }}
+                    {% endif %}
+                </div>
+                {% if f.estado == 'pagado' %}
+                <span class="badge badge-on">Pagado</span>
+                {% else %}
+                <span class="badge badge-espera">Pendiente</span>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="vacio vacio-izq">
+            Todavía no tenés facturas. Acá vas a ver tu resumen mensual con las clases que
+            tomaste, el monto a pagar y si el pago está pendiente o realizado.
+        </p>
+        {% endif %}
     </main>
 </body>
 </html>
