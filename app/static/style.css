@@ -1009,3 +1009,152 @@ main.ancho {
 .lc-oferta {
     border-color: var(--accent) !important;
 }
+
+/* ---------- tipos de clase ---------- */
+
+.header-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.btn-secundario-claro,
+.btn.btn-secundario-claro {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid #2a2e37;
+}
+
+.tipos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+}
+
+.tipo-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.tipo-imagen {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    display: block;
+    background: var(--bg);
+}
+
+.tipo-card .tipo-imagen {
+    aspect-ratio: auto;
+    height: 140px;
+}
+
+.tipo-imagen-vacia {
+    display: grid;
+    place-content: center;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--muted);
+}
+
+.tipo-cuerpo {
+    padding: 14px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tipo-titulo {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.tipo-titulo h2 {
+    margin: 0;
+    font-size: 1.15rem;
+}
+
+.tipo-datos {
+    margin: 0;
+    font-weight: 600;
+}
+
+.tipo-acciones {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.tipo-acciones form {
+    margin: 0;
+}
+
+.tipo-imagen-editar {
+    display: grid;
+    grid-template-columns: minmax(0, 220px) 1fr;
+    gap: 16px;
+    align-items: start;
+}
+
+.tipo-imagen-editar .tipo-imagen {
+    border-radius: 8px;
+}
+
+.form-imagen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.form-imagen input[type="file"] {
+    max-width: 100%;
+}
+
+@media (max-width: 520px) {
+    .tipo-imagen-editar {
+        grid-template-columns: 1fr;
+    }
+}
+
+.hora-tipo {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0;
+    margin-top: 2px;
+}
+
+.cards-semana .hora-chip .hora-tipo {
+    font-size: 0.75rem;
+}
+
+.card-tipo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent);
+    font-weight: 600;
+    margin-top: -4px;
+}
+
+.card-tipo-imagen {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.horario-form textarea {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a2e37;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: 1rem;
+    resize: vertical;
+}

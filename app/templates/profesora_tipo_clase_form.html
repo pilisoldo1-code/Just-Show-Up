@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - {{ 'Editar tipo de clase' if tipo else 'Nuevo tipo de clase' }}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>{{ 'Editar ' ~ tipo.nombre if tipo else 'Nuevo tipo de clase' }}</h1>
+        <p class="subtitle"><a href="/profesora/tipos-clase">‹ Volver a los tipos de clase</a></p>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+        {% if errores %}
+        <div class="aviso aviso-error">
+            <strong>{{ 'Corregí estos datos:' if errores|length > 1 else 'Corregí este dato:' }}</strong>
+            <ul class="lista-errores">{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+
+        <form action="{{ '/profesora/tipos-clase/' ~ tipo.id ~ '/revisar' if tipo else '/profesora/tipos-clase/nuevo' }}"
+              method="post" class="horario-form" {% if not tipo %}enctype="multipart/form-data"{% endif %}>
+            <label>
+                Nombre
+                <input type="text" name="nombre" value="{{ datos.nombre or '' }}" maxlength="60" required
+                       placeholder="Ej.: Pilates, Funcional, Yoga" />
+            </label>
+            <label>
+                Descripción
+                <textarea name="descripcion" rows="3" maxlength="500">{{ datos.descripcion or '' }}</textarea>
+            </label>
+            <div class="form-fila">
+                <label>
+                    Duración (minutos)
+                    <input type="number" name="duracion" min="1" max="600" value="{{ datos.duracion }}" required />
+                </label>
+                <label>
+                    Precio presencial ($)
+                    <input type="number" name="precio_presencial" min="0" step="0.01" value="{{ '%g'|format(datos.precio_presencial|float) if datos.precio_presencial is not none else '' }}" required />
+                </label>
+                <label>
+                    Cupo máximo
+                    <input type="number" name="cupo_max" min="1" max="200" value="{{ datos.cupo_max }}" required />
+                </label>
+            </div>
+            {% if not tipo %}
+            <label>
+                Imagen (opcional · JPG, PNG o WebP, hasta 2 MB)
+                <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" />
+            </label>
+            {% else %}
+            <p class="nota">Si cambiás duración, precio o cupo, antes de guardar vas a ver cómo afecta a las clases ya generadas.</p>
+            {% endif %}
+            <button type="submit" class="btn">{{ 'Revisar y guardar' if tipo else 'Crear tipo de clase' }}</button>
+        </form>
+
+        {% if tipo %}
+        <section class="panel">
+            <h2>Imagen</h2>
+            <div class="tipo-imagen-editar">
+                {% if tipo.imagen_url %}
+                <img class="tipo-imagen" src="{{ tipo.imagen_url }}" alt="{{ tipo.nombre }}" />
+                {% else %}
+                <div class="tipo-imagen tipo-imagen-vacia" aria-hidden="true">{{ tipo.nombre[:1] | upper }}</div>
+                {% endif %}
+                <div>
+                    <form action="/profesora/tipos-clase/{{ tipo.id }}/imagen" method="post" enctype="multipart/form-data" class="form-imagen">
+                        <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" required />
+                        <button type="submit" class="btn btn-chico">{{ 'Cambiar imagen' if tipo.imagen_url else 'Subir imagen' }}</button>
+                    </form>
+                    <p class="nota">JPG, PNG o WebP, hasta 2 MB.</p>
+                    {% if tipo.imagen_url %}
+                    <form action="/profesora/tipos-clase/{{ tipo.id }}/quitar-imagen" method="post">
+                        <button type="submit" class="link-btn">Quitar imagen</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+        {% endif %}
+    </main>
+</body>
+</html>

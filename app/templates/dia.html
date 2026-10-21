@@ -24,6 +24,12 @@
                     <span class="card-dia">{{ titulo_dia }}</span>
                 </div>
                 <div class="card-hora">{{ c.hora }}</div>
+                {% if c.tipo %}
+                <div class="card-tipo">
+                    {% if c.imagen %}<img src="{{ c.imagen }}" alt="" class="card-tipo-imagen" loading="lazy" />{% endif %}
+                    <span>{{ c.tipo }}</span>
+                </div>
+                {% endif %}
                 <ul class="card-datos">
                     <li>Duración: {{ c.duracion }} min</li>
                     <li>Precio: ${{ '%g'|format(c.precio) }}</li>

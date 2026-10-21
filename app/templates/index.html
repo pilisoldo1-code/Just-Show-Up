@@ -44,7 +44,7 @@
                     <span class="card-fecha">{{ d.fecha_txt }}</span>
                 </div>
                 <div class="horas">
-                    {% for h in d.horas %}<span class="hora-chip {{ 'hora-chip-cancelada' if h in d.canceladas_en else '' }}">{{ h }}</span>{% endfor %}
+                    {% for h in d.horas %}<span class="hora-chip {{ 'hora-chip-cancelada' if h in d.canceladas_en else '' }}">{{ h }}{% if d.tipos and d.tipos[h] %}<small class="hora-tipo">{{ d.tipos[h] }}</small>{% endif %}</span>{% endfor %}
                 </div>
                 <div class="card-accion">
                     {% if d.todas_pasadas %}
