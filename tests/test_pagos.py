@@ -150,5 +150,60 @@ class Pantalla(unittest.TestCase):
             self.assertIn('href="/profesora/resumenes"', self.client.get("/profesora/resumenes").text)
 
 
+class MisFacturas(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(main.app)
+        p = mock.patch.object(main, "_sb", return_value=None)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def como(self, usuario):
+        p = mock.patch.object(auth, "_usuario_cacheado", return_value=usuario)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_sin_sesion_va_al_login(self):
+        self.como(None)
+        r = self.client.get("/mis-facturas", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertTrue(r.headers["location"].startswith("/login"))
+
+    def test_profesora_no_puede_entrar(self):
+        self.como(PROFESORA)
+        with mock.patch.object(pagos, "mis_facturas") as mf:
+            r = self.client.get("/mis-facturas", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        mf.assert_not_called()
+
+    def test_alumna_ve_sus_facturas(self):
+        self.como(ALUMNA)
+        facturas = [
+            {"id": 1, "mes_txt": "Octubre 2026", "cantidad_clases": 2, "total": 1600.0,
+             "estado": "pendiente", "pago": None},
+            {"id": 2, "mes_txt": "Setiembre 2026", "cantidad_clases": 4, "total": 3200.0,
+             "estado": "pagado", "pago": {"monto": 3200.0, "medio": "Transferencia", "fecha": "2026-10-02"}},
+        ]
+        with mock.patch.object(pagos, "mis_facturas", return_value=facturas) as mf:
+            r = self.client.get("/mis-facturas")
+        self.assertEqual(r.status_code, 200)
+        mf.assert_called_once_with(None, "a")
+        for texto in ("Octubre 2026", "$1600.00", "Pendiente", "Setiembre 2026", "Pagado", "Transferencia"):
+            self.assertIn(texto, r.text)
+
+    def test_alumna_sin_facturas_muestra_vacio(self):
+        self.como(ALUMNA)
+        with mock.patch.object(pagos, "mis_facturas", return_value=[]):
+            r = self.client.get("/mis-facturas")
+        self.assertIn("Todavía no tenés facturas", r.text)
+
+    def test_error_de_base_muestra_aviso(self):
+        self.como(ALUMNA)
+        with mock.patch.object(pagos, "mis_facturas", side_effect=RuntimeError("caída")), \
+                self.assertLogs(level="ERROR"):
+            r = self.client.get("/mis-facturas")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("No pudimos cargar tus facturas", r.text)
+
+
 if __name__ == "__main__":
     unittest.main()

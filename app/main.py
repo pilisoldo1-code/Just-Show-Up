@@ -335,7 +335,12 @@ def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
 
 @app.get("/mis-facturas")
 def mis_facturas(request: Request, usuario: Usuario = Depends(requiere_alumna)):
-    return _render(request, "mis_facturas.html", usuario)
+    try:
+        facturas, aviso = pagos.mis_facturas(_sb(usuario), usuario.id), ""
+    except Exception:
+        logging.exception("No se pudieron cargar las facturas")
+        facturas, aviso = [], "No pudimos cargar tus facturas. Probá de nuevo."
+    return _render(request, "mis_facturas.html", usuario, facturas=facturas, aviso=aviso, aviso_ok=False)
 
 
 @app.post("/clases/{clase_id}/inscribirse")

@@ -43,6 +43,32 @@ def resumenes(sb: Client, mes: int, anio: int) -> list[dict]:
     return salida
 
 
+def mis_facturas(sb: Client, alumna_id: str) -> list[dict]:
+    filas = (
+        sb.table("resumen_mensual")
+        .select("id, mes, anio, cantidad_clases, total, estado, pago(monto, medio_pago, fecha)")
+        .eq("id_alumna", alumna_id)
+        .order("anio", desc=True).order("mes", desc=True)
+        .execute().data
+    )
+    salida = []
+    for r in filas:
+        pago = r["pago"][0] if r.get("pago") else None
+        salida.append({
+            "id": r["id"],
+            "mes_txt": f"{MESES[r['mes']].capitalize()} {r['anio']}",
+            "cantidad_clases": r["cantidad_clases"],
+            "total": r["total"],
+            "estado": r["estado"],
+            "pago": {
+                "monto": pago["monto"],
+                "medio": MEDIOS_PAGO.get(pago["medio_pago"], pago["medio_pago"]),
+                "fecha": pago["fecha"],
+            } if pago else None,
+        })
+    return salida
+
+
 def generar(sb: Client, mes: int, anio: int) -> tuple[bool, str]:
     resultado = sb.rpc("generar_resumenes", {"p_mes": mes, "p_anio": anio}).execute().data
     if resultado["resultado"] != "ok":
