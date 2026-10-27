@@ -272,9 +272,9 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     funcionando con la base nueva), navegador escritorio/celular. Antes de aplicarla se
     hizo un respaldo de todos los datos y un script de vuelta atrás probado (deja las 6
     funciones modificadas idénticas byte a byte a las de producción).
-- **Facturación mensual y pagos (módulo 6, rama `modulo-6-resumen-correcciones`,
-  2026-10-21; migración `20261021150000_resumen_mensual_pagos.sql` SIN APLICAR en
-  Supabase)**. Parte del PR #13 de Josefina (su rama `modulo-6-resumen` queda intacta),
+- **Facturación mensual y pagos (módulo 6, rama `modulo-6-resumen-correcciones`;
+  migración `20261021150000_resumen_mensual_pagos.sql` APLICADA en Supabase el 27/10 como
+  `20261027205754 resumen_mensual_pagos`; el código todavía NO está en `main` ni desplegado)**. Parte del PR #13 de Josefina (su rama `modulo-6-resumen` queda intacta),
   rediseñado con Julieta. **Simulación educativa**: sin requisitos fiscales, numeración
   oficial ni pasarela de pagos (sin Mercado Pago); los pagos los marca la profesora.
   - Tablas: `resumen_mensual` = la factura (`estado_factura` borrador/confirmada/anulada y
@@ -321,10 +321,13 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     (`python tests/base_local/test_facturacion_base.py`, necesita `requirements-dev.txt`):
     fechas de cierre y publicación, cambio de año, concurrencia, permisos, cédula, foto fija,
     PDF y el código real de `app/facturas.py`. 49 tests unitarios (`tests.test_facturas`) y
-    navegador escritorio/celular contra la base local. Falta probar contra Supabase real
-    (necesita aplicar las migraciones).
+    navegador escritorio/celular contra la base local. Migraciones aplicadas el 27/10 tras un
+    respaldo verificado (`~/Documents/Just Show Up - respaldos/2026-10-27 antes de facturación
+    (módulo 6)/`, con `vuelta_atras_modulo6.sql`); después de aplicarlas la estructura quedó
+    idéntica a la de los archivos del repo, los datos sin cambios y los permisos probados con
+    las cuentas de prueba. Falta probar la app contra Supabase real (theta) y el PR.
 - **Cédula de identidad (rama `modulo-6-resumen-correcciones`, migración
-  `20261021140000_profiles_cedula.sql` SIN APLICAR)**: `profiles.cedula` opcional (las usuarias
+  `20261021140000_profiles_cedula.sql` APLICADA el 27/10 como `20261027205550 profiles_cedula`)**: `profiles.cedula` opcional (las usuarias
   existentes quedan sin cédula; no se completa nada), solo dígitos, validada con el dígito
   verificador uruguayo (`_cedula_valida` en la base y `validaciones.cedula` en Python, mismo
   algoritmo) y única. Cada alumna ve la suya en Mi perfil (solo lectura) y **no puede
@@ -494,7 +497,17 @@ Se definieron como módulos verticales: cada uno entrega algo visible/probable
 en la web, no solo cambios de esquema.
 
 - **Planificación** (pedido del profesor) — **hecho** (licencias, vacaciones y
-  cancelaciones puntuales). Estadísticas **hecha** (ver Estado actual).
+  cancelaciones puntuales).
+  **PENDIENTE (pedido de Julieta, 27/10; hacerlo DESPUÉS de integrar el módulo 6 y presentar
+  antes una propuesta técnica, sin modificar nada):** dos opciones en Planificación con pestañas
+  o selector: "Licencia / ausencia" (lo actual: rango de fechas, motivo, vista previa,
+  confirmar; conservar) y **"Cancelar clases puntuales"**: elegir un día en un calendario, ver
+  sus clases (hora y tipo), marcar con checkboxes una, varias o todas, motivo, botón "Cancelar
+  clases seleccionadas", confirmación con fecha, horarios y cantidad. Reglas: solo se cancelan
+  las seleccionadas; las ya canceladas se muestran identificadas y no se pueden elegir; mismo
+  procedimiento de cancelación actual (reservas, lista de espera, avisos, facturación); sin
+  duplicados; todo o nada si se cancelan varias; escritorio y celular. Ej.: lunes 2/11 con
+  08:00, 09:00 y 17:00 → cancelar solo 08:00 y 09:00 por una consulta médica. Estadísticas **hecha** (ver Estado actual).
   Pendiente del mismo pedido: **Tipo de clase** (falta que el usuario pase los nombres de los tipos).
 
 1. **Autenticación y perfiles** — etapa 1 y olvidé mi contraseña hechos; etapa 2
