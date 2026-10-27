@@ -9,16 +9,26 @@
 
 ## Dónde quedamos (leer primero)
 
-**`CONTINUIDAD_PROYECTO.md`** tiene el traspaso del 27/10 (GitHub, Supabase, respaldo, pruebas) y
-las decisiones de Mercado Pago y Videos On Demand; quedó escrito **antes** de que se integrara el
-PR #15, así que su §3/§6/§11 sobre "PR #15 sin integrar" ya no aplican (se integró ese mismo día,
-merge común en `568d551`). **Estado del orden de trabajo:**
-1. ~~Integrar el PR #15 (facturación)~~ — hecho, en `main`.
-2. ~~Planificación: cancelar clases puntuales con checkboxes~~ — hecho, junto con las mejoras del
-   menú de la profesora (rama `mejoras-planificacion-menu`; ver Estado actual). Sin mergear a
-   `main` todavía: falta autorización para push/PR.
-3. Mercado Pago Checkout Pro en modo de prueba (propuesta ya presentada, falta aprobación).
-4. Videos On Demand: Zoom gratuito + Mux gratuito si pasa la prueba de reproducción firmada.
+**`CONTINUIDAD_PROYECTO.md`** tiene el estado actual (GitHub, Supabase, respaldo, pruebas, cómo
+seguir desde otra computadora), lo pendiente, lo que necesita autorización, las decisiones de
+Mercado Pago y Videos On Demand y las ideas a evaluar. **Orden de trabajo (actualizado 28/10/2026)**:
+1. ~~Integrar el PR #15 (facturación)~~ — **hecho**: integrado en `main` con merge común
+   (`568d551`), theta desplegada y verificada (17/17, sin tocar datos reales). El PR #13 de
+   Josefina quedó marcado "merged" automáticamente. amber sigue con la versión anterior.
+2. ~~Planificación: cancelar clases puntuales con checkboxes + mejoras del menú~~ — **código
+   integrado** (PR #16, #17 y #18, `main` = `2d3f63c`, desplegado en theta) y migración
+   `planificacion_cancelacion_puntual` aplicada en Supabase (`20261028003643`). **Faltan las
+   pruebas finales contra la base real** (ver Estado actual y `CONTINUIDAD_PROYECTO.md` §9:
+   hay que resolver antes la contradicción de los horarios de prueba inactivos).
+3. Mercado Pago Checkout Pro **solo en modo de prueba** (propuesta presentada, falta aprobación).
+4. Videos On Demand: Zoom gratuito (~40 min, carga manual) + Mux gratuito si pasa la prueba de
+   reproducción firmada.
+
+Ideas pendientes **para evaluar (no aprobadas)**: cobro del 25 % por inasistencia, notificaciones
+de cancelación, magic links, gráficas en Estadísticas, revisión integral para celulares
+(`CONTINUIDAD_PROYECTO.md` §11).
+
+**Todo push o merge a `main` despliega solo en theta: consultar antes.**
 
 ## Qué es esto
 
@@ -236,8 +246,10 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   - Probado con 75 casos + 16 de concurrencia (8 alumnas reservando mientras se
     crea el bloqueo) + navegador escritorio/celular; la base quedó idéntica
     después de cada prueba. Pruebas con horarios de sábado (no hay clases reales).
-- **Planificación: cancelar clases puntuales (hecha 2026-10-27, rama
-  `mejoras-planificacion-menu`)** — segunda pestaña en `/profesora/planificacion`
+- **Planificación: cancelar clases puntuales (hecha 2026-10-27; PR #16, ajustes visuales en
+  #17 y #18, todos integrados en `main` = `2d3f63c` y desplegados en theta; migración aplicada
+  en Supabase el 28/10 como `20261028003643 planificacion_cancelacion_puntual`, función
+  verificada idéntica al archivo del repo)** — segunda pestaña en `/profesora/planificacion`
   ("Licencia / ausencia" ↔ "Cancelar clases puntuales"; la primera queda igual).
   La profesora elige una fecha (se generan las clases de esa semana si hiciera
   falta, igual que en `/profesora/clases`), ve las clases de ese día con
@@ -275,6 +287,15 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     (`tests/test_planificacion.py`, incluye el menú) y navegador escritorio/
     celular con datos simulados (sin Supabase disponible en esa sesión). No se
     tocó la base real.
+  - **PENDIENTE: pruebas finales contra Supabase real** (todavía no se crearon datos de
+    prueba). Antes hay que resolver una **contradicción del plan de pruebas**: las pruebas
+    reales anteriores usan horarios de prueba **inactivos** (para que no los vean las alumnas),
+    pero `crear_bloqueos_puntuales` exige horario activo (`h.activo`) y `generar_clases` solo
+    genera clases de horarios **y** tipos activos; con un horario inactivo la cancelación
+    siempre devuelve `clases_invalidas`. Opciones en `CONTINUIDAD_PROYECTO.md` §9.
+  - Ojo en pruebas: abrir la pestaña puntual con una `fecha` **llama a `generar_clases`** para
+    esa semana (escribe en la base, igual que `/profesora/clases`).
+  - Cupos (PR #17): los textos muestran "7 cupos" / "1 cupo" según `cupo_max`.
 - **Menú de la profesora (hecho 2026-10-27, mismo trabajo)**: orden fijo
   Horarios · Tipos de clase · Asistencias · Planificación · Alumnas ·
   Facturación · Estadísticas (antes "Clases" se llamaba así y "Tipos de clase"
@@ -334,7 +355,8 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     funciones modificadas idénticas byte a byte a las de producción).
 - **Facturación mensual y pagos (módulo 6, rama `modulo-6-resumen-correcciones`;
   migración `20261021150000_resumen_mensual_pagos.sql` APLICADA en Supabase el 27/10 como
-  `20261027205754 resumen_mensual_pagos`; el código todavía NO está en `main` ni desplegado)**. Parte del PR #13 de Josefina (su rama `modulo-6-resumen` queda intacta),
+  `20261027205754 resumen_mensual_pagos`; **integrado en `main` el 27/10 (PR #15, merge común,
+  `568d551`) y desplegado en theta**)**. Parte del PR #13 de Josefina (su rama `modulo-6-resumen` queda intacta),
   rediseñado con Julieta. **Simulación educativa**: sin requisitos fiscales, numeración
   oficial ni pasarela de pagos (sin Mercado Pago); los pagos los marca la profesora.
   - Tablas: `resumen_mensual` = la factura (`estado_factura` borrador/confirmada/anulada y
@@ -389,7 +411,10 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     (`tests/supabase_real/prueba_modulo6_real.py`, 73 casos: facturación completa de profesora y
     alumna, PDF, permisos y regresión de login, alumnas, reservas, lista de espera, tipos,
     planificación y asistencia) usando solo cuentas `@prueba.invalid` y septiembre de 2026 (sin
-    datos reales); limpieza y comparación con el respaldo: idéntico. Falta: push, PR y desplegar.
+    datos reales); limpieza y comparación con el respaldo: idéntico. **Theta verificada después
+    del merge** (17 comprobaciones de solo lectura con cuentas de prueba, huella de 12 tablas
+    idéntica antes y después). **Desde el último día de cada mes** (31/10 para octubre), abrir
+    Facturación en ese mes crea los borradores de las alumnas reales: es lo previsto.
 - **Cédula de identidad (rama `modulo-6-resumen-correcciones`, migración
   `20261021140000_profiles_cedula.sql` APLICADA el 27/10 como `20261027205550 profiles_cedula`)**: `profiles.cedula` opcional (las usuarias
   existentes quedan sin cédula; no se completa nada), solo dígitos, validada con el dígito
@@ -562,8 +587,11 @@ en la web, no solo cambios de esquema.
 
 - **Planificación** (pedido del profesor) — **hecho**: licencias/vacaciones por
   período y, desde el 27/10, **cancelar clases puntuales** con checkboxes (ver
-  Estado actual). Estadísticas **hecha**. Tipos de clase **hecho**. Menú de la
-  profesora reordenado y con pestaña activa resaltada **hecho** (ver Estado actual).
+  Estado actual; PR #16–#18 en `main`, migración aplicada; **faltan las pruebas
+  finales contra la base real**). Estadísticas **hecha**. Tipos de clase **hecho**.
+  Menú de la profesora reordenado y con pestaña activa resaltada **hecho** (ver
+  Estado actual); en celular el menú pasa a varias líneas (`flex-wrap`), una
+  revisión integral para celulares queda como idea a evaluar.
 
 1. **Autenticación y perfiles** — etapa 1 y olvidé mi contraseña hechos; etapa 2
    fase 1 hecha, falta la fase 2 (cerrar `anon`) y rotar claves (ver Gotchas).
@@ -578,9 +606,8 @@ en la web, no solo cambios de esquema.
 4. **Lista de espera** — **hecho** (oferta de 30 min dentro de la app, confirmar,
    rechazar, salir; vista de la profesora). Falta solo el aviso por mail (Resend).
 5. **Asistencia** — **hecho** (profesora marca; la alumna lo ve en Mi historial).
-6. **Facturación mensual y pagos** — **terminado** (simulado) en la rama
-   `modulo-6-resumen-correcciones`, **PR #15** abierto sin integrar; migraciones ya aplicadas en
-   Supabase (27/10). Pago con **Mercado Pago Checkout Pro solo en modo de prueba**: paso 3 del
+6. **Facturación mensual y pagos** — **hecho** (simulado): PR #15 integrado en `main` el 27/10
+   (merge común, `568d551`), desplegado en theta y verificado; migraciones aplicadas en Supabase. Pago con **Mercado Pago Checkout Pro solo en modo de prueba**: paso 3 del
    orden de trabajo (propuesta en `CONTINUIDAD_PROYECTO.md` §7).
 7. **Clases grabadas → "Videos On Demand"** (decidido 27/10): la profesora sube la grabación (Zoom
    gratuito, carga manual) y todas las alumnas la ven 24 h desde la publicación; alojamiento en Mux
@@ -769,7 +796,8 @@ Para cada módulo, en este orden:
   `estado='confirmada'`; los "lugares disponibles" salen de la función
   `reservas_confirmadas` (las alumnas no pueden contar reservas ajenas por RLS).
   `clase.cantidad_inscriptas` es una copia que las funciones resincronizan. El
-  cupo máximo sale de `horario.cupo_max` (la tabla `clase` no lo copia).
+  cupo máximo sale de `clase.cupo_max` (desde Tipos de clase cada clase guarda el suyo; antes
+  salía de `horario.cupo_max`).
   `reservar`/`cancelar_reserva`/`anotar_en_espera` hacen `select ... for update`
   sobre la clase, así que los pedidos simultáneos se ordenan: sin sobreventa
   (probado: 3 reservas a la vez con cupo 2 → 2 ok, 1 completa).
