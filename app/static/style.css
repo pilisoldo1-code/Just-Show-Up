@@ -910,6 +910,14 @@ main.ancho {
     justify-content: space-between;
 }
 
+.form-puntual {
+    margin-top: 20px;
+}
+
+.form-puntual .lista-puntual {
+    margin-bottom: 4px;
+}
+
 .form-fila {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

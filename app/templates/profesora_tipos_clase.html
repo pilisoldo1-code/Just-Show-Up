@@ -32,7 +32,7 @@
                         <span class="badge {{ 'badge-on' if t.activo else 'badge-off' }}">{{ 'Activo' if t.activo else 'Inactivo' }}</span>
                     </div>
                     {% if t.descripcion %}<p class="nota">{{ t.descripcion }}</p>{% endif %}
-                    <p class="tipo-datos">{{ t.duracion }} min · ${{ '%g'|format(t.precio_presencial|float) }} · cupo {{ t.cupo_max }}</p>
+                    <p class="tipo-datos">{{ t.duracion }} min · ${{ '%g'|format(t.precio_presencial|float) }} · {{ t.cupo_max }} {{ 'cupo' if t.cupo_max == 1 else 'cupos' }}</p>
                     <p class="nota">{{ t.horarios_activos }} {{ 'horario activo' if t.horarios_activos == 1 else 'horarios activos' }}{% if t.horarios > t.horarios_activos %} · {{ t.horarios - t.horarios_activos }} inactivo{{ 's' if t.horarios - t.horarios_activos != 1 }}{% endif %}</p>
                     <div class="tipo-acciones">
                         <a class="btn btn-chico" href="/profesora/tipos-clase/{{ t.id }}/editar">Editar</a>

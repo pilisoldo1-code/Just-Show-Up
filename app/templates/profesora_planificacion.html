@@ -79,7 +79,8 @@
 
             {% if fecha_puntual and clases_dia is not none %}
             {% if clases_dia %}
-            <form id="form-puntual" action="/profesora/planificacion/puntual/cancelar" method="post">
+            <form id="form-puntual" action="/profesora/planificacion/puntual/cancelar" method="post"
+                  class="horario-form form-plano form-puntual">
                 <input type="hidden" name="fecha" value="{{ fecha_puntual }}" />
                 <ul class="lista-clases lista-puntual">
                     {% for c in clases_dia %}

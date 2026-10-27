@@ -15,8 +15,8 @@
         <section class="panel">
             <dl class="datos-perfil">
                 <div><dt>Horario</dt><dd>{{ datos.dia_semana | nombre_dia }} {{ datos.hora_inicio }}</dd></div>
-                <div><dt>Tipo actual</dt><dd>{{ tipo_actual.nombre }} · {{ tipo_actual.duracion }} min · ${{ '%g'|format(tipo_actual.precio_presencial|float) }} · cupo {{ tipo_actual.cupo_max }}</dd></div>
-                <div><dt>Tipo nuevo</dt><dd>{{ tipo_nuevo.nombre }} · {{ tipo_nuevo.duracion }} min · ${{ '%g'|format(tipo_nuevo.precio_presencial|float) }} · cupo {{ tipo_nuevo.cupo_max }}</dd></div>
+                <div><dt>Tipo actual</dt><dd>{{ tipo_actual.nombre }} · {{ tipo_actual.duracion }} min · ${{ '%g'|format(tipo_actual.precio_presencial|float) }} · {{ tipo_actual.cupo_max }} {{ 'cupo' if tipo_actual.cupo_max == 1 else 'cupos' }}</dd></div>
+                <div><dt>Tipo nuevo</dt><dd>{{ tipo_nuevo.nombre }} · {{ tipo_nuevo.duracion }} min · ${{ '%g'|format(tipo_nuevo.precio_presencial|float) }} · {{ tipo_nuevo.cupo_max }} {{ 'cupo' if tipo_nuevo.cupo_max == 1 else 'cupos' }}</dd></div>
             </dl>
         </section>
 
