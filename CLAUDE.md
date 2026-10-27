@@ -7,6 +7,16 @@
 > negocio`, etc.) como parte del mismo commit, sin que haga falta que te lo
 > pidan explícitamente. Mantenerlo desactualizado es peor que no tenerlo.
 
+## Dónde quedamos (leer primero)
+
+**`CONTINUIDAD_PROYECTO.md`** tiene el estado actual (GitHub, PR #15 y #13, Supabase, respaldo,
+pruebas), lo pendiente, lo que necesita autorización y las decisiones de Mercado Pago, Videos On
+Demand y Planificación. **Orden de trabajo definitivo (27/10/2026)**:
+1. Integrar el PR #15 (facturación) — detenido esperando decisión: el merge despliega solo en theta.
+2. Planificación: cancelar clases puntuales con checkboxes (propuesta técnica antes de programar).
+3. Mercado Pago Checkout Pro en modo de prueba (propuesta ya presentada, falta aprobación).
+4. Videos On Demand: Zoom gratuito + Mux gratuito si pasa la prueba de reproducción firmada.
+
 ## Qué es esto
 
 Plataforma web que reemplaza un proceso manual por WhatsApp: una profesora
@@ -381,7 +391,7 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 - Existe un segundo deploy "oficial" conectado por GitHub a otra cuenta de
   Vercel (la de la dueña del repo) — ver Gotchas.
 
-## Plan del equipo hasta el martes 20/10/2026
+## Plan del equipo hasta el martes 20/10/2026 (HISTÓRICO: ya pasó; el estado vigente está en `CONTINUIDAD_PROYECTO.md`)
 
 > **Para Claude Code**: leé esta sección antes de empezar. Cada integrante trabaja en
 > **un módulo distinto, en su propia rama**. No toques módulos de otra persona.
@@ -527,12 +537,14 @@ en la web, no solo cambios de esquema.
 4. **Lista de espera** — **hecho** (oferta de 30 min dentro de la app, confirmar,
    rechazar, salir; vista de la profesora). Falta solo el aviso por mail (Resend).
 5. **Asistencia** — **hecho** (profesora marca; la alumna lo ve en Mi historial).
-6. **Facturación mensual y pagos** — **desarrollado** (simulado, sin Mercado Pago) en la rama
-   `modulo-6-resumen-correcciones` (trabajo de Josefina del PR #13 + rediseño); migración
-   **sin aplicar** todavía (ver Estado actual).
-7. **Suscripción y clases grabadas** — biblioteca de videos con gate de
-   acceso. Modalidad (suscripción mensual vs. compra individual con vigencia)
-   **todavía no está decidida** — no implementar hasta que se defina.
+6. **Facturación mensual y pagos** — **terminado** (simulado) en la rama
+   `modulo-6-resumen-correcciones`, **PR #15** abierto sin integrar; migraciones ya aplicadas en
+   Supabase (27/10). Pago con **Mercado Pago Checkout Pro solo en modo de prueba**: paso 3 del
+   orden de trabajo (propuesta en `CONTINUIDAD_PROYECTO.md` §7).
+7. **Clases grabadas → "Videos On Demand"** (decidido 27/10): la profesora sube la grabación (Zoom
+   gratuito, carga manual) y todas las alumnas la ven 24 h desde la publicación; alojamiento en Mux
+   gratuito sujeto a validación. Paso 4 del orden de trabajo (`CONTINUIDAD_PROYECTO.md` §8). La
+   suscripción paga original queda fuera por ahora.
 8. **Notificaciones y extras** — mails vía Resend (confirmación, recordatorio
    24hs), integración con Google Calendar, automatizaciones con n8n,
    analytics con PostHog.
