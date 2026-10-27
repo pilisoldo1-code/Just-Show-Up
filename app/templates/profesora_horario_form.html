@@ -66,8 +66,9 @@
             function mostrar() {
                 var o = sel.options[sel.selectedIndex];
                 if (!o || !o.dataset.duracion) return;
+                var cupo = o.dataset.cupo + (o.dataset.cupo === "1" ? " cupo" : " cupos");
                 detalle.textContent = o.text + ": " + o.dataset.duracion + " min · $" + o.dataset.precio +
-                    " · cupo " + o.dataset.cupo + " (se define en el tipo de clase)";
+                    " · " + cupo + " (se define en el tipo de clase)";
             }
             sel.addEventListener("change", mostrar);
             mostrar();
