@@ -10,12 +10,20 @@
     <main>
         {% include "_menu.html" %}
         <h1>Planificación</h1>
-        <p class="subtitle">Licencias, vacaciones o días sin clase. Las clases de esas fechas se cancelan y no se pueden reservar.</p>
+
+        <nav class="dias-nav" aria-label="Elegir tipo de bloqueo">
+            <a href="/profesora/planificacion?modo=licencia" class="dia-chip {{ 'dia-chip-activo' if modo == 'licencia' else '' }}"
+               {{ 'aria-current=page' if modo == 'licencia' else '' }}>Licencia / ausencia</a>
+            <a href="/profesora/planificacion?modo=puntual" class="dia-chip {{ 'dia-chip-activo' if modo == 'puntual' else '' }}"
+               {{ 'aria-current=page' if modo == 'puntual' else '' }}>Cancelar clases puntuales</a>
+        </nav>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
+        {% if modo == 'licencia' %}
+        <p class="subtitle">Licencias, vacaciones o días sin clase. Las clases de esas fechas se cancelan y no se pueden reservar.</p>
         <section class="panel">
             <h2>Nuevo bloqueo</h2>
             {% if errores %}
@@ -55,6 +63,79 @@
                 <button type="submit" class="btn">Revisar clases afectadas</button>
             </form>
         </section>
+        {% else %}
+        <p class="subtitle">Cancelar una o varias clases de un día puntual, sin afectar las demás clases de ese día.</p>
+        <section class="panel">
+            <h2>Elegir día</h2>
+            <form action="/profesora/planificacion" method="get" class="horario-form form-plano">
+                <input type="hidden" name="modo" value="puntual" />
+                <label>
+                    Fecha
+                    <input type="date" name="fecha" value="{{ fecha_puntual }}" min="{{ hoy_iso }}" required
+                           onchange="this.form.submit()" />
+                </label>
+                <noscript><button type="submit" class="btn btn-chico">Ver clases</button></noscript>
+            </form>
+
+            {% if fecha_puntual and clases_dia is not none %}
+            {% if clases_dia %}
+            <form id="form-puntual" action="/profesora/planificacion/puntual/cancelar" method="post">
+                <input type="hidden" name="fecha" value="{{ fecha_puntual }}" />
+                <ul class="lista-clases lista-puntual">
+                    {% for c in clases_dia %}
+                    <li>
+                        <label class="clase-check {{ 'clase-check-deshabilitada' if not c.seleccionable else '' }}">
+                            <input type="checkbox" name="ids_clase" value="{{ c.id }}" data-hora="{{ c.hora }}"
+                                   {{ 'disabled' if not c.seleccionable else '' }} />
+                            <span><strong>{{ c.hora }}</strong>{% if c.tipo %} · {{ c.tipo }}{% endif %}</span>
+                        </label>
+                        {% if c.cancelada %}
+                        <span class="badge badge-off">Ya cancelada</span>
+                        {% elif c.empezada %}
+                        <span class="badge badge-off">Ya empezó</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                <label>
+                    Motivo
+                    <input type="text" name="motivo" maxlength="{{ largo_motivo }}"
+                           placeholder="Ej.: consulta médica, corte de luz" required />
+                </label>
+                <p class="nota">Solo se cancelan las clases que marques; las demás de ese día siguen activas.</p>
+                <button type="button" class="btn" onclick="abrirConfirmacionPuntual()">Cancelar clases seleccionadas</button>
+            </form>
+
+            <dialog id="confirmar-puntual" class="modal">
+                <h2>Confirmar cancelación</h2>
+                <p class="modal-texto" id="confirmar-puntual-texto"></p>
+                <div class="modal-botones">
+                    <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                    <button type="submit" form="form-puntual" class="btn btn-peligro-solido">Confirmar cancelación</button>
+                </div>
+            </dialog>
+
+            <script>
+                function abrirConfirmacionPuntual() {
+                    var form = document.getElementById('form-puntual');
+                    var marcadas = Array.prototype.filter.call(
+                        form.querySelectorAll('input[name="ids_clase"]'), function (c) { return c.checked; }
+                    );
+                    if (marcadas.length === 0) { alert('Elegí al menos una clase.'); return; }
+                    if (!form.querySelector('[name="motivo"]').value.trim()) { alert('Escribí el motivo de la cancelación.'); return; }
+                    var horas = marcadas.map(function (c) { return c.dataset.hora; }).join(', ');
+                    document.getElementById('confirmar-puntual-texto').textContent =
+                        "{{ titulo_puntual }}: se van a cancelar "
+                        + marcadas.length + (marcadas.length === 1 ? ' clase (' : ' clases (') + horas + ').';
+                    document.getElementById('confirmar-puntual').showModal();
+                }
+            </script>
+            {% else %}
+            <p class="vacio">No hay clases programadas ese día.</p>
+            {% endif %}
+            {% endif %}
+        </section>
+        {% endif %}
 
         <h2 class="seccion">Bloqueos registrados</h2>
         {% if bloqueos.vigentes %}
@@ -69,6 +150,8 @@
 
                 <dialog id="eliminar-{{ b.id }}" class="modal">
                     <form action="/profesora/planificacion/{{ b.id }}/eliminar" method="post">
+                        <input type="hidden" name="modo" value="{{ modo }}" />
+                        <input type="hidden" name="fecha" value="{{ fecha_puntual }}" />
                         <h2>Eliminar bloqueo</h2>
                         <p class="modal-clase">{{ b.rango_txt }} · {{ b.alcance_txt }}</p>
                         <p class="modal-texto">

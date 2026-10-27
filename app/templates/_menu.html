@@ -1,12 +1,13 @@
 <nav class="menu">
     <div class="menu-links">
         {% if usuario.es_profesora %}
-        <a href="/profesora/horarios">Horarios</a>
-        <a href="/profesora/clases">Clases</a>
-        <a href="/profesora/planificacion">Planificación</a>
-        <a href="/profesora/alumnas">Alumnas</a>
-        <a href="/profesora/estadisticas">Estadísticas</a>
-        <a href="/profesora/resumenes">Facturación</a>
+        <a href="/profesora/horarios" class="{{ 'activo' if request.url.path.startswith('/profesora/horarios') else '' }}">Horarios</a>
+        <a href="/profesora/tipos-clase" class="{{ 'activo' if request.url.path.startswith('/profesora/tipos-clase') else '' }}">Tipos de clase</a>
+        <a href="/profesora/clases" class="{{ 'activo' if request.url.path.startswith('/profesora/clases') else '' }}">Asistencias</a>
+        <a href="/profesora/planificacion" class="{{ 'activo' if request.url.path.startswith('/profesora/planificacion') else '' }}">Planificación</a>
+        <a href="/profesora/alumnas" class="{{ 'activo' if request.url.path.startswith('/profesora/alumnas') else '' }}">Alumnas</a>
+        <a href="/profesora/resumenes" class="{{ 'activo' if request.url.path.startswith('/profesora/resumenes') else '' }}">Facturación</a>
+        <a href="/profesora/estadisticas" class="{{ 'activo' if request.url.path.startswith('/profesora/estadisticas') else '' }}">Estadísticas</a>
         {% else %}
         <a href="/">Clases</a>
         {% endif %}

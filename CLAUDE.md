@@ -9,11 +9,14 @@
 
 ## Dónde quedamos (leer primero)
 
-**`CONTINUIDAD_PROYECTO.md`** tiene el estado actual (GitHub, PR #15 y #13, Supabase, respaldo,
-pruebas), lo pendiente, lo que necesita autorización y las decisiones de Mercado Pago, Videos On
-Demand y Planificación. **Orden de trabajo definitivo (27/10/2026)**:
-1. Integrar el PR #15 (facturación) — detenido esperando decisión: el merge despliega solo en theta.
-2. Planificación: cancelar clases puntuales con checkboxes (propuesta técnica antes de programar).
+**`CONTINUIDAD_PROYECTO.md`** tiene el traspaso del 27/10 (GitHub, Supabase, respaldo, pruebas) y
+las decisiones de Mercado Pago y Videos On Demand; quedó escrito **antes** de que se integrara el
+PR #15, así que su §3/§6/§11 sobre "PR #15 sin integrar" ya no aplican (se integró ese mismo día,
+merge común en `568d551`). **Estado del orden de trabajo:**
+1. ~~Integrar el PR #15 (facturación)~~ — hecho, en `main`.
+2. ~~Planificación: cancelar clases puntuales con checkboxes~~ — hecho, junto con las mejoras del
+   menú de la profesora (rama `mejoras-planificacion-menu`; ver Estado actual). Sin mergear a
+   `main` todavía: falta autorización para push/PR.
 3. Mercado Pago Checkout Pro en modo de prueba (propuesta ya presentada, falta aprobación).
 4. Videos On Demand: Zoom gratuito + Mux gratuito si pasa la prueba de reproducción firmada.
 
@@ -233,6 +236,53 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   - Probado con 75 casos + 16 de concurrencia (8 alumnas reservando mientras se
     crea el bloqueo) + navegador escritorio/celular; la base quedó idéntica
     después de cada prueba. Pruebas con horarios de sábado (no hay clases reales).
+- **Planificación: cancelar clases puntuales (hecha 2026-10-27, rama
+  `mejoras-planificacion-menu`)** — segunda pestaña en `/profesora/planificacion`
+  ("Licencia / ausencia" ↔ "Cancelar clases puntuales"; la primera queda igual).
+  La profesora elige una fecha (se generan las clases de esa semana si hiciera
+  falta, igual que en `/profesora/clases`), ve las clases de ese día con
+  checkboxes (hora y tipo), marca una o varias, escribe el motivo y confirma en
+  un diálogo que muestra fecha, horarios y cantidad antes de cancelar.
+  - **Decisión de modelo**: **un `bloqueo` `puntual` por clase elegida** (no uno
+    con una lista de clases), reutilizando 100% el mecanismo de licencias: cada
+    clase de un día ya tiene un `id_horario` distinto, así que "cancelar la de
+    8:00 y la de 9:00 pero no la de 17:00" son dos bloqueos con
+    `fecha_desde = fecha_hasta` = ese día. Por eso "Bloqueos registrados" y
+    "Eliminar" (con su recuperación de reservas respetando cupo) funcionan
+    igual, clase por clase, sin tocar nada de licencias.
+  - Función nueva `crear_bloqueos_puntuales(p_ids_clase, p_motivo)` (migración
+    `20261027220000_planificacion_cancelacion_puntual.sql`), `security definer`,
+    atómica: bloquea las filas de `clase` involucradas, valida que **todas**
+    existan, estén `programada`, no hayan empezado y sean de un horario activo
+    (si una sola no cumple, `clases_invalidas` y no cancela ninguna — todo o
+    nada), y recién ahí crea un
+    bloqueo por clase y cancela clase + reservas (con `id_bloqueo`) + lista de
+    espera, igual que `crear_bloqueo`. Las clases ya canceladas se muestran en
+    la pantalla identificadas y sin checkbox (también lo rechaza la base).
+  - `app/clases.py`: `clases_para_cancelar` (lista del día con
+    `seleccionable`/`cancelada`/`empezada`) y `cancelar_clases_puntuales`
+    (traduce los códigos). Rutas en `app/main.py`:
+    `/profesora/planificacion?modo=puntual&fecha=...` (GET) y
+    `/profesora/planificacion/puntual/cancelar` (POST).
+  - Probado: **33 casos en un Postgres local** con todas las migraciones del
+    repo (`python tests/base_local/test_planificacion_puntual_base.py`): una
+    clase, varias del mismo día, las no elegidas siguen activas, todo o nada
+    (id inexistente / ya cancelada / ya empezada / horario desactivado en el
+    mismo pedido no cancela nada), validaciones, permisos (alumna y anon
+    rechazados), concurrencia (dos pedidos simultáneos por la misma clase: solo
+    uno cancela), `quitar_bloqueo` revierte una cancelación puntual sin tocar
+    las otras del mismo día. Más **24 casos de rutas y lógica pura** mockeados
+    (`tests/test_planificacion.py`, incluye el menú) y navegador escritorio/
+    celular con datos simulados (sin Supabase disponible en esa sesión). No se
+    tocó la base real.
+- **Menú de la profesora (hecho 2026-10-27, mismo trabajo)**: orden fijo
+  Horarios · Tipos de clase · Asistencias · Planificación · Alumnas ·
+  Facturación · Estadísticas (antes "Clases" se llamaba así y "Tipos de clase"
+  solo se llegaba desde un botón dentro de Horarios, que se conservó además).
+  La pestaña de la sección donde está la profesora se resalta en verde menta
+  (`--accent`) con `request.url.path.startswith(...)` en `_menu.html` — no hace
+  falta tocar las rutas. Se mantiene al entrar a pantallas internas (el detalle
+  de una clase resalta "Asistencias", etc.).
 - **Estadísticas (hecha 2026-10-19, rama `modulo-estadisticas`)** —
   `/profesora/estadisticas`, menú de la profesora: … · Alumnas · **Estadísticas**.
   Filtro de período: **Este mes** (desde el 1°), **Últimos 3 meses** (el mes
@@ -510,19 +560,10 @@ Somos **3 personas** implementando sobre el mismo repo. Para no pisarnos:
 Se definieron como módulos verticales: cada uno entrega algo visible/probable
 en la web, no solo cambios de esquema.
 
-- **Planificación** (pedido del profesor) — **hecho** (licencias, vacaciones y
-  cancelaciones puntuales).
-  **PENDIENTE (pedido de Julieta, 27/10; hacerlo DESPUÉS de integrar el módulo 6 y presentar
-  antes una propuesta técnica, sin modificar nada):** dos opciones en Planificación con pestañas
-  o selector: "Licencia / ausencia" (lo actual: rango de fechas, motivo, vista previa,
-  confirmar; conservar) y **"Cancelar clases puntuales"**: elegir un día en un calendario, ver
-  sus clases (hora y tipo), marcar con checkboxes una, varias o todas, motivo, botón "Cancelar
-  clases seleccionadas", confirmación con fecha, horarios y cantidad. Reglas: solo se cancelan
-  las seleccionadas; las ya canceladas se muestran identificadas y no se pueden elegir; mismo
-  procedimiento de cancelación actual (reservas, lista de espera, avisos, facturación); sin
-  duplicados; todo o nada si se cancelan varias; escritorio y celular. Ej.: lunes 2/11 con
-  08:00, 09:00 y 17:00 → cancelar solo 08:00 y 09:00 por una consulta médica. Estadísticas **hecha** (ver Estado actual).
-  Pendiente del mismo pedido: **Tipo de clase** (falta que el usuario pase los nombres de los tipos).
+- **Planificación** (pedido del profesor) — **hecho**: licencias/vacaciones por
+  período y, desde el 27/10, **cancelar clases puntuales** con checkboxes (ver
+  Estado actual). Estadísticas **hecha**. Tipos de clase **hecho**. Menú de la
+  profesora reordenado y con pestaña activa resaltada **hecho** (ver Estado actual).
 
 1. **Autenticación y perfiles** — etapa 1 y olvidé mi contraseña hechos; etapa 2
    fase 1 hecha, falta la fase 2 (cerrar `anon`) y rotar claves (ver Gotchas).
@@ -754,6 +795,16 @@ Para cada módulo, en este orden:
   Python 3.9 que trae macOS no lo puede importar (Vercel usa 3.12). Con `uv`:
   `uv venv --python 3.12 .venv && uv pip install -r requirements.txt httpx`
   (`httpx` lo pide `TestClient` para las pruebas).
+- **`pgserver` (el Postgres local de `tests/base_local/`) solo tiene wheels hasta
+  Python 3.12** (verificado 2026-10-27: `pgserver==0.1.4` en PyPI no publica nada
+  para cp313/cp314). Si la compu trae Python 3.13 o 3.14 por defecto (`python3
+  --version`), `pip install -r requirements-dev.txt` falla con "No matching
+  distribution found for pgserver" aunque el resto de las dependencias instale
+  bien — no es un problema de red. Sin `uv`: `brew install python@3.12` y
+  `$(brew --prefix python@3.12)/bin/python3.12 -m venv .venv312 && .venv312/bin/pip
+  install -r requirements-dev.txt` (dejar el `.venv` normal como esté; `.venv312`
+  está en `.gitignore`). Para solo correr la app o las pruebas sin Postgres local
+  (`unittest discover tests`), cualquier Python ≥ 3.10 alcanza.
 - **Servidor local**: `uvicorn app.main:app --port 8000 --env-file .env` (la app
   no carga `.env` sola; sin `--env-file` da `KeyError: 'SUPABASE_URL'`). El
   panel de preview del desktop no puede ejecutar el venv dentro de `~/Desktop`

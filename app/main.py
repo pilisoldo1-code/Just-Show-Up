@@ -748,22 +748,37 @@ def _datos_bloqueo(desde: str, hasta: str, id_horario: str, motivo: str):
     return _parse_fecha(desde), _parse_fecha(hasta), horario, motivo.strip()
 
 
-def _render_planificacion(request: Request, usuario: Usuario, status_code: int = 200, **contexto):
+def _render_planificacion(request: Request, usuario: Usuario, modo: str = "licencia",
+                          status_code: int = 200, **contexto):
     sb = _sb(usuario)
     hoy = clases.ahora().date()
     contexto.setdefault("datos", {})
     contexto.setdefault("errores", [])
+    contexto.setdefault("fecha_puntual", "")
+    contexto.setdefault("titulo_puntual", "")
+    contexto.setdefault("clases_dia", None)
     return _render(
-        request, "profesora_planificacion.html", usuario, status_code=status_code,
+        request, "profesora_planificacion.html", usuario, status_code=status_code, modo=modo,
         bloqueos=clases.bloqueos(sb), horarios=clases.horarios_para_elegir(sb),
         hoy_iso=hoy.isoformat(), largo_motivo=clases.LARGO_MAX_MOTIVO, **contexto,
     )
 
 
 @app.get("/profesora/planificacion")
-def profesora_planificacion(request: Request, ok: int = 0, aviso: str = "",
-                            usuario: Usuario = Depends(requiere_profesora)):
-    return _render_planificacion(request, usuario, aviso=aviso, aviso_ok=bool(ok))
+def profesora_planificacion(request: Request, modo: str = "licencia", fecha: str = "",
+                            ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_profesora)):
+    modo = modo if modo == "puntual" else "licencia"
+    contexto = {"aviso": aviso, "aviso_ok": bool(ok)}
+    if modo == "puntual" and fecha:
+        f = _parse_fecha(fecha)
+        if f and f >= clases.ahora().date():
+            sb = _sb(usuario)
+            lunes = f - timedelta(days=f.weekday())
+            clases.generar_clases(sb, lunes)
+            contexto["fecha_puntual"] = f.isoformat()
+            contexto["titulo_puntual"] = f"{clases.nombre_dia(f)} {f.day} de {MESES[f.month]}"
+            contexto["clases_dia"] = clases.clases_para_cancelar(sb, f)
+    return _render_planificacion(request, usuario, modo=modo, **contexto)
 
 
 @app.post("/profesora/planificacion/revisar")
@@ -820,15 +835,37 @@ def profesora_planificacion_confirmar(
 
 
 @app.post("/profesora/planificacion/{bloqueo_id}/eliminar")
-def profesora_planificacion_eliminar(bloqueo_id: int, usuario: Usuario = Depends(requiere_profesora)):
+def profesora_planificacion_eliminar(bloqueo_id: int, modo: str = Form("licencia"), fecha: str = Form(""),
+                                     usuario: Usuario = Depends(requiere_profesora)):
     try:
         ok, aviso = clases.eliminar_bloqueo(_sb(usuario), bloqueo_id)
     except Exception:
         logging.exception("Error al eliminar bloqueo")
         ok, aviso = False, "Ocurrió un error, probá de nuevo."
-    return RedirectResponse(
-        url="/profesora/planificacion?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303
-    )
+    query = {"ok": int(ok), "aviso": aviso}
+    if modo == "puntual":
+        query["modo"] = "puntual"
+        if fecha:
+            query["fecha"] = fecha
+    return RedirectResponse(url="/profesora/planificacion?" + urlencode(query), status_code=303)
+
+
+@app.post("/profesora/planificacion/puntual/cancelar")
+def profesora_planificacion_puntual_cancelar(
+    fecha: str = Form(""),
+    ids_clase: list[int] = Form([]),
+    motivo: str = Form(""),
+    usuario: Usuario = Depends(requiere_profesora),
+):
+    try:
+        ok, aviso = clases.cancelar_clases_puntuales(_sb(usuario), ids_clase, motivo)
+    except Exception:
+        logging.exception("Error al cancelar clases puntuales")
+        ok, aviso = False, "Ocurrió un error, probá de nuevo."
+    query = {"modo": "puntual", "ok": int(ok), "aviso": aviso}
+    if fecha:
+        query["fecha"] = fecha
+    return RedirectResponse(url="/profesora/planificacion?" + urlencode(query), status_code=303)
 
 
 # ---------- profesora: alumnas ----------
