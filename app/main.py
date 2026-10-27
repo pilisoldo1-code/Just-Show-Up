@@ -6,11 +6,11 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import auth, clases, estadisticas, validaciones
+from app import auth, clases, estadisticas, factura_pdf, facturas, validaciones
 from app.auth import ErrorAuth, Redirigir, Usuario, requiere_alumna, requiere_login, requiere_profesora
 from app.clases import DIAS_ORDEN
 from app import tipos_clase
@@ -209,11 +209,11 @@ def _fecha_legible(iso: str | None) -> str:
 
 def _datos_perfil(usuario: Usuario) -> dict:
     datos = {"nombre": usuario.nombre, "apellido": usuario.apellido, "mail": usuario.mail,
-             "telefono": "", "fecha_nacimiento": "", "fecha_vencimiento_carne_salud": ""}
+             "telefono": "", "fecha_nacimiento": "", "fecha_vencimiento_carne_salud": "", "cedula": ""}
     try:
         filas = (
             auth.cliente_con_token(usuario.token).table("profiles")
-            .select("telefono, fecha_nacimiento, fecha_vencimiento_carne_salud")
+            .select("telefono, fecha_nacimiento, fecha_vencimiento_carne_salud, cedula")
             .eq("id", usuario.id).execute().data
         )
     except Exception:
@@ -221,6 +221,7 @@ def _datos_perfil(usuario: Usuario) -> dict:
         return datos
     if filas:
         datos["telefono"] = filas[0]["telefono"] or ""
+        datos["cedula"] = validaciones.formatear_cedula(filas[0].get("cedula"))
         datos["fecha_nacimiento"] = _fecha_legible(filas[0]["fecha_nacimiento"])
         datos["fecha_vencimiento_carne_salud"] = _fecha_legible(filas[0]["fecha_vencimiento_carne_salud"])
     return datos
@@ -336,8 +337,33 @@ def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
 
 
 @app.get("/mis-facturas")
-def mis_facturas(request: Request, usuario: Usuario = Depends(requiere_alumna)):
-    return _render(request, "mis_facturas.html", usuario)
+def mis_facturas(request: Request, aviso: str = "", usuario: Usuario = Depends(requiere_alumna)):
+    try:
+        lista = facturas.mis_facturas(_sb(usuario), usuario.id)
+    except Exception:
+        logging.exception("No se pudieron cargar las facturas")
+        lista, aviso = [], "No pudimos cargar tus facturas. Probá de nuevo."
+    return _render(request, "mis_facturas.html", usuario, facturas=lista, aviso=aviso, aviso_ok=False)
+
+
+def _pdf(f: dict, marca: str | None) -> Response:
+    contenido = factura_pdf.generar(f, clases.ahora(), marca)
+    return Response(contenido, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{factura_pdf.nombre_archivo(f)}"',
+        "Cache-Control": "no-store",
+    })
+
+
+@app.get("/mis-facturas/{factura_id}/pdf")
+def mi_factura_pdf(factura_id: int, usuario: Usuario = Depends(requiere_alumna)):
+    try:
+        f = facturas.mi_factura(_sb(usuario), usuario.id, factura_id)
+    except Exception:
+        logging.exception("No se pudo armar el PDF")
+        return RedirectResponse(url="/mis-facturas?" + urlencode({"aviso": "No pudimos generar el PDF. Probá de nuevo."}), status_code=303)
+    if f is None:
+        return RedirectResponse(url="/mis-facturas?" + urlencode({"aviso": "No encontramos esa factura."}), status_code=303)
+    return _pdf(f, "ANULADA" if f["estado_factura"] == "anulada" else None)
 
 
 @app.post("/clases/{clase_id}/inscribirse")
@@ -807,7 +833,7 @@ def profesora_planificacion_eliminar(bloqueo_id: int, usuario: Usuario = Depends
 
 # ---------- profesora: alumnas ----------
 
-COLUMNAS_ALUMNA = "id, nombre, apellido, mail, telefono, fecha_nacimiento, fecha_vencimiento_carne_salud"
+COLUMNAS_ALUMNA = "id, nombre, apellido, mail, telefono, fecha_nacimiento, fecha_vencimiento_carne_salud, cedula"
 
 
 @app.get("/profesora/alumnas")
@@ -820,6 +846,8 @@ def alumnas_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuar
     except Exception:
         logging.exception("No se pudo listar alumnas")
         filas, aviso, ok = [], "No pudimos cargar la lista de alumnas. Probá de nuevo.", 0
+    for a in filas:
+        a["cedula_txt"] = validaciones.formatear_cedula(a.get("cedula"))
     return _render(request, "profesora_alumnas.html", usuario, alumnas=filas, aviso=aviso, aviso_ok=bool(ok))
 
 
@@ -842,18 +870,22 @@ def alumna_crear(
     telefono: str = Form(""),
     fecha_nacimiento: str = Form(""),
     fecha_vencimiento_carne_salud: str = Form(""),
+    cedula: str = Form(""),
     usuario: Usuario = Depends(requiere_profesora),
 ):
     ingresados = {
         "nombre": nombre, "apellido": apellido, "mail": mail, "telefono": telefono,
         "fecha_nacimiento": fecha_nacimiento, "fecha_vencimiento_carne_salud": fecha_vencimiento_carne_salud,
+        "cedula": cedula,
     }
     datos, errores = validaciones.validar_alumna(ingresados, clases.ahora().date())
+    if not errores and datos["cedula"] and _cedula_en_uso(usuario, datos["cedula"]):
+        errores = ["Ya existe una alumna con esa cédula."]
     if not errores:
         try:
             _, contrasena = auth.crear_cuenta(
                 datos["mail"], datos["nombre"], datos["apellido"],
-                extras={k: datos[k] for k in ("telefono", "fecha_nacimiento", "fecha_vencimiento_carne_salud")},
+                extras={k: datos[k] for k in ("telefono", "fecha_nacimiento", "fecha_vencimiento_carne_salud", "cedula")},
             )
         except ErrorAuth as e:
             errores = [str(e)]
@@ -868,6 +900,37 @@ def alumna_crear(
         titulo="Alumna creada", nombre=f"{datos['nombre']} {datos['apellido']}",
         mail=datos["mail"], contrasena=contrasena,
     )
+
+
+def _cedula_en_uso(usuario: Usuario, cedula: str) -> bool:
+    return bool(_sb(usuario).table("profiles").select("id").eq("cedula", cedula).execute().data)
+
+
+@app.post("/profesora/alumnas/{alumna_id}/cedula")
+def alumna_cedula(alumna_id: str, cedula: str = Form(""), usuario: Usuario = Depends(requiere_profesora)):
+    def volver(ok: bool, aviso: str) -> RedirectResponse:
+        return RedirectResponse(url="/profesora/alumnas?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303)
+
+    try:
+        uuid.UUID(alumna_id)
+    except ValueError:
+        return volver(False, "No encontramos a esa alumna.")
+    digitos, error = validaciones.cedula(cedula)
+    if error:
+        return volver(False, error)
+    try:
+        r = _sb(usuario).rpc("actualizar_cedula", {"p_id_alumna": alumna_id, "p_cedula": digitos or None}).execute().data
+    except Exception:
+        logging.exception("No se pudo guardar la cédula")
+        return volver(False, "No se pudo guardar la cédula. Probá de nuevo.")
+    mensajes = {
+        "ok": "Cédula guardada." if digitos else "Cédula quitada.",
+        "cedula_repetida": "Ya existe una alumna con esa cédula.",
+        "cedula_invalida": "La cédula no es válida: revisá el número y el dígito verificador.",
+        "no_existe": "No encontramos a esa alumna.",
+        "no_autorizada": "Solo la profesora puede cargar cédulas.",
+    }
+    return volver(r == "ok", mensajes.get(r, "No se pudo guardar la cédula."))
 
 
 @app.post("/profesora/alumnas/{alumna_id}/reiniciar-contrasena")
@@ -916,3 +979,217 @@ def profesora_estadisticas(request: Request, periodo: str = estadisticas.PERIODO
         datos, aviso = None, "No pudimos cargar las estadísticas. Probá de nuevo."
     return _render(request, "profesora_estadisticas.html", usuario, datos=datos, periodo=periodo,
                    periodos=estadisticas.PERIODOS, aviso=aviso, aviso_ok=False)
+
+
+# ---------- profesora: facturación mensual ----------
+
+def _mes_anio(mes: int, anio: int) -> tuple[int, int]:
+    """Normaliza mes/año: si no vienen usa el actual, y nunca deja ir a un mes futuro."""
+    hoy = clases.ahora().date()
+    if not 1 <= mes <= 12 or not 2024 <= anio:
+        return hoy.month, hoy.year
+    if (anio, mes) > (hoy.year, hoy.month):
+        return hoy.month, hoy.year
+    return mes, anio
+
+
+def _volver_mes(mes: int, anio: int, ok: bool, aviso: str) -> RedirectResponse:
+    return RedirectResponse(
+        url="/profesora/resumenes?" + urlencode({"mes": mes, "anio": anio, "ok": int(ok), "aviso": aviso}),
+        status_code=303,
+    )
+
+
+def _volver_factura(factura_id: int, ok: bool, aviso: str) -> RedirectResponse:
+    return RedirectResponse(url=f"/profesora/resumenes/{factura_id}?" + urlencode({"ok": int(ok), "aviso": aviso}),
+                            status_code=303)
+
+
+def _motivo(texto: str) -> str | None:
+    texto = " ".join(texto.split())
+    return texto if facturas.MOTIVO_MIN <= len(texto) <= facturas.MOTIVO_MAX else None
+
+
+def _ejecutar_factura(funcion, *args) -> tuple[bool, str]:
+    try:
+        return funcion(*args)
+    except Exception:
+        logging.exception("Error en facturación")
+        return False, "Ocurrió un error, probá de nuevo."
+
+
+@app.get("/profesora/resumenes")
+def profesora_resumenes(request: Request, mes: int = 0, anio: int = 0, ok: int = 0, aviso: str = "",
+                        usuario: Usuario = Depends(requiere_profesora)):
+    mes, anio = _mes_anio(mes, anio)
+    ahora = clases.ahora()
+    hoy = ahora.date()
+    revision = facturas.en_revision(mes, anio, hoy)
+    lista, provisorio, previa, aviso_final = [], [], None, aviso
+    try:
+        sb = _sb(usuario)
+        if revision:
+            facturas.sincronizar(sb, mes, anio)
+            lista = facturas.facturas_del_mes(sb, mes, anio)
+            previa = facturas.previsualizar_mes(sb, mes, anio)
+        else:
+            provisorio = facturas.provisorio(sb, mes, anio, ahora)
+    except Exception:
+        logging.exception("No se pudo cargar la facturación")
+        aviso_final, ok = "No pudimos cargar la facturación. Probá de nuevo.", 0
+    ant_mes, ant_anio = facturas.mes_anterior(mes, anio)
+    sig_mes, sig_anio = facturas.mes_siguiente(mes, anio)
+    publica = facturas.primer_dia_siguiente(mes, anio)
+    return _render(
+        request, "profesora_resumenes.html", usuario,
+        facturas=lista, provisorio=provisorio, previa=previa, en_revision=revision,
+        mes=mes, anio=anio, mes_txt=facturas.mes_txt(mes, anio),
+        ultimo_dia_txt=f"{facturas.ultimo_dia(mes, anio).day}/{mes}", publica_txt=f"{publica.day}/{publica.month}/{publica.year}",
+        publicada=ahora >= facturas.inicio_publicacion(mes, anio),
+        ant_mes=ant_mes, ant_anio=ant_anio, sig_mes=sig_mes, sig_anio=sig_anio,
+        hay_siguiente=(anio, mes) < (hoy.year, hoy.month), hoy_txt=f"{hoy.day}/{hoy.month}",
+        aviso=aviso_final, aviso_ok=bool(ok),
+    )
+
+
+@app.get("/profesora/resumenes/confirmar-mes")
+def profesora_confirmar_mes(request: Request, mes: int = 0, anio: int = 0, usuario: Usuario = Depends(requiere_profesora)):
+    mes, anio = _mes_anio(mes, anio)
+    try:
+        sb = _sb(usuario)
+        previa = facturas.previsualizar_mes(sb, mes, anio)
+        lista = [f for f in facturas.facturas_del_mes(sb, mes, anio)
+                 if f["estado_factura"] == "borrador" and f["cantidad_clases"] > 0]
+    except Exception:
+        logging.exception("No se pudo armar la vista previa")
+        return _volver_mes(mes, anio, False, "No pudimos armar la vista previa. Probá de nuevo.")
+    return _render(request, "profesora_confirmar_mes.html", usuario, previa=previa, facturas=lista,
+                   mes=mes, anio=anio, mes_txt=facturas.mes_txt(mes, anio))
+
+
+@app.post("/profesora/resumenes/confirmar-mes")
+def profesora_confirmar_mes_post(mes: int = Form(...), anio: int = Form(...), firma: str = Form(""),
+                                 usuario: Usuario = Depends(requiere_profesora)):
+    ok, aviso = _ejecutar_factura(facturas.confirmar_mes, _sb(usuario), mes, anio, firma)
+    return _volver_mes(mes, anio, ok, aviso)
+
+
+@app.get("/profesora/resumenes/{factura_id}")
+def profesora_factura(request: Request, factura_id: int, ok: int = 0, aviso: str = "",
+                      usuario: Usuario = Depends(requiere_profesora)):
+    periodo_finalizado = False
+    try:
+        sb = _sb(usuario)
+        f = facturas.factura(sb, factura_id)
+        if f and f["estado_factura"] == "borrador":
+            periodo_finalizado = facturas.previsualizar_mes(sb, f["mes"], f["anio"]).get("periodo_finalizado", False)
+    except Exception:
+        logging.exception("No se pudo cargar la factura")
+        f, aviso, ok = None, "No pudimos cargar la factura. Probá de nuevo.", 0
+    if f is None and not aviso:
+        return RedirectResponse(url="/profesora/resumenes?" + urlencode({"aviso": "No encontramos esa factura."}),
+                                status_code=303)
+    hoy = clases.ahora().date()
+    return _render(request, "profesora_factura.html", usuario, f=f, hoy_iso=hoy.isoformat(), periodo_finalizado=periodo_finalizado,
+                   medios_pago=facturas.MEDIOS_PAGO, motivo_min=facturas.MOTIVO_MIN, motivo_max=facturas.MOTIVO_MAX,
+                   aviso=aviso, aviso_ok=bool(ok))
+
+
+@app.get("/profesora/resumenes/{factura_id}/pdf")
+def profesora_factura_pdf(factura_id: int, usuario: Usuario = Depends(requiere_profesora)):
+    try:
+        f = facturas.factura(_sb(usuario), factura_id)
+    except Exception:
+        logging.exception("No se pudo armar el PDF")
+        return _volver_factura(factura_id, False, "No pudimos generar el PDF. Probá de nuevo.")
+    if f is None:
+        return _volver_mes(0, 0, False, "No encontramos esa factura.")
+    marca = {"borrador": "BORRADOR - vista previa, todavía no confirmada", "anulada": "ANULADA"}.get(f["estado_factura"])
+    return _pdf(f, marca)
+
+
+@app.post("/profesora/resumenes/{factura_id}/lineas/{linea_id}/ajustar")
+def profesora_ajustar_linea(factura_id: int, linea_id: int, version: int = Form(...), tipo: str = Form(...),
+                            importe: str = Form(""), motivo: str = Form(""), usuario: Usuario = Depends(requiere_profesora)):
+    texto = _motivo(motivo)
+    valor = facturas.parsear_importe(importe) if tipo == "importe" else None
+    if texto is None:
+        return _volver_factura(factura_id, False, facturas.mensaje("motivo_invalido"))
+    if tipo not in ("importe", "bonificada") or (tipo == "importe" and valor is None):
+        return _volver_factura(factura_id, False, facturas.mensaje("importe_invalido"))
+    ok, aviso = _ejecutar_factura(facturas.ajustar_linea, _sb(usuario), linea_id, tipo, valor, texto, version)
+    return _volver_factura(factura_id, ok, aviso)
+
+
+@app.post("/profesora/resumenes/{factura_id}/lineas/{linea_id}/quitar-ajuste")
+def profesora_quitar_ajuste(factura_id: int, linea_id: int, version: int = Form(...), motivo: str = Form(""),
+                            usuario: Usuario = Depends(requiere_profesora)):
+    texto = _motivo(motivo)
+    if texto is None:
+        return _volver_factura(factura_id, False, facturas.mensaje("motivo_invalido"))
+    ok, aviso = _ejecutar_factura(facturas.quitar_ajuste, _sb(usuario), linea_id, texto, version)
+    return _volver_factura(factura_id, ok, aviso)
+
+
+@app.post("/profesora/resumenes/{factura_id}/descuento")
+def profesora_descuento(factura_id: int, version: int = Form(...), tipo: str = Form(""), valor: str = Form(""),
+                        motivo: str = Form(""), usuario: Usuario = Depends(requiere_profesora)):
+    texto = _motivo(motivo)
+    if texto is None:
+        return _volver_factura(factura_id, False, facturas.mensaje("motivo_invalido"))
+    if tipo == "quitar":
+        tipo_db, numero = None, None
+    else:
+        numero = facturas.parsear_importe(valor)
+        if tipo not in ("monto", "porcentaje") or not numero:
+            return _volver_factura(factura_id, False, facturas.mensaje("descuento_invalido"))
+        tipo_db = tipo
+    ok, aviso = _ejecutar_factura(facturas.descuento, _sb(usuario), factura_id, tipo_db, numero, texto, version)
+    return _volver_factura(factura_id, ok, aviso)
+
+
+@app.post("/profesora/resumenes/{factura_id}/confirmar")
+def profesora_confirmar_factura(factura_id: int, version: int = Form(...), usuario: Usuario = Depends(requiere_profesora)):
+    ok, aviso = _ejecutar_factura(facturas.confirmar, _sb(usuario), factura_id, version)
+    return _volver_factura(factura_id, ok, aviso)
+
+
+@app.post("/profesora/resumenes/{factura_id}/pagar")
+def profesora_registrar_pago(factura_id: int, monto: str = Form(...), medio_pago: str = Form(...),
+                             fecha: str = Form(...), usuario: Usuario = Depends(requiere_profesora)):
+    f = _parse_fecha(fecha)
+    importe = facturas.parsear_importe(monto)
+    if f is None:
+        ok, aviso = False, "Fecha inválida."
+    elif f > clases.ahora().date():
+        ok, aviso = False, facturas.mensaje("fecha_futura")
+    elif not importe:
+        ok, aviso = False, "Monto inválido."
+    elif medio_pago not in facturas.MEDIOS_PAGO:
+        ok, aviso = False, "Elegí efectivo o transferencia."
+    else:
+        ok, aviso = _ejecutar_factura(facturas.registrar_pago, _sb(usuario), factura_id, importe, medio_pago, f)
+    return _volver_factura(factura_id, ok, aviso)
+
+
+@app.post("/profesora/resumenes/{factura_id}/anular")
+def profesora_anular_factura(factura_id: int, motivo: str = Form(""), usuario: Usuario = Depends(requiere_profesora)):
+    texto = _motivo(motivo)
+    if texto is None:
+        return _volver_factura(factura_id, False, facturas.mensaje("motivo_invalido"))
+    try:
+        ok, aviso, nueva = facturas.anular_factura(_sb(usuario), factura_id, texto)
+    except Exception:
+        logging.exception("Error al anular factura")
+        ok, aviso, nueva = False, "Ocurrió un error, probá de nuevo.", None
+    return _volver_factura(nueva if ok else factura_id, ok, aviso)
+
+
+@app.post("/profesora/resumenes/{factura_id}/pagos/{pago_id}/anular")
+def profesora_anular_pago(factura_id: int, pago_id: int, motivo: str = Form(""),
+                          usuario: Usuario = Depends(requiere_profesora)):
+    texto = _motivo(motivo)
+    if texto is None:
+        return _volver_factura(factura_id, False, facturas.mensaje("motivo_invalido"))
+    ok, aviso = _ejecutar_factura(facturas.anular_pago, _sb(usuario), pago_id, texto)
+    return _volver_factura(factura_id, ok, aviso)

@@ -1158,3 +1158,222 @@ main.ancho {
     font-size: 1rem;
     resize: vertical;
 }
+
+/* ---------- módulo 6: resúmenes y pagos ---------- */
+.resumen-detalle,
+.pagos-anulados {
+    flex: 1 1 100%;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.resumen-detalle summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.resumen-detalle table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+
+.resumen-detalle th,
+.resumen-detalle td {
+    text-align: left;
+    padding: 4px 6px;
+    border-bottom: 1px solid #2a2e37;
+}
+
+.resumen-detalle .num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.resumen-detalle tfoot td {
+    color: var(--text);
+    font-weight: 600;
+    border-bottom: none;
+}
+
+.resumen-detalle .detalle-proxima {
+    opacity: 0.6;
+}
+
+.pagos-anulados ul {
+    margin: 4px 0 0;
+    padding-left: 18px;
+}
+
+.lista-clases .pagos-anulados li {
+    display: list-item;
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 2px 0;
+}
+
+.nota-chica {
+    font-size: 0.8rem;
+}
+
+.nota-separada {
+    margin: 6px 0 16px;
+}
+
+.tabla-scroll {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.factura-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    margin: 12px 0;
+}
+
+.factura-tabla th,
+.factura-tabla td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid #2a2e37;
+    vertical-align: top;
+}
+
+.factura-tabla th {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.factura-tabla .num {
+    text-align: right;
+}
+
+.factura-tabla td.num .btn {
+    margin: 2px 0 2px 4px;
+}
+
+.factura-tabla tfoot td {
+    border-bottom: none;
+    color: var(--muted);
+}
+
+.factura-tabla .factura-total td {
+    color: var(--text);
+    font-weight: 700;
+    font-size: 1rem;
+    border-top: 1px solid #2a2e37;
+}
+
+.factura-estados {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.factura-cabecera {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.factura-cabecera h2 {
+    margin: 0;
+}
+
+.factura-anulada {
+    opacity: 0.7;
+}
+
+.form-en-linea {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 0;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.form-en-linea .campo-ancho {
+    flex: 1 1 220px;
+}
+
+.horario-form .opcion {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.historial-factura {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+
+.resumen-confirmacion {
+    font-size: 1.1rem;
+}
+
+.panel + .panel,
+.factura-alumna {
+    margin-top: 16px;
+}
+
+.factura-tabla dialog {
+    text-align: left;
+}
+
+.panel-facturacion .nota + .nota {
+    margin-top: 8px;
+}
+
+.panel-facturacion .btn {
+    margin-top: 12px;
+}
+
+@media (max-width: 560px) {
+    .factura-tabla {
+        font-size: 0.78rem;
+    }
+
+    .factura-tabla th,
+    .factura-tabla td {
+        padding: 5px 3px;
+    }
+
+    .factura-alumna {
+        padding: 14px 10px;
+    }
+}
+
+.factura-identificacion {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    margin: 8px 0 12px;
+}
+
+.factura-identificacion div {
+    display: flex;
+    flex-direction: column;
+}
+
+.factura-identificacion dt {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+
+.factura-identificacion dd {
+    margin: 0;
+    font-weight: 600;
+}

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Facturación mensual</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        <h1>Facturación mensual</h1>
+        <p class="subtitle">Se cobran las clases tomadas (presente, ausente o sin registrar); las canceladas a tiempo o por vos no se cobran.</p>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        <div class="semana-nav">
+            <a class="btn btn-secundario" href="/profesora/resumenes?mes={{ ant_mes }}&anio={{ ant_anio }}">‹ Mes anterior</a>
+            <span class="semana-rango">{{ mes_txt }}</span>
+            {% if hay_siguiente %}
+            <a class="btn btn-secundario" href="/profesora/resumenes?mes={{ sig_mes }}&anio={{ sig_anio }}">Mes siguiente ›</a>
+            {% else %}
+            <span class="btn btn-secundario btn-disabled">Mes siguiente ›</span>
+            {% endif %}
+        </div>
+
+        {% if not en_revision %}
+        <section class="panel">
+            <span class="badge badge-espera">Provisorio</span>
+            <p class="nota">{{ mes_txt }} está en curso: esto es lo que va del mes según las reservas vigentes (hoy {{ hoy_txt }}).
+                No se guarda nada. Los borradores de las facturas se preparan desde el último día del mes ({{ ultimo_dia_txt }}).</p>
+        </section>
+
+        {% if provisorio %}
+        <ul class="lista-clases">
+            {% for a in provisorio %}
+            <li class="resumen-item">
+                <div class="lc-fecha"><strong>{{ a.alumna }}</strong></div>
+                <div class="lc-detalle">
+                    Hasta hoy: {{ a.dictadas }} {{ 'clase' if a.dictadas == 1 else 'clases' }} · ${{ a.total_dictadas }}
+                    {% if a.proximas %}<br />Reservadas para lo que queda del mes: {{ a.proximas }} · ${{ a.total_proximas }}{% endif %}
+                </div>
+                <details class="resumen-detalle">
+                    <summary>Ver clases</summary>
+                    <table>
+                        <thead><tr><th>Fecha</th><th>Clase</th><th class="num">Precio</th></tr></thead>
+                        <tbody>
+                            {% for d in a.detalle %}
+                            <tr{% if not d.dictada %} class="detalle-proxima"{% endif %}>
+                                <td>{{ d.fecha_txt }} · {{ d.hora }}</td>
+                                <td>{{ d.tipo }}{% if not d.dictada %} (todavía no se dictó){% endif %}</td>
+                                <td class="num">${{ d.precio }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </details>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="vacio vacio-izq">Todavía no hay reservas confirmadas en {{ mes_txt }}.</p>
+        {% endif %}
+
+        {% else %}
+        <section class="panel panel-facturacion">
+            {% if previa and not previa.periodo_finalizado %}
+            <p class="nota"><strong>Todavía hay clases de {{ mes_txt }} sin terminar.</strong> Podés revisar y ajustar los
+                borradores; confirmar se habilita cuando termine la última clase del mes. Las facturas incluyen solo clases ya dictadas.</p>
+            {% endif %}
+            <p class="nota">Las alumnas ven sus facturas confirmadas desde el {{ publica_txt }}{% if publicada %} (ya publicadas){% endif %}.
+                Los borradores nunca se les muestran.</p>
+            {% if previa and previa.cantidad %}
+            {% if previa.periodo_finalizado %}
+            <a class="btn" href="/profesora/resumenes/confirmar-mes?mes={{ mes }}&anio={{ anio }}">Confirmar todas las facturas del mes ({{ previa.cantidad }})</a>
+            {% else %}
+            <span class="btn btn-disabled">Confirmar todas las facturas del mes ({{ previa.cantidad }})</span>
+            {% endif %}
+            {% endif %}
+        </section>
+
+        {% if facturas %}
+        <ul class="lista-clases">
+            {% for f in facturas %}
+            <li class="resumen-item{% if f.estado_factura == 'anulada' %} factura-anulada{% endif %}">
+                <div class="lc-fecha"><strong>{{ f.alumna }}</strong>{% if f.numero %}<br /><span class="nota-chica">{{ f.numero }}</span>{% endif %}
+                    {% if not f.cedula_txt %}<br /><span class="nota-chica">Sin cédula</span>{% endif %}</div>
+                <div class="lc-detalle">
+                    {{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · <strong>${{ f.total }}</strong>
+                    {% if f.total != f.subtotal_original %}<br /><span class="nota-chica">Original: ${{ f.subtotal_original }}</span>{% endif %}
+                </div>
+                <span class="badge {{ 'badge-espera' if f.estado_factura == 'borrador' else ('badge-off' if f.estado_factura == 'anulada' else 'badge-on') }}">{{ f.estado_factura_txt }}</span>
+                {% if f.estado_factura == 'confirmada' %}
+                <span class="badge {{ 'badge-on' if f.estado_pago != 'pendiente' else 'badge-espera' }}">{{ f.estado_pago_txt }}</span>
+                {% endif %}
+                <a class="btn btn-chico" href="/profesora/resumenes/{{ f.id }}">Ver factura</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="vacio vacio-izq">No hay clases para facturar en {{ mes_txt }}.</p>
+        {% endif %}
+        {% endif %}
+    </main>
+</body>
+</html>

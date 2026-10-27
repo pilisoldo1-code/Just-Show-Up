@@ -7,6 +7,16 @@
 > negocio`, etc.) como parte del mismo commit, sin que haga falta que te lo
 > pidan explícitamente. Mantenerlo desactualizado es peor que no tenerlo.
 
+## Dónde quedamos (leer primero)
+
+**`CONTINUIDAD_PROYECTO.md`** tiene el estado actual (GitHub, PR #15 y #13, Supabase, respaldo,
+pruebas), lo pendiente, lo que necesita autorización y las decisiones de Mercado Pago, Videos On
+Demand y Planificación. **Orden de trabajo definitivo (27/10/2026)**:
+1. Integrar el PR #15 (facturación) — detenido esperando decisión: el merge despliega solo en theta.
+2. Planificación: cancelar clases puntuales con checkboxes (propuesta técnica antes de programar).
+3. Mercado Pago Checkout Pro en modo de prueba (propuesta ya presentada, falta aprobación).
+4. Videos On Demand: Zoom gratuito + Mux gratuito si pasa la prueba de reproducción firmada.
+
 ## Qué es esto
 
 Plataforma web que reemplaza un proceso manual por WhatsApp: una profesora
@@ -99,8 +109,7 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     clases (con link a `/dia/{fecha}` para cancelar) y lista de espera con
     posición. **Mi historial** (`/mi-historial`, pantalla aparte por decisión
     del usuario): clases canceladas y clases pasadas. **Mis facturas**
-    (`/mis-facturas`): pantalla vacía explicativa hasta que exista el módulo de
-    resumen mensual y pagos.
+    (`/mis-facturas`): resúmenes mensuales con detalle de clases (ver módulo 6).
   - **Foto de perfil: pendiente de decisión.** Hoy el avatar son las iniciales
     porque no existe dónde guardar fotos. Para fotos reales haría falta una
     columna `foto_url` en `profiles` + un bucket de Supabase Storage con sus
@@ -273,6 +282,72 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     funcionando con la base nueva), navegador escritorio/celular. Antes de aplicarla se
     hizo un respaldo de todos los datos y un script de vuelta atrás probado (deja las 6
     funciones modificadas idénticas byte a byte a las de producción).
+- **Facturación mensual y pagos (módulo 6, rama `modulo-6-resumen-correcciones`;
+  migración `20261021150000_resumen_mensual_pagos.sql` APLICADA en Supabase el 27/10 como
+  `20261027205754 resumen_mensual_pagos`; el código todavía NO está en `main` ni desplegado)**. Parte del PR #13 de Josefina (su rama `modulo-6-resumen` queda intacta),
+  rediseñado con Julieta. **Simulación educativa**: sin requisitos fiscales, numeración
+  oficial ni pasarela de pagos (sin Mercado Pago); los pagos los marca la profesora.
+  - Tablas: `resumen_mensual` = la factura (`estado_factura` borrador/confirmada/anulada y
+    `estado_pago` pendiente/pagado/sin_cargo, importes, `version`, `numero` JSU-AAAA-MM-NNNN
+    al confirmar, `reemplaza_a`); `resumen_mensual_detalle` = una línea por clase cobrada
+    (foto: fecha, hora, tipo, `precio_original`, `ajuste_tipo`, `importe_final`);
+    `factura_historial` y `pago_anulacion` (motivos internos, **solo los lee la profesora**);
+    `pago` (vigente/anulado). Nadie escribe directo: solo funciones que validan rol, fechas,
+    versión e importes. Una sola factura no anulada por alumna y mes; un solo pago vigente.
+  - **Fechas (Montevideo)**: durante el mes la profesora ve un **provisorio** (lo calcula la
+    app, no se guarda). Desde el **último día del mes** se arman **borradores**
+    (`sincronizar_borradores`, se llama sola al abrir el mes; agrega/quita clases sin perder
+    los ajustes; solo clases ya empezadas). **Confirmar** exige que hayan terminado todas las
+    clases programadas del mes (`_periodo_finalizado`) y que el borrador esté al día con las
+    reservas (`_factura_al_dia`). La alumna ve sus facturas confirmadas **desde el día 1 del
+    mes siguiente, 00:00** (lo aplica RLS, no la pantalla); nunca ve borradores.
+  - **Ajustes** (solo en borrador, con motivo): bonificar una clase o cobrarle menos (entre $0
+    y el precio original), y descuento general en monto o porcentaje. El total se recalcula
+    en la base. La alumna ve "Descuento"/"Bonificada", no el motivo.
+  - **Confirmación individual y masiva**: la masiva muestra antes cantidad y total y es todo o
+    nada (si algo cambió desde la vista previa, no confirma ninguna: compara una "firma" de
+    ids+versiones). Toda modificación lleva la `version` que la profesora tenía en pantalla.
+  - **Corregir una factura confirmada**: "Anular y reemitir" (con motivo; si tiene pago
+    vigente, primero anular el pago). La anulada queda en el historial y se crea un borrador
+    con las mismas clases, ajustes y motivos, que se confirma con otro número. La alumna ve
+    la anulada solo si ya estaba publicada, marcada "reemplazada por…".
+  - **Pagos simulados**: solo facturas confirmadas, total exacto, fecha no futura, uno vigente
+    (índice único + bloqueo), anulación con motivo/responsable/fecha en `pago_anulacion`.
+    Factura en $0 = "sin cargo".
+  - **PDF** (`app/factura_pdf.py`, `fpdf2`): "Factura mensual – Just Show Up", generado al
+    descargar con los datos guardados (no cambia si cambian precios). Alumna:
+    `/mis-facturas/{id}/pdf`; profesora: `/profesora/resumenes/{id}/pdf` (borrador marcado).
+  - **Identificación (decisión del usuario, 27/10)**: cada factura muestra nombre completo,
+    cédula y período. En borrador salen del perfil actual; **al confirmar se copian**
+    (`alumna_nombre`, `alumna_apellido`, `alumna_cedula`) y ya no cambian aunque cambie el
+    perfil. Sin cédula se puede confirmar igual: dice "Cédula: no registrada" y la vista previa
+    masiva avisa cuántas facturas no tienen cédula.
+  - Pantallas: menú de la profesora "Facturación" (`/profesora/resumenes`, detalle
+    `/profesora/resumenes/{id}`, vista previa `/profesora/resumenes/confirmar-mes`); alumna:
+    Mis facturas.
+  - Orden de bloqueo: factura → líneas → pago; sincronizar, confirmar y anular facturas toman
+    además un candado por mes. Todo "ahora" de estas funciones pasa por `public._ahora()`.
+  - Probado: **180 casos en un Postgres local** con reloj simulado y datos sintéticos
+    (`python tests/base_local/test_facturacion_base.py`, necesita `requirements-dev.txt`):
+    fechas de cierre y publicación, cambio de año, concurrencia, permisos, cédula, foto fija,
+    PDF y el código real de `app/facturas.py`. 49 tests unitarios (`tests.test_facturas`) y
+    navegador escritorio/celular contra la base local. Migraciones aplicadas el 27/10 tras un
+    respaldo verificado (`~/Documents/Just Show Up - respaldos/2026-10-27 antes de facturación
+    (módulo 6)/`, con `vuelta_atras_modulo6.sql`); después de aplicarlas la estructura quedó
+    idéntica a la de los archivos del repo, los datos sin cambios y los permisos probados con
+    las cuentas de prueba. **Probado contra Supabase real el 27/10** con el servidor local
+    (`tests/supabase_real/prueba_modulo6_real.py`, 73 casos: facturación completa de profesora y
+    alumna, PDF, permisos y regresión de login, alumnas, reservas, lista de espera, tipos,
+    planificación y asistencia) usando solo cuentas `@prueba.invalid` y septiembre de 2026 (sin
+    datos reales); limpieza y comparación con el respaldo: idéntico. Falta: push, PR y desplegar.
+- **Cédula de identidad (rama `modulo-6-resumen-correcciones`, migración
+  `20261021140000_profiles_cedula.sql` APLICADA el 27/10 como `20261027205550 profiles_cedula`)**: `profiles.cedula` opcional (las usuarias
+  existentes quedan sin cédula; no se completa nada), solo dígitos, validada con el dígito
+  verificador uruguayo (`_cedula_valida` en la base y `validaciones.cedula` en Python, mismo
+  algoritmo) y única. Cada alumna ve la suya en Mi perfil (solo lectura) y **no puede
+  cambiarla** (no está en su permiso de UPDATE por columna). La profesora la carga en el alta o
+  después con "Cargar/Corregir cédula" en Alumnas (función `actualizar_cedula`, verifica rol;
+  vacía = quitarla).
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -316,7 +391,7 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 - Existe un segundo deploy "oficial" conectado por GitHub a otra cuenta de
   Vercel (la de la dueña del repo) — ver Gotchas.
 
-## Plan del equipo hasta el martes 20/10/2026
+## Plan del equipo hasta el martes 20/10/2026 (HISTÓRICO: ya pasó; el estado vigente está en `CONTINUIDAD_PROYECTO.md`)
 
 > **Para Claude Code**: leé esta sección antes de empezar. Cada integrante trabaja en
 > **un módulo distinto, en su propia rama**. No toques módulos de otra persona.
@@ -436,7 +511,17 @@ Se definieron como módulos verticales: cada uno entrega algo visible/probable
 en la web, no solo cambios de esquema.
 
 - **Planificación** (pedido del profesor) — **hecho** (licencias, vacaciones y
-  cancelaciones puntuales). Estadísticas **hecha** (ver Estado actual).
+  cancelaciones puntuales).
+  **PENDIENTE (pedido de Julieta, 27/10; hacerlo DESPUÉS de integrar el módulo 6 y presentar
+  antes una propuesta técnica, sin modificar nada):** dos opciones en Planificación con pestañas
+  o selector: "Licencia / ausencia" (lo actual: rango de fechas, motivo, vista previa,
+  confirmar; conservar) y **"Cancelar clases puntuales"**: elegir un día en un calendario, ver
+  sus clases (hora y tipo), marcar con checkboxes una, varias o todas, motivo, botón "Cancelar
+  clases seleccionadas", confirmación con fecha, horarios y cantidad. Reglas: solo se cancelan
+  las seleccionadas; las ya canceladas se muestran identificadas y no se pueden elegir; mismo
+  procedimiento de cancelación actual (reservas, lista de espera, avisos, facturación); sin
+  duplicados; todo o nada si se cancelan varias; escritorio y celular. Ej.: lunes 2/11 con
+  08:00, 09:00 y 17:00 → cancelar solo 08:00 y 09:00 por una consulta médica. Estadísticas **hecha** (ver Estado actual).
   Pendiente del mismo pedido: **Tipo de clase** (falta que el usuario pase los nombres de los tipos).
 
 1. **Autenticación y perfiles** — etapa 1 y olvidé mi contraseña hechos; etapa 2
@@ -452,11 +537,14 @@ en la web, no solo cambios de esquema.
 4. **Lista de espera** — **hecho** (oferta de 30 min dentro de la app, confirmar,
    rechazar, salir; vista de la profesora). Falta solo el aviso por mail (Resend).
 5. **Asistencia** — **hecho** (profesora marca; la alumna lo ve en Mi historial).
-6. **Resumen mensual y pagos** — cálculo automático + registro de pagos
-   (Mercado Pago para pagos, ver Stack).
-7. **Suscripción y clases grabadas** — biblioteca de videos con gate de
-   acceso. Modalidad (suscripción mensual vs. compra individual con vigencia)
-   **todavía no está decidida** — no implementar hasta que se defina.
+6. **Facturación mensual y pagos** — **terminado** (simulado) en la rama
+   `modulo-6-resumen-correcciones`, **PR #15** abierto sin integrar; migraciones ya aplicadas en
+   Supabase (27/10). Pago con **Mercado Pago Checkout Pro solo en modo de prueba**: paso 3 del
+   orden de trabajo (propuesta en `CONTINUIDAD_PROYECTO.md` §7).
+7. **Clases grabadas → "Videos On Demand"** (decidido 27/10): la profesora sube la grabación (Zoom
+   gratuito, carga manual) y todas las alumnas la ven 24 h desde la publicación; alojamiento en Mux
+   gratuito sujeto a validación. Paso 4 del orden de trabajo (`CONTINUIDAD_PROYECTO.md` §8). La
+   suscripción paga original queda fuera por ahora.
 8. **Notificaciones y extras** — mails vía Resend (confirmación, recordatorio
    24hs), integración con Google Calendar, automatizaciones con n8n,
    analytics con PostHog.
@@ -490,7 +578,7 @@ Supabase Auth (no se reinventa autenticación).
 - Al liberarse un cupo, se notifica a la primera de la lista de espera, que
   tiene 30 minutos para confirmar antes de que se ofrezca a la siguiente.
 - Solo la profesora marca asistencia (presente/ausente).
-- **Qué se cobra (para el futuro resumen mensual)**: las reservas `confirmada`
+- **Qué se cobra (resumen mensual)**: las reservas `confirmada`
   de clases `programada` que ya pasaron (presente, ausente o sin registrar). No
   se cobran las reservas `cancelada`: las canceló la alumna a tiempo
   (`id_bloqueo` NULL) o la profesora (`id_bloqueo` con valor).
@@ -591,6 +679,35 @@ Para cada módulo, en este orden:
   "Semana anterior/siguiente" y en el "Volver" de los diálogos). Pendiente de
   corregir; en Planificación se corrigió solo para esa pantalla
   (`.acciones-confirmar`) para no cambiar el diseño del resto sin pedirlo.
+- **No aplicar `20261021000000_resumen_mensual_pagos.sql` (rama de Josefina, PR #13)**:
+  la reemplaza `20261021150000_resumen_mensual_pagos.sql` (facturación completa con sus
+  protecciones). Aplicar las dos crearía conflicto.
+- **Las pruebas locales viven en `tests/base_local/` (no en el scratchpad)**: el 27/10 macOS
+  borró los scripts que estaban en `/private/tmp` (limpieza automática). No guardar en `/tmp`
+  nada que haya que conservar. Esas pruebas usan solo datos sintéticos (nunca copiar datos
+  reales al repo) y `unittest discover` no las corre (no tienen `__init__.py`: necesitan Postgres).
+- **Pruebas contra Supabase real (`tests/supabase_real/`)**: no visitar la grilla (`/`), el día
+  (`/dia/...`) ni Mis inscripciones con datos reales: generan clases de semanas nuevas y procesan
+  listas de espera reales (cambia la base). Para facturar en pruebas usar un mes cerrado sin
+  datos reales. Las alumnas de prueba sin contraseña entran con `auth.admin.generate_link`
+  (magic link) + `verify_otp(token_hash)`; en httpx poner las cookies `sb_acceso/sb_refresco`
+  SIN dominio (con `domain="localhost"` no se mandan). Las pruebas consumen números de
+  `factura_numero_seq`: al terminar, si no hay facturas, reiniciarla con
+  `select setval('public.factura_numero_seq', 1, false)`.
+- **`public._ahora()`** es el único "ahora" de la facturación: las pruebas locales lo
+  reemplazan para simular fechas (último día del mes, día 1, cambio de año). No usar `now()`
+  directo en funciones nuevas de facturación (sí en `default` de columnas de auditoría).
+- **PDF con fuentes estándar (Helvetica)**: solo Latin-1. `factura_pdf._txt` cambia "−", "—",
+  "→" y similares; un carácter nuevo fuera de Latin-1 saldría como "?". Para probar el texto
+  de un PDF hay que descomprimir los streams (y los paréntesis aparecen escapados: `\(`).
+- **La app de facturación no usa "embeds" de PostgREST** (`tabla(campos)` dentro del select):
+  solo filtros simples. Así se pudo probar el código real contra un Postgres local con un
+  cliente falso (sin PostgREST). Si se agregan embeds, esa prueba deja de cubrirlos.
+- **Mientras no se aplique la fase 2 de seguridad, `anon` puede modificar `clase` y
+  `reserva`** (verificado 2026-10-21 en la base local: cambiar el precio de una clase pasada,
+  cancelar una reserva cobrable o crear una reserva confirmada en una clase pasada). Eso
+  altera lo que se cobra en los resúmenes **pendientes** (los pagados quedan fijos por el
+  detalle). Las alumnas con sesión no pueden. Se cierra con `auth_etapa2_cerrar_anon.sql`.
 - **Las pruebas automáticas NUNCA deben elegir "el primer registro" de una tabla
   compartida** (16/10: una prueba tomó el primer bloqueo creyendo que era el suyo y eliminó
   una licencia real). Identificar lo propio por un marcador (`motivo` que empieza con

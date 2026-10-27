@@ -35,6 +35,12 @@
                 <input type="email" name="mail" value="{{ datos.get('mail', '') }}" required />
             </label>
             <label>
+                Cédula de identidad (opcional)
+                <input type="text" name="cedula" value="{{ datos.get('cedula', '') }}" inputmode="numeric"
+                       maxlength="11" pattern="[0-9.\-\s]{7,11}" placeholder="1.234.567-2"
+                       title="7 u 8 números con el dígito verificador (por ejemplo 1.234.567-2)" />
+            </label>
+            <label>
                 Teléfono (09xxxxxxx)
                 <input type="tel" name="telefono" value="{{ datos.get('telefono', '') }}"
                        inputmode="numeric" maxlength="9" pattern="09[0-9]{7}" placeholder="099123456"

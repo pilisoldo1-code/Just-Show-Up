@@ -283,7 +283,18 @@ def crear_cuenta(
     if rol != "alumna":
         cambios["rol"] = rol
     if cambios:
-        admin.table("profiles").update(cambios).eq("id", creada.user.id).execute()
+        try:
+            admin.table("profiles").update(cambios).eq("id", creada.user.id).execute()
+        except Exception as e:
+            # sin los datos del perfil la cuenta queda a medias: se borra y se informa
+            logging.exception("No se pudieron guardar los datos del perfil; se borra la cuenta recién creada")
+            try:
+                admin.auth.admin.delete_user(creada.user.id)
+            except Exception:
+                logging.exception("No se pudo borrar la cuenta a medias")
+            if "profiles_cedula_unica" in str(e) or "23505" in str(e):
+                raise ErrorAuth("Ya existe una alumna con esa cédula.") from e
+            raise ErrorAuth(MSG_GENERICO) from e
     return creada.user.id, contrasena
 
 

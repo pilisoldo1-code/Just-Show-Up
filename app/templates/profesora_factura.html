@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Factura</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main>
+        {% include "_menu.html" %}
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        {% if f %}
+        <p><a class="lc-accion" href="/profesora/resumenes?mes={{ f.mes }}&anio={{ f.anio }}">‹ Facturación de {{ f.mes_txt }}</a></p>
+        <h1>Factura de {{ f.alumna }}</h1>
+        <p class="subtitle">{{ f.mes_txt }}{% if f.numero %} · {{ f.numero }}{% endif %}{% if f.confirmada_txt %} · confirmada el {{ f.confirmada_txt }}{% endif %}</p>
+        {% include "_factura_identificacion.html" %}
+        {% if not f.identificacion_fija %}
+        <p class="nota">En borrador se muestran los datos actuales del perfil; al confirmar quedan fijos en la factura.</p>
+        {% if not f.cedula_txt %}
+        <p class="aviso aviso-error">La alumna no tiene cédula registrada. Podés confirmar igual (la factura dirá "no registrada")
+            o <a class="lc-accion" href="/profesora/alumnas">cargarla en Alumnas</a> antes de confirmar.</p>
+        {% endif %}
+        {% endif %}
+
+        <p><a class="btn btn-chico btn-secundario" href="/profesora/resumenes/{{ f.id }}/pdf">{{ 'Vista previa del PDF' if f.estado_factura == 'borrador' else 'Descargar PDF' }}</a></p>
+        <div class="factura-estados">
+            <span class="badge {{ 'badge-espera' if f.estado_factura == 'borrador' else ('badge-off' if f.estado_factura == 'anulada' else 'badge-on') }}">{{ f.estado_factura_txt }}</span>
+            {% if f.estado_factura == 'confirmada' %}
+            <span class="badge {{ 'badge-on' if f.estado_pago != 'pendiente' else 'badge-espera' }}">{{ f.estado_pago_txt }}</span>
+            {% endif %}
+        </div>
+
+        {% if f.estado_factura == 'anulada' %}
+        <div class="aviso aviso-error">Factura anulada el {{ f.anulada_txt }}.
+            {% if f.reemplazada_por_id %}Reemplazada por <a class="lc-accion" href="/profesora/resumenes/{{ f.reemplazada_por_id }}">{{ f.reemplazada_por }}</a>.{% endif %}</div>
+        {% endif %}
+        {% if f.reemplaza_id %}
+        <p class="nota">Reemplaza a la factura <a class="lc-accion" href="/profesora/resumenes/{{ f.reemplaza_id }}">{{ f.reemplaza }}</a>.</p>
+        {% endif %}
+
+        {% set editable = f.estado_factura == 'borrador' %}
+        {% set interno = true %}
+        {% include "_factura_lineas.html" %}
+
+        {% if editable %}
+        <section class="panel">
+            <h2>Descuento general</h2>
+            {% if f.descuento_tipo %}
+            <p>Aplicado: {{ f.descuento_txt }} (−${{ f.descuento_monto }}){% if f.descuento_motivo %} · «{{ f.descuento_motivo }}»{% endif %}</p>
+            {% endif %}
+            <form action="/profesora/resumenes/{{ f.id }}/descuento" method="post" class="horario-form form-en-linea"
+                  onsubmit="this.querySelector('button[type=submit]').disabled = true">
+                <input type="hidden" name="version" value="{{ f.version }}" />
+                <label>
+                    Tipo
+                    <select name="tipo" required>
+                        <option value="porcentaje">Porcentaje (%)</option>
+                        <option value="monto">Monto fijo ($)</option>
+                        {% if f.descuento_tipo %}<option value="quitar">Quitar descuento</option>{% endif %}
+                    </select>
+                </label>
+                <label>
+                    Valor
+                    <input type="number" name="valor" min="0" step="0.01" inputmode="decimal" />
+                </label>
+                <label class="campo-ancho">
+                    Motivo (interno)
+                    <input type="text" name="motivo" minlength="{{ motivo_min }}" maxlength="{{ motivo_max }}" required />
+                </label>
+                <button type="submit" class="btn">Guardar descuento</button>
+            </form>
+        </section>
+
+        <section class="panel">
+            <h2>Confirmar factura</h2>
+            <p class="nota">Una vez confirmada no se puede modificar. La alumna la ve desde el día 1 del mes siguiente.
+                Para corregirla después habrá que anularla y reemitirla.</p>
+            {% if not periodo_finalizado %}
+            <p class="aviso aviso-error">Todavía hay clases del mes sin terminar: se puede confirmar cuando termine la última.</p>
+            <span class="btn btn-disabled">Confirmar factura</span>
+            {% elif not f.cantidad_clases %}
+            <span class="btn btn-disabled">Confirmar factura</span> <span class="nota">No tiene clases para cobrar.</span>
+            {% else %}
+            <button type="button" class="btn" onclick="document.getElementById('confirmar').showModal()">Confirmar factura</button>
+            <dialog id="confirmar" class="modal">
+                <form action="/profesora/resumenes/{{ f.id }}/confirmar" method="post" class="horario-form"
+                      onsubmit="this.querySelector('button[type=submit]').disabled = true">
+                    <h2>Confirmar factura</h2>
+                    <p class="modal-clase">{{ f.alumna }} · {{ f.mes_txt }}</p>
+                    <p>{{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · total <strong>${{ f.total }}</strong></p>
+                    <input type="hidden" name="version" value="{{ f.version }}" />
+                    <div class="modal-botones">
+                        <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                        <button type="submit" class="btn">Confirmar</button>
+                    </div>
+                </form>
+            </dialog>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        {% if f.estado_factura == 'confirmada' %}
+        <section class="panel">
+            <h2>Pago</h2>
+            {% if f.pago %}
+            <p>Pago #{{ f.pago.id }}: ${{ f.pago.monto }} · {{ f.pago.medio }} · {{ f.pago.fecha }}
+                <br /><span class="nota-chica">Registrado el {{ f.pago.registrado_en }}{% if f.pago.registrado_por %} por {{ f.pago.registrado_por }}{% endif %}</span></p>
+            <button type="button" class="btn btn-chico btn-peligro" onclick="document.getElementById('anular-pago').showModal()">Anular pago</button>
+            <dialog id="anular-pago" class="modal">
+                <form action="/profesora/resumenes/{{ f.id }}/pagos/{{ f.pago.id }}/anular" method="post" class="horario-form"
+                      onsubmit="this.querySelector('button[type=submit]').disabled = true">
+                    <h2>Anular pago #{{ f.pago.id }}</h2>
+                    <p class="modal-clase">${{ f.pago.monto }} · {{ f.pago.medio }} · {{ f.pago.fecha }}</p>
+                    <p>El pago no se borra: queda en el historial como anulado, con el motivo, la fecha y quién lo anuló.
+                        La factura vuelve a <strong>pendiente de pago</strong>.</p>
+                    <label>
+                        Motivo (interno)
+                        <textarea name="motivo" rows="3" minlength="{{ motivo_min }}" maxlength="{{ motivo_max }}" required></textarea>
+                    </label>
+                    <div class="modal-botones">
+                        <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                        <button type="submit" class="btn btn-peligro-solido">Confirmar anulación</button>
+                    </div>
+                </form>
+            </dialog>
+            {% elif f.estado_pago == 'sin_cargo' %}
+            <p>Factura sin cargo: no hay nada que cobrar.</p>
+            {% else %}
+            <form action="/profesora/resumenes/{{ f.id }}/pagar" method="post" class="horario-form form-en-linea"
+                  onsubmit="this.querySelector('button[type=submit]').disabled = true">
+                <input type="hidden" name="monto" value="{{ f.total }}" />
+                <p>Monto: <strong>${{ f.total }}</strong> (el total; no hay pagos parciales)</p>
+                <label>
+                    Medio de pago
+                    <select name="medio_pago" required>
+                        {% for valor, texto in medios_pago.items() %}<option value="{{ valor }}">{{ texto }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label>
+                    Fecha
+                    <input type="date" name="fecha" value="{{ hoy_iso }}" max="{{ hoy_iso }}" required />
+                </label>
+                <button type="submit" class="btn">Registrar pago</button>
+            </form>
+            <p class="nota">Pago simulado: solo deja registrado que la alumna pagó.</p>
+            {% endif %}
+            {% if f.pagos_anulados %}
+            <div class="pagos-anulados">
+                <strong>Pagos anulados</strong>
+                <ul>
+                    {% for p in f.pagos_anulados %}
+                    <li>Pago #{{ p.id }}: ${{ p.monto }} · {{ p.medio }} · {{ p.fecha }}
+                        (registrado el {{ p.registrado_en }}{% if p.registrado_por %} por {{ p.registrado_por }}{% endif %})
+                        — anulado el {{ p.anulado_en }}{% if p.anulado_por %} por {{ p.anulado_por }}{% endif %}: «{{ p.motivo }}»</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        {% if f.estado_factura == 'confirmada' %}
+        <section class="panel">
+            <h2>Corregir la factura</h2>
+            <p class="nota">Una factura confirmada no se modifica. Para corregirla se anula (queda en el historial con el motivo)
+                y se crea un borrador nuevo con las mismas clases y ajustes, que después se confirma con otro número.
+                Si la alumna ya la veía, va a ver la anulada marcada como tal y la nueva cuando la confirmes.</p>
+            {% if f.pago %}
+            <p class="nota"><strong>Tiene un pago registrado:</strong> primero anulá el pago.</p>
+            {% else %}
+            <button type="button" class="btn btn-chico btn-peligro" onclick="document.getElementById('anular-factura').showModal()">Anular y reemitir</button>
+            <dialog id="anular-factura" class="modal">
+                <form action="/profesora/resumenes/{{ f.id }}/anular" method="post" class="horario-form"
+                      onsubmit="this.querySelector('button[type=submit]').disabled = true">
+                    <h2>Anular la factura {{ f.numero }}</h2>
+                    <p class="modal-clase">{{ f.alumna }} · {{ f.mes_txt }} · ${{ f.total }}</p>
+                    <p>La factura queda anulada (no se borra) y se crea un borrador que la reemplaza.</p>
+                    <label>
+                        Motivo (interno)
+                        <textarea name="motivo" rows="3" minlength="{{ motivo_min }}" maxlength="{{ motivo_max }}" required></textarea>
+                    </label>
+                    <div class="modal-botones">
+                        <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                        <button type="submit" class="btn btn-peligro-solido">Anular y crear borrador</button>
+                    </div>
+                </form>
+            </dialog>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        {% if f.historial %}
+        <section class="panel">
+            <h2>Historial</h2>
+            <ul class="historial-factura">
+                {% for h in f.historial %}
+                <li><span class="nota-chica">{{ h.en }}{% if h.por %} · {{ h.por }}{% endif %}</span><br />
+                    <strong>{{ h.accion }}</strong>{% if h.texto %}: {{ h.texto }}{% endif %}{% if h.motivo %} · «{{ h.motivo }}»{% endif %}</li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+        {% endif %}
+    </main>
+</body>
+</html>
