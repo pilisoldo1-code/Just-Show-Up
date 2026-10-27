@@ -325,7 +325,11 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     respaldo verificado (`~/Documents/Just Show Up - respaldos/2026-10-27 antes de facturación
     (módulo 6)/`, con `vuelta_atras_modulo6.sql`); después de aplicarlas la estructura quedó
     idéntica a la de los archivos del repo, los datos sin cambios y los permisos probados con
-    las cuentas de prueba. Falta probar la app contra Supabase real (theta) y el PR.
+    las cuentas de prueba. **Probado contra Supabase real el 27/10** con el servidor local
+    (`tests/supabase_real/prueba_modulo6_real.py`, 73 casos: facturación completa de profesora y
+    alumna, PDF, permisos y regresión de login, alumnas, reservas, lista de espera, tipos,
+    planificación y asistencia) usando solo cuentas `@prueba.invalid` y septiembre de 2026 (sin
+    datos reales); limpieza y comparación con el respaldo: idéntico. Falta: push, PR y desplegar.
 - **Cédula de identidad (rama `modulo-6-resumen-correcciones`, migración
   `20261021140000_profiles_cedula.sql` APLICADA el 27/10 como `20261027205550 profiles_cedula`)**: `profiles.cedula` opcional (las usuarias
   existentes quedan sin cédula; no se completa nada), solo dígitos, validada con el dígito
@@ -670,6 +674,14 @@ Para cada módulo, en este orden:
   borró los scripts que estaban en `/private/tmp` (limpieza automática). No guardar en `/tmp`
   nada que haya que conservar. Esas pruebas usan solo datos sintéticos (nunca copiar datos
   reales al repo) y `unittest discover` no las corre (no tienen `__init__.py`: necesitan Postgres).
+- **Pruebas contra Supabase real (`tests/supabase_real/`)**: no visitar la grilla (`/`), el día
+  (`/dia/...`) ni Mis inscripciones con datos reales: generan clases de semanas nuevas y procesan
+  listas de espera reales (cambia la base). Para facturar en pruebas usar un mes cerrado sin
+  datos reales. Las alumnas de prueba sin contraseña entran con `auth.admin.generate_link`
+  (magic link) + `verify_otp(token_hash)`; en httpx poner las cookies `sb_acceso/sb_refresco`
+  SIN dominio (con `domain="localhost"` no se mandan). Las pruebas consumen números de
+  `factura_numero_seq`: al terminar, si no hay facturas, reiniciarla con
+  `select setval('public.factura_numero_seq', 1, false)`.
 - **`public._ahora()`** es el único "ahora" de la facturación: las pruebas locales lo
   reemplazan para simular fechas (último día del mes, día 1, cambio de año). No usar `now()`
   directo en funciones nuevas de facturación (sí en `default` de columnas de auditoría).
