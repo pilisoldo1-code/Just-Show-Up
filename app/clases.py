@@ -591,3 +591,55 @@ def eliminar_bloqueo(sb: Client, id_bloqueo: int) -> tuple[bool, str]:
         texto += (f" {_plural(r['sin_cupo'], 'reserva no se pudo', 'reservas no se pudieron')} recuperar "
                   "porque el cupo de la clase ahora es menor.")
     return True, texto
+
+
+# ---------- profesora: planificación (cancelar clases puntuales de un día) ----------
+# Variante de "licencia": en vez de un rango de fechas, la profesora elige un día y marca con
+# checkboxes una o varias de sus clases. Por abajo crea un bloqueo puntual por cada clase elegida
+# (ver crear_bloqueos_puntuales en la base), así se puede deshacer cada cancelación por separado.
+
+def clases_para_cancelar(sb: Client, fecha: date) -> list[dict]:
+    """Clases del día (programadas o ya canceladas) para la pantalla de checkboxes.
+    Las ya canceladas o ya empezadas se devuelven igual, marcadas como no seleccionables."""
+    filas = (
+        sb.table("clase").select("id, hora_inicio, duracion, estado, horario(activo), tipo_clase(nombre)")
+        .eq("fecha", fecha.isoformat()).in_("estado", ["programada", "cancelada"])
+        .order("hora_inicio").execute().data
+    )
+    filas = [c for c in filas if c["horario"] and c["horario"]["activo"]]
+    ahora_dt = ahora()
+    resultado = []
+    for c in filas:
+        empezada = _inicio_clase({"fecha": fecha.isoformat(), "hora_inicio": c["hora_inicio"]}) <= ahora_dt
+        resultado.append({
+            "id": c["id"],
+            "hora": c["hora_inicio"][:5],
+            "tipo": c["tipo_clase"]["nombre"] if c.get("tipo_clase") else "",
+            "cancelada": c["estado"] == "cancelada",
+            "empezada": empezada,
+            "seleccionable": c["estado"] == "programada" and not empezada,
+        })
+    return resultado
+
+
+def cancelar_clases_puntuales(sb: Client, ids_clase: list[int], motivo: str) -> tuple[bool, str]:
+    motivo = motivo.strip()
+    if len(motivo) > LARGO_MAX_MOTIVO:
+        return False, f"El motivo puede tener como máximo {LARGO_MAX_MOTIVO} caracteres."
+    r = sb.rpc("crear_bloqueos_puntuales", {"p_ids_clase": ids_clase, "p_motivo": motivo}).execute().data
+    if r["resultado"] != "ok":
+        return False, {
+            "no_autorizada": "Solo la profesora puede cancelar clases.",
+            "sin_clases": "Elegí al menos una clase.",
+            "motivo_vacio": "Escribí el motivo de la cancelación.",
+            "clases_invalidas": "Alguna de las clases elegidas ya no se puede cancelar "
+                                "(ya estaba cancelada, ya empezó, es de un horario desactivado o no existe); "
+                                "no se canceló ninguna. Volvé a elegir.",
+        }.get(r["resultado"], "No se pudo guardar la cancelación.")
+    texto = f"Se {'canceló' if r['clases'] == 1 else 'cancelaron'} {_plural(r['clases'], 'clase', 'clases')}"
+    if r["reservas"]:
+        texto += f" y {_plural(r['reservas'], 'reserva', 'reservas')} (las alumnas lo ven como cancelada por la profesora)"
+    if r["espera"]:
+        texto += f"; se cerró la lista de espera de {_plural(r['espera'], 'alumna', 'alumnas')}"
+    texto += "."
+    return True, texto

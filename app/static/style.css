@@ -496,6 +496,12 @@ main.ancho {
     color: var(--accent);
 }
 
+.menu-links a.activo {
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 2px;
+}
+
 .menu-cuenta form {
     margin: 0;
 }
@@ -881,6 +887,28 @@ main.ancho {
 }
 
 /* ---------- planificación ---------- */
+
+.clase-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.clase-check input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+}
+
+.clase-check-deshabilitada {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.lista-puntual li {
+    justify-content: space-between;
+}
 
 .form-fila {
     display: grid;
