@@ -17,6 +17,14 @@
         <p><a class="lc-accion" href="/profesora/resumenes?mes={{ f.mes }}&anio={{ f.anio }}">‹ Facturación de {{ f.mes_txt }}</a></p>
         <h1>Factura de {{ f.alumna }}</h1>
         <p class="subtitle">{{ f.mes_txt }}{% if f.numero %} · {{ f.numero }}{% endif %}{% if f.confirmada_txt %} · confirmada el {{ f.confirmada_txt }}{% endif %}</p>
+        {% include "_factura_identificacion.html" %}
+        {% if not f.identificacion_fija %}
+        <p class="nota">En borrador se muestran los datos actuales del perfil; al confirmar quedan fijos en la factura.</p>
+        {% if not f.cedula_txt %}
+        <p class="aviso aviso-error">La alumna no tiene cédula registrada. Podés confirmar igual (la factura dirá "no registrada")
+            o <a class="lc-accion" href="/profesora/alumnas">cargarla en Alumnas</a> antes de confirmar.</p>
+        {% endif %}
+        {% endif %}
 
         <p><a class="btn btn-chico btn-secundario" href="/profesora/resumenes/{{ f.id }}/pdf">{{ 'Vista previa del PDF' if f.estado_factura == 'borrador' else 'Descargar PDF' }}</a></p>
         <div class="factura-estados">

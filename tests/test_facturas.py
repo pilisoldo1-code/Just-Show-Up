@@ -41,7 +41,7 @@ def factura(**cambios):
         "historial": [{"en": "30/06/2026 12:00", "por": "Profe Prueba", "accion": "Ajuste de clase",
                        "texto": "Lunes 29/6 08:00: $800.00 → $600.00", "motivo": "llegó tarde"}],
         "reemplazada_por": None, "reemplaza": None, "reemplaza_a": None, "reemplazada_por_id": None, "reemplaza_id": None,
-        "anulada_txt": "",
+        "anulada_txt": "", "cedula_txt": "1.234.567-2", "identificacion_fija": False,
     }
     f.update(cambios)
     return f
@@ -327,7 +327,7 @@ class Pdf(Base):
         self.assertIn('filename="factura-JSU-2026-06-0001.pdf"', r.headers["content-disposition"])
         self.assertEqual(r.headers["cache-control"], "no-store")
         t = _texto_pdf(r.content)
-        for texto in ("Just Show Up", "Factura mensual", "JSU-2026-06-0001", "Ana Prueba", "Junio 2026", "$ 1.395,00",
+        for texto in ("Just Show Up", "Factura mensual", "JSU-2026-06-0001", "Ana Uno", "1.234.567-2", "Junio 2026", "$ 1.395,00",
                       "-$ 200,00", "Documento simulado"):
             self.assertIn(texto, t)
         self.assertNotIn("tarde", t)
@@ -393,6 +393,131 @@ class AnularFactura(Base):
         self.assertIn('Reemplazada por <a class="lc-accion" href="/profesora/resumenes/8">JSU-2</a>', t)
         self.assertNotIn("Ajustar", t)
         self.assertNotIn("Registrar pago", t)
+
+
+class Identificacion(Base):
+    def ver(self, f):
+        self.como(PROFESORA)
+        with mock.patch.object(facturas, "factura", return_value=f), \
+                mock.patch.object(facturas, "previsualizar_mes", return_value={"periodo_finalizado": True}):
+            return self.client.get("/profesora/resumenes/1").text
+
+    def test_detalle_muestra_nombre_cedula_y_periodo(self):
+        t = self.ver(factura())
+        for texto in ("<dt>Alumna</dt><dd>Ana Uno</dd>", "<dt>Cédula</dt><dd>1.234.567-2</dd>", "<dt>Período</dt><dd>Junio 2026</dd>",
+                      "al confirmar quedan fijos"):
+            self.assertIn(texto, t)
+
+    def test_borrador_sin_cedula_avisa_pero_deja_confirmar(self):
+        t = self.ver(factura(cedula_txt=""))
+        self.assertIn("<dt>Cédula</dt><dd>no registrada</dd>", t)
+        self.assertIn("La alumna no tiene cédula registrada", t)
+        self.assertIn("/profesora/resumenes/1/confirmar", t)
+
+    def test_confirmada_no_muestra_aviso_de_perfil(self):
+        t = self.ver(factura(estado_factura="confirmada", numero="JSU-1", identificacion_fija=True, cedula_txt=""))
+        self.assertIn("no registrada", t)
+        self.assertNotIn("al confirmar quedan fijos", t)
+        self.assertNotIn("La alumna no tiene cédula registrada", t)
+
+    def test_vista_previa_avisa_facturas_sin_cedula(self):
+        self.como(PROFESORA)
+        previa = {"resultado": "ok", "periodo_finalizado": True, "cantidad": 2, "total": D("1"), "firma": "f",
+                  "desactualizadas": 0, "sin_clases": 0, "sin_cedula": 1}
+        with mock.patch.object(facturas, "previsualizar_mes", return_value=previa), \
+                mock.patch.object(facturas, "facturas_del_mes", return_value=[factura(), factura(id=2, cedula_txt="")]):
+            t = self.client.get("/profesora/resumenes/confirmar-mes?mes=6&anio=2026").text
+        self.assertIn("1 factura es de una alumna sin cédula registrada", t)
+        self.assertIn("Sin cédula", t)
+        self.assertIn("Confirmar 2 facturas", t)
+
+    def test_mis_facturas_y_pdf_sin_cedula(self):
+        self.como(ALUMNA)
+        f = factura(estado_factura="confirmada", numero="JSU-1", identificacion_fija=True, cedula_txt="")
+        with mock.patch.object(facturas, "mis_facturas", return_value=[f]):
+            self.assertIn("<dt>Cédula</dt><dd>no registrada</dd>", self.client.get("/mis-facturas").text)
+        with mock.patch.object(facturas, "mi_factura", return_value=f):
+            self.assertIn("(no registrada)", _texto_pdf(self.client.get("/mis-facturas/1/pdf").content))
+
+    def test_snapshot_vs_perfil_actual(self):
+        perfiles = {"x": {"nombre": "Nuevo", "apellido": "Nombre", "cedula": "12345672"}}
+        borrador = {"id_alumna": "x", "alumna_nombre": None}
+        confirmada = {"id_alumna": "x", "alumna_nombre": "Viejo", "alumna_apellido": "Nombre", "alumna_cedula": None}
+        self.assertEqual(facturas._identificacion(borrador, perfiles),
+                         {"alumna": "Nuevo Nombre", "cedula_txt": "1.234.567-2", "identificacion_fija": False})
+        self.assertEqual(facturas._identificacion(confirmada, perfiles),
+                         {"alumna": "Viejo Nombre", "cedula_txt": "", "identificacion_fija": True})
+
+
+class Cedula(Base):
+    def test_validacion(self):
+        from app import validaciones as v
+        self.assertEqual(v.cedula("1.234.567-2"), ("12345672", None))
+        self.assertEqual(v.cedula(" 1234567 2 ")[1], None)
+        self.assertEqual(v.cedula(""), ("", None))
+        for mala in ("12345671", "123456", "123456789", "1234567a", "1.234.567-9"):
+            self.assertIsNotNone(v.cedula(mala)[1], mala)
+        self.assertTrue(v.cedula_valida("9876543"[:-1] + str((10 - sum(int(d) * p for d, p in zip("0987654", (2, 9, 8, 7, 6, 3, 4))) % 10) % 10)))
+        self.assertEqual(v.formatear_cedula("12345672"), "1.234.567-2")
+        self.assertEqual(v.formatear_cedula(None), "")
+
+    ALTA = {"nombre": "Ana", "apellido": "Uno", "mail": "ana@prueba.invalid", "cedula": "1.234.567-2"}
+
+    def test_alta_con_cedula(self):
+        self.como(PROFESORA)
+        with mock.patch.object(main, "_cedula_en_uso", return_value=False), \
+                mock.patch.object(main.auth, "crear_cuenta", return_value=("id", "Temporal1")) as cc:
+            r = self.post("/profesora/alumnas", self.ALTA)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(cc.call_args.kwargs["extras"]["cedula"], "12345672")
+
+    def test_alta_cedula_invalida_o_repetida(self):
+        self.como(PROFESORA)
+        with mock.patch.object(main, "_cedula_en_uso", return_value=False), mock.patch.object(main.auth, "crear_cuenta") as cc:
+            r = self.post("/profesora/alumnas", {**self.ALTA, "cedula": "1.234.567-9"})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("dígito verificador", r.text)
+        cc.assert_not_called()
+        with mock.patch.object(main, "_cedula_en_uso", return_value=True), mock.patch.object(main.auth, "crear_cuenta") as cc:
+            r = self.post("/profesora/alumnas", self.ALTA)
+        self.assertIn("Ya existe una alumna con esa cédula", r.text)
+        cc.assert_not_called()
+
+    def test_alta_sin_cedula_sigue_funcionando(self):
+        self.como(PROFESORA)
+        with mock.patch.object(main.auth, "crear_cuenta", return_value=("id", "Temporal1")) as cc, \
+                mock.patch.object(main, "_cedula_en_uso") as uso:
+            r = self.post("/profesora/alumnas", {**self.ALTA, "cedula": ""})
+        self.assertEqual(r.status_code, 200)
+        uso.assert_not_called()
+        self.assertEqual(cc.call_args.kwargs["extras"]["cedula"], "")
+
+    def test_cargar_y_quitar_cedula(self):
+        self.como(PROFESORA)
+        sb = mock.MagicMock()
+        sb.rpc.return_value.execute.return_value.data = "ok"
+        uid = "a0000000-0000-4000-8000-000000000001"
+        with mock.patch.object(main, "_sb", return_value=sb):
+            r = self.post(f"/profesora/alumnas/{uid}/cedula", {"cedula": "1.234.567-2"})
+            self.post(f"/profesora/alumnas/{uid}/cedula", {"cedula": ""})
+            sb.rpc.return_value.execute.return_value.data = "cedula_repetida"
+            r2 = self.post(f"/profesora/alumnas/{uid}/cedula", {"cedula": "1.234.567-2"})
+            r3 = self.post(f"/profesora/alumnas/{uid}/cedula", {"cedula": "123"})
+        self.assertIn("ok=1", r.headers["location"])
+        self.assertEqual(sb.rpc.call_args_list[:2], [
+            mock.call("actualizar_cedula", {"p_id_alumna": uid, "p_cedula": "12345672"}),
+            mock.call("actualizar_cedula", {"p_id_alumna": uid, "p_cedula": None})])
+        self.assertIn("ok=0", r2.headers["location"])
+        self.assertIn("ok=0", r3.headers["location"])
+        self.assertEqual(sb.rpc.call_count, 3)
+
+    def test_alumna_no_puede_cargar_cedula(self):
+        self.como(ALUMNA)
+        sb = mock.MagicMock()
+        with mock.patch.object(main, "_sb", return_value=sb):
+            r = self.post("/profesora/alumnas/a0000000-0000-4000-8000-000000000001/cedula", {"cedula": "1.234.567-2"})
+        self.assertTrue(r.headers["location"].startswith("/?"))
+        sb.rpc.assert_not_called()
 
 
 class Logica(unittest.TestCase):

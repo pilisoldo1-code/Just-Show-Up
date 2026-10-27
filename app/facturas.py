@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 from supabase import Client
 
 from app.clases import TZ, nombre_dia
+from app.validaciones import formatear_cedula
 
 MESES = [
     "", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
@@ -91,12 +92,17 @@ def _dia_txt(iso: str) -> str:
     return f"{nombre_dia(f)} {f.day}/{f.month}"
 
 
-def _nombres(sb: Client, ids) -> dict:
+def _perfiles(sb: Client, ids) -> dict:
+    """id -> perfil (nombre, apellido, cédula). RLS: la profesora lee todos; la alumna, el suyo."""
     ids = sorted({i for i in ids if i})
     if not ids:
         return {}
-    filas = sb.table("profiles").select("id, nombre, apellido").in_("id", ids).execute().data
-    return {p["id"]: f"{p['nombre']} {p['apellido']}" for p in filas}
+    filas = sb.table("profiles").select("id, nombre, apellido, cedula").in_("id", ids).execute().data
+    return {p["id"]: p for p in filas}
+
+
+def _nombres(sb: Client, ids) -> dict:
+    return {i: f"{p['nombre']} {p['apellido']}" for i, p in _perfiles(sb, ids).items()}
 
 
 def _codigo(sb: Client, funcion: str, params: dict) -> dict:
@@ -163,13 +169,24 @@ def provisorio(sb: Client, mes: int, anio: int, ahora: datetime, alumna_id: str 
 
 _CAMPOS_FACTURA = ("id, id_alumna, mes, anio, estado_factura, estado_pago, cantidad_clases, subtotal_original, "
                    "total_lineas, descuento_tipo, descuento_valor, descuento_monto, total, version, numero, "
-                   "confirmada_en, anulada_en, reemplaza_a")
+                   "confirmada_en, anulada_en, reemplaza_a, alumna_nombre, alumna_apellido, alumna_cedula")
 
 
-def _factura(f: dict, nombres: dict) -> dict:
+def _identificacion(f: dict, perfiles: dict) -> dict:
+    """Desde que se confirma, la factura usa su foto fija; un borrador muestra el perfil actual."""
+    if f.get("alumna_nombre") is not None:
+        nombre, apellido, cedula, fija = f["alumna_nombre"], f["alumna_apellido"], f.get("alumna_cedula"), True
+    else:
+        p = perfiles.get(f["id_alumna"]) or {}
+        nombre, apellido, cedula, fija = p.get("nombre", ""), p.get("apellido", ""), p.get("cedula"), False
+    return {"alumna": f"{nombre} {apellido}".strip(), "cedula_txt": formatear_cedula(cedula),
+            "identificacion_fija": fija}
+
+
+def _factura(f: dict, perfiles: dict) -> dict:
     return {
         **f,
-        "alumna": nombres.get(f["id_alumna"], ""),
+        **_identificacion(f, perfiles),
         "mes_txt": mes_txt(f["mes"], f["anio"]),
         "estado_factura_txt": ESTADOS_FACTURA[f["estado_factura"]],
         "estado_pago_txt": ESTADOS_PAGO[f["estado_pago"]],
@@ -205,8 +222,8 @@ def _linea(l: dict) -> dict:
 def facturas_del_mes(sb: Client, mes: int, anio: int) -> list[dict]:
     filas = (sb.table("resumen_mensual").select(_CAMPOS_FACTURA)
              .eq("mes", mes).eq("anio", anio).execute().data)
-    nombres = _nombres(sb, (f["id_alumna"] for f in filas))
-    salida = [_factura(f, nombres) for f in filas]
+    perfiles = _perfiles(sb, (f["id_alumna"] for f in filas))
+    salida = [_factura(f, perfiles) for f in filas]
     salida.sort(key=lambda f: (f["estado_factura"] == "anulada", f["alumna"].lower(), f["id"]))
     return salida
 
@@ -254,10 +271,11 @@ def factura(sb: Client, factura_id: int) -> dict | None:
                  .order("id", desc=True).execute().data)
     relacionadas = (sb.table("resumen_mensual").select("id, numero, estado_factura, reemplaza_a")
                     .eq("id_alumna", f["id_alumna"]).eq("mes", f["mes"]).eq("anio", f["anio"]).execute().data)
-    nombres = _nombres(sb, [f["id_alumna"]] + [h["por"] for h in historial] + [p["registrado_por"] for p in pagos]
-                       + [a["anulado_por"] for a in anulaciones.values()])
+    perfiles = _perfiles(sb, [f["id_alumna"]] + [h["por"] for h in historial] + [p["registrado_por"] for p in pagos]
+                         + [a["anulado_por"] for a in anulaciones.values()])
+    nombres = {i: f"{p['nombre']} {p['apellido']}" for i, p in perfiles.items()}
 
-    salida = _factura(f, nombres)
+    salida = _factura(f, perfiles)
     motivos = {}
     for h in sorted(historial, key=lambda h: h["id"]):
         if h["accion"] == "ajuste_linea":

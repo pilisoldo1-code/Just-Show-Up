@@ -1354,3 +1354,26 @@ main.ancho {
         padding: 14px 10px;
     }
 }
+
+.factura-identificacion {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 28px;
+    margin: 8px 0 12px;
+}
+
+.factura-identificacion div {
+    display: flex;
+    flex-direction: column;
+}
+
+.factura-identificacion dt {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+
+.factura-identificacion dd {
+    margin: 0;
+    font-weight: 600;
+}

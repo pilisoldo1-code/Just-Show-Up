@@ -85,7 +85,8 @@
         <ul class="lista-clases">
             {% for f in facturas %}
             <li class="resumen-item{% if f.estado_factura == 'anulada' %} factura-anulada{% endif %}">
-                <div class="lc-fecha"><strong>{{ f.alumna }}</strong>{% if f.numero %}<br /><span class="nota-chica">{{ f.numero }}</span>{% endif %}</div>
+                <div class="lc-fecha"><strong>{{ f.alumna }}</strong>{% if f.numero %}<br /><span class="nota-chica">{{ f.numero }}</span>{% endif %}
+                    {% if not f.cedula_txt %}<br /><span class="nota-chica">Sin cédula</span>{% endif %}</div>
                 <div class="lc-detalle">
                     {{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · <strong>${{ f.total }}</strong>
                     {% if f.total != f.subtotal_original %}<br /><span class="nota-chica">Original: ${{ f.subtotal_original }}</span>{% endif %}

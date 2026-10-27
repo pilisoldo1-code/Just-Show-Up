@@ -101,6 +101,10 @@ create table public.resumen_mensual (
     anulada_en timestamptz,
     anulada_por uuid references public.profiles(id),
     reemplaza_a bigint references public.resumen_mensual(id),
+    -- foto de la identificación de la alumna, fija desde que se confirma (cédula: puede no tener)
+    alumna_nombre text,
+    alumna_apellido text,
+    alumna_cedula text,
     creado_en timestamptz not null default now(),
     check ((descuento_tipo is null) = (descuento_valor is null)),
     check (descuento_tipo <> 'porcentaje' or descuento_valor > 0 and descuento_valor <= 100),
@@ -108,7 +112,8 @@ create table public.resumen_mensual (
     check (total = total_lineas - descuento_monto),
     check ((estado_factura = 'borrador') = (numero is null and confirmada_en is null)),
     check ((estado_factura = 'anulada') = (anulada_en is not null)),
-    check (estado_factura <> 'borrador' or estado_pago = 'pendiente')
+    check (estado_factura <> 'borrador' or estado_pago = 'pendiente'),
+    check (estado_factura = 'borrador' or (alumna_nombre is not null and alumna_apellido is not null))
 );
 create unique index resumen_mensual_una_vigente on public.resumen_mensual (id_alumna, mes, anio)
     where estado_factura <> 'anulada';
@@ -332,10 +337,13 @@ set search_path = ''
 as $$
 declare
     f public.resumen_mensual;
+    a public.profiles;
 begin
     select * into f from public.resumen_mensual where id = p_id;
+    select * into a from public.profiles where id = f.id_alumna;
     update public.resumen_mensual
     set estado_factura = 'confirmada',
+        alumna_nombre = a.nombre, alumna_apellido = a.apellido, alumna_cedula = a.cedula,
         numero = 'JSU-' || f.anio || '-' || lpad(f.mes::text, 2, '0') || '-' || lpad(nextval('public.factura_numero_seq')::text, 4, '0'),
         confirmada_en = public._ahora(), confirmada_por = auth.uid(),
         estado_pago = case when f.total = 0 then 'sin_cargo' else 'pendiente' end,
@@ -633,6 +641,8 @@ begin
         'total', coalesce(sum(total) filter (where cantidad_clases > 0), 0),
         'sin_clases', count(*) filter (where cantidad_clases = 0),
         'desactualizadas', count(*) filter (where cantidad_clases > 0 and not public._factura_al_dia(id)),
+        'sin_cedula', count(*) filter (where cantidad_clases > 0
+                                       and (select p.cedula from public.profiles p where p.id = id_alumna) is null),
         'firma', public._firma_mes(p_mes, p_anio))
     from public.resumen_mensual
     where mes = p_mes and anio = p_anio and estado_factura = 'borrador';

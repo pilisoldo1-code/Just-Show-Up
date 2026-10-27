@@ -45,8 +45,9 @@ class _Pdf(FPDF):
         self.cell(0, 4, f"Página {self.page_no()}/{{nb}}", align="R")
 
 
-def generar(f: dict, alumna: str, ahora: datetime, marca: str | None = None) -> bytes:
-    """f = factura de app.facturas (factura() o mis_facturas()). marca = 'BORRADOR' o 'ANULADA'."""
+def generar(f: dict, ahora: datetime, marca: str | None = None) -> bytes:
+    """f = factura de app.facturas (factura() o mis_facturas()). marca = 'BORRADOR' o 'ANULADA'.
+    Nombre y cédula salen de la factura: su foto fija si está confirmada."""
     pdf = _Pdf(f"Documento simulado con fines educativos · Just Show Up · generado el "
                f"{ahora.day:02d}/{ahora.month:02d}/{ahora.year} {ahora.hour:02d}:{ahora.minute:02d}")
     pdf.alias_nb_pages()
@@ -84,8 +85,9 @@ def generar(f: dict, alumna: str, ahora: datetime, marca: str | None = None) -> 
     else:
         estado = "Pendiente de pago"
     pdf.set_y(52 if marca else 44)
-    datos = [("Alumna", alumna), ("Período", f.get("mes_txt", "")),
-             ("Confirmada el", f.get("confirmada_txt") or "-"), ("Clases", str(f.get("cantidad_clases", 0))),
+    datos = [("Alumna", f.get("alumna", "")), ("Cédula", f.get("cedula_txt") or "no registrada"),
+             ("Período", f.get("mes_txt", "")), ("Confirmada el", f.get("confirmada_txt") or "-"),
+             ("Clases", str(f.get("cantidad_clases", 0))),
              (f"Estado de pago al {ahora.day:02d}/{ahora.month:02d}/{ahora.year}", estado)]
     pdf.set_font("Helvetica", "", 9)
     for i, (etiqueta, valor) in enumerate(datos):

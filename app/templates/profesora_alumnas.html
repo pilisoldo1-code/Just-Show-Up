@@ -27,6 +27,7 @@
                     <th>Apellido</th>
                     <th>Nombre</th>
                     <th>Mail</th>
+                    <th>Cédula</th>
                     <th>Teléfono</th>
                     <th>Carné de salud vence</th>
                     <th></th>
@@ -38,9 +39,27 @@
                     <td>{{ a.apellido }}</td>
                     <td>{{ a.nombre }}</td>
                     <td>{{ a.mail }}</td>
+                    <td>{{ a.cedula_txt or 'No registrada' }}</td>
                     <td>{{ a.telefono or '—' }}</td>
                     <td>{{ a.fecha_vencimiento_carne_salud or '—' }}</td>
                     <td class="acciones">
+                        <button type="button" class="link-btn" onclick="document.getElementById('cedula-{{ loop.index }}').showModal()">{{ 'Corregir cédula' if a.cedula else 'Cargar cédula' }}</button>
+                        <dialog id="cedula-{{ loop.index }}" class="modal">
+                            <form action="/profesora/alumnas/{{ a.id }}/cedula" method="post" class="horario-form">
+                                <h2>Cédula de {{ a.nombre }} {{ a.apellido }}</h2>
+                                <label>
+                                    Cédula de identidad
+                                    <input type="text" name="cedula" value="{{ a.cedula_txt }}" inputmode="numeric" maxlength="11"
+                                           pattern="[0-9.\-\s]{7,11}" placeholder="1.234.567-2" />
+                                </label>
+                                <p class="nota">Dejala vacía para quitarla. La alumna no puede modificarla. Las facturas ya
+                                    confirmadas conservan la cédula que tenían al confirmarse.</p>
+                                <div class="modal-botones">
+                                    <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                                    <button type="submit" class="btn">Guardar</button>
+                                </div>
+                            </form>
+                        </dialog>
                         <form action="/profesora/alumnas/{{ a.id }}/reiniciar-contrasena" method="post"
                               onsubmit="return confirm('¿Generar una contraseña nueva para {{ a.nombre }} {{ a.apellido }}? La anterior dejará de funcionar.')">
                             <button type="submit" class="link-btn">Reiniciar contraseña</button>
@@ -49,7 +68,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="empty">Todavía no hay alumnas cargadas.</td>
+                    <td colspan="7" class="empty">Todavía no hay alumnas cargadas.</td>
                 </tr>
                 {% endfor %}
             </tbody>

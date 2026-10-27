@@ -32,6 +32,7 @@
                     {% endif %}
                 </div>
             </div>
+            {% include "_factura_identificacion.html" %}
             {% if f.estado_factura == 'anulada' %}
             <p class="nota">Esta factura fue anulada{% if f.reemplazada_por %} y reemplazada por la factura {{ f.reemplazada_por }}{% endif %}.</p>
             {% endif %}

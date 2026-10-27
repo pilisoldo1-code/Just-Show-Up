@@ -20,6 +20,7 @@
             <dl class="datos-perfil">
                 <div><dt>Nombre</dt><dd>{{ datos.nombre }} {{ datos.apellido }}</dd></div>
                 <div><dt>Mail</dt><dd>{{ datos.mail or '—' }}</dd></div>
+                <div><dt>Cédula</dt><dd>{{ datos.cedula or 'No registrada' }}</dd></div>
                 <div><dt>Teléfono</dt><dd>{{ datos.telefono or '—' }}</dd></div>
                 {% if not usuario.es_profesora %}
                 <div><dt>Fecha de nacimiento</dt><dd>{{ datos.fecha_nacimiento or '—' }}</dd></div>

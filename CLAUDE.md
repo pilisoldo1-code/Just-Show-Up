@@ -307,16 +307,30 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   - **PDF** (`app/factura_pdf.py`, `fpdf2`): "Factura mensual – Just Show Up", generado al
     descargar con los datos guardados (no cambia si cambian precios). Alumna:
     `/mis-facturas/{id}/pdf`; profesora: `/profesora/resumenes/{id}/pdf` (borrador marcado).
+  - **Identificación (decisión del usuario, 27/10)**: cada factura muestra nombre completo,
+    cédula y período. En borrador salen del perfil actual; **al confirmar se copian**
+    (`alumna_nombre`, `alumna_apellido`, `alumna_cedula`) y ya no cambian aunque cambie el
+    perfil. Sin cédula se puede confirmar igual: dice "Cédula: no registrada" y la vista previa
+    masiva avisa cuántas facturas no tienen cédula.
   - Pantallas: menú de la profesora "Facturación" (`/profesora/resumenes`, detalle
     `/profesora/resumenes/{id}`, vista previa `/profesora/resumenes/confirmar-mes`); alumna:
     Mis facturas.
   - Orden de bloqueo: factura → líneas → pago; sincronizar, confirmar y anular facturas toman
     además un candado por mes. Todo "ahora" de estas funciones pasa por `public._ahora()`.
-  - Probado: 153 casos en un Postgres local con reloj simulado (fechas de cierre y
-    publicación, cambio de año, concurrencia, permisos, PDF y el código real de
-    `app/facturas.py`), 37 tests unitarios (`tests.test_facturas`) y navegador
-    escritorio/celular contra la base local. Falta probar contra Supabase real (necesita
-    aplicar la migración).
+  - Probado: **180 casos en un Postgres local** con reloj simulado y datos sintéticos
+    (`python tests/base_local/test_facturacion_base.py`, necesita `requirements-dev.txt`):
+    fechas de cierre y publicación, cambio de año, concurrencia, permisos, cédula, foto fija,
+    PDF y el código real de `app/facturas.py`. 49 tests unitarios (`tests.test_facturas`) y
+    navegador escritorio/celular contra la base local. Falta probar contra Supabase real
+    (necesita aplicar las migraciones).
+- **Cédula de identidad (rama `modulo-6-resumen-correcciones`, migración
+  `20261021140000_profiles_cedula.sql` SIN APLICAR)**: `profiles.cedula` opcional (las usuarias
+  existentes quedan sin cédula; no se completa nada), solo dígitos, validada con el dígito
+  verificador uruguayo (`_cedula_valida` en la base y `validaciones.cedula` en Python, mismo
+  algoritmo) y única. Cada alumna ve la suya en Mi perfil (solo lectura) y **no puede
+  cambiarla** (no está en su permiso de UPDATE por columna). La profesora la carga en el alta o
+  después con "Cargar/Corregir cédula" en Alumnas (función `actualizar_cedula`, verifica rol;
+  vacía = quitarla).
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -639,6 +653,10 @@ Para cada módulo, en este orden:
 - **No aplicar `20261021000000_resumen_mensual_pagos.sql` (rama de Josefina, PR #13)**:
   la reemplaza `20261021150000_resumen_mensual_pagos.sql` (facturación completa con sus
   protecciones). Aplicar las dos crearía conflicto.
+- **Las pruebas locales viven en `tests/base_local/` (no en el scratchpad)**: el 27/10 macOS
+  borró los scripts que estaban en `/private/tmp` (limpieza automática). No guardar en `/tmp`
+  nada que haya que conservar. Esas pruebas usan solo datos sintéticos (nunca copiar datos
+  reales al repo) y `unittest discover` no las corre (no tienen `__init__.py`: necesitan Postgres).
 - **`public._ahora()`** es el único "ahora" de la facturación: las pruebas locales lo
   reemplazan para simular fechas (último día del mes, día 1, cambio de año). No usar `now()`
   directo en funciones nuevas de facturación (sí en `default` de columnas de auditoría).

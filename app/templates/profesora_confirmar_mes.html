@@ -20,6 +20,10 @@
         <section class="panel">
             <p class="resumen-confirmacion">Vas a confirmar <strong>{{ previa.cantidad }} {{ 'factura' if previa.cantidad == 1 else 'facturas' }}</strong>
                 por un total de <strong>${{ previa.total }}</strong>.</p>
+            {% if previa.sin_cedula %}
+            <p class="aviso aviso-error">{{ previa.sin_cedula }} {{ 'factura es de una alumna sin cédula registrada' if previa.sin_cedula == 1 else 'facturas son de alumnas sin cédula registrada' }}: se van a confirmar con "Cédula: no registrada". Si querés, cargala antes en
+                <a class="lc-accion" href="/profesora/alumnas">Alumnas</a>.</p>
+            {% endif %}
             {% if previa.desactualizadas %}
             <p class="aviso aviso-error">{{ previa.desactualizadas }} {{ 'factura tiene' if previa.desactualizadas == 1 else 'facturas tienen' }}
                 clases que cambiaron: volvé a la facturación del mes para actualizarlas antes de confirmar.</p>
@@ -40,7 +44,7 @@
         <ul class="lista-clases">
             {% for f in facturas %}
             <li>
-                <div class="lc-fecha"><strong>{{ f.alumna }}</strong></div>
+                <div class="lc-fecha"><strong>{{ f.alumna }}</strong>{% if not f.cedula_txt %}<br /><span class="nota-chica">Sin cédula</span>{% endif %}</div>
                 <div class="lc-detalle">{{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · <strong>${{ f.total }}</strong>
                     {% if f.total != f.subtotal_original %}<br /><span class="nota-chica">Original: ${{ f.subtotal_original }}</span>{% endif %}</div>
             </li>

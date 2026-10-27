@@ -209,11 +209,11 @@ def _fecha_legible(iso: str | None) -> str:
 
 def _datos_perfil(usuario: Usuario) -> dict:
     datos = {"nombre": usuario.nombre, "apellido": usuario.apellido, "mail": usuario.mail,
-             "telefono": "", "fecha_nacimiento": "", "fecha_vencimiento_carne_salud": ""}
+             "telefono": "", "fecha_nacimiento": "", "fecha_vencimiento_carne_salud": "", "cedula": ""}
     try:
         filas = (
             auth.cliente_con_token(usuario.token).table("profiles")
-            .select("telefono, fecha_nacimiento, fecha_vencimiento_carne_salud")
+            .select("telefono, fecha_nacimiento, fecha_vencimiento_carne_salud, cedula")
             .eq("id", usuario.id).execute().data
         )
     except Exception:
@@ -221,6 +221,7 @@ def _datos_perfil(usuario: Usuario) -> dict:
         return datos
     if filas:
         datos["telefono"] = filas[0]["telefono"] or ""
+        datos["cedula"] = validaciones.formatear_cedula(filas[0].get("cedula"))
         datos["fecha_nacimiento"] = _fecha_legible(filas[0]["fecha_nacimiento"])
         datos["fecha_vencimiento_carne_salud"] = _fecha_legible(filas[0]["fecha_vencimiento_carne_salud"])
     return datos
@@ -345,8 +346,8 @@ def mis_facturas(request: Request, aviso: str = "", usuario: Usuario = Depends(r
     return _render(request, "mis_facturas.html", usuario, facturas=lista, aviso=aviso, aviso_ok=False)
 
 
-def _pdf(f: dict, alumna: str, marca: str | None) -> Response:
-    contenido = factura_pdf.generar(f, alumna, clases.ahora(), marca)
+def _pdf(f: dict, marca: str | None) -> Response:
+    contenido = factura_pdf.generar(f, clases.ahora(), marca)
     return Response(contenido, media_type="application/pdf", headers={
         "Content-Disposition": f'attachment; filename="{factura_pdf.nombre_archivo(f)}"',
         "Cache-Control": "no-store",
@@ -362,7 +363,7 @@ def mi_factura_pdf(factura_id: int, usuario: Usuario = Depends(requiere_alumna))
         return RedirectResponse(url="/mis-facturas?" + urlencode({"aviso": "No pudimos generar el PDF. Probá de nuevo."}), status_code=303)
     if f is None:
         return RedirectResponse(url="/mis-facturas?" + urlencode({"aviso": "No encontramos esa factura."}), status_code=303)
-    return _pdf(f, f"{usuario.nombre} {usuario.apellido}", "ANULADA" if f["estado_factura"] == "anulada" else None)
+    return _pdf(f, "ANULADA" if f["estado_factura"] == "anulada" else None)
 
 
 @app.post("/clases/{clase_id}/inscribirse")
@@ -832,7 +833,7 @@ def profesora_planificacion_eliminar(bloqueo_id: int, usuario: Usuario = Depends
 
 # ---------- profesora: alumnas ----------
 
-COLUMNAS_ALUMNA = "id, nombre, apellido, mail, telefono, fecha_nacimiento, fecha_vencimiento_carne_salud"
+COLUMNAS_ALUMNA = "id, nombre, apellido, mail, telefono, fecha_nacimiento, fecha_vencimiento_carne_salud, cedula"
 
 
 @app.get("/profesora/alumnas")
@@ -845,6 +846,8 @@ def alumnas_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuar
     except Exception:
         logging.exception("No se pudo listar alumnas")
         filas, aviso, ok = [], "No pudimos cargar la lista de alumnas. Probá de nuevo.", 0
+    for a in filas:
+        a["cedula_txt"] = validaciones.formatear_cedula(a.get("cedula"))
     return _render(request, "profesora_alumnas.html", usuario, alumnas=filas, aviso=aviso, aviso_ok=bool(ok))
 
 
@@ -867,18 +870,22 @@ def alumna_crear(
     telefono: str = Form(""),
     fecha_nacimiento: str = Form(""),
     fecha_vencimiento_carne_salud: str = Form(""),
+    cedula: str = Form(""),
     usuario: Usuario = Depends(requiere_profesora),
 ):
     ingresados = {
         "nombre": nombre, "apellido": apellido, "mail": mail, "telefono": telefono,
         "fecha_nacimiento": fecha_nacimiento, "fecha_vencimiento_carne_salud": fecha_vencimiento_carne_salud,
+        "cedula": cedula,
     }
     datos, errores = validaciones.validar_alumna(ingresados, clases.ahora().date())
+    if not errores and datos["cedula"] and _cedula_en_uso(usuario, datos["cedula"]):
+        errores = ["Ya existe una alumna con esa cédula."]
     if not errores:
         try:
             _, contrasena = auth.crear_cuenta(
                 datos["mail"], datos["nombre"], datos["apellido"],
-                extras={k: datos[k] for k in ("telefono", "fecha_nacimiento", "fecha_vencimiento_carne_salud")},
+                extras={k: datos[k] for k in ("telefono", "fecha_nacimiento", "fecha_vencimiento_carne_salud", "cedula")},
             )
         except ErrorAuth as e:
             errores = [str(e)]
@@ -893,6 +900,37 @@ def alumna_crear(
         titulo="Alumna creada", nombre=f"{datos['nombre']} {datos['apellido']}",
         mail=datos["mail"], contrasena=contrasena,
     )
+
+
+def _cedula_en_uso(usuario: Usuario, cedula: str) -> bool:
+    return bool(_sb(usuario).table("profiles").select("id").eq("cedula", cedula).execute().data)
+
+
+@app.post("/profesora/alumnas/{alumna_id}/cedula")
+def alumna_cedula(alumna_id: str, cedula: str = Form(""), usuario: Usuario = Depends(requiere_profesora)):
+    def volver(ok: bool, aviso: str) -> RedirectResponse:
+        return RedirectResponse(url="/profesora/alumnas?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303)
+
+    try:
+        uuid.UUID(alumna_id)
+    except ValueError:
+        return volver(False, "No encontramos a esa alumna.")
+    digitos, error = validaciones.cedula(cedula)
+    if error:
+        return volver(False, error)
+    try:
+        r = _sb(usuario).rpc("actualizar_cedula", {"p_id_alumna": alumna_id, "p_cedula": digitos or None}).execute().data
+    except Exception:
+        logging.exception("No se pudo guardar la cédula")
+        return volver(False, "No se pudo guardar la cédula. Probá de nuevo.")
+    mensajes = {
+        "ok": "Cédula guardada." if digitos else "Cédula quitada.",
+        "cedula_repetida": "Ya existe una alumna con esa cédula.",
+        "cedula_invalida": "La cédula no es válida: revisá el número y el dígito verificador.",
+        "no_existe": "No encontramos a esa alumna.",
+        "no_autorizada": "Solo la profesora puede cargar cédulas.",
+    }
+    return volver(r == "ok", mensajes.get(r, "No se pudo guardar la cédula."))
 
 
 @app.post("/profesora/alumnas/{alumna_id}/reiniciar-contrasena")
@@ -1067,7 +1105,7 @@ def profesora_factura_pdf(factura_id: int, usuario: Usuario = Depends(requiere_p
     if f is None:
         return _volver_mes(0, 0, False, "No encontramos esa factura.")
     marca = {"borrador": "BORRADOR - vista previa, todavía no confirmada", "anulada": "ANULADA"}.get(f["estado_factura"])
-    return _pdf(f, f["alumna"], marca)
+    return _pdf(f, marca)
 
 
 @app.post("/profesora/resumenes/{factura_id}/lineas/{linea_id}/ajustar")
