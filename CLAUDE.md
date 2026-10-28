@@ -110,12 +110,18 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     `/profesora/*` → vuelve a `/` con aviso; profesora en `/` → su panel.
     Dependencias en `app/auth.py`: `requiere_login`, `requiere_alumna`,
     `requiere_profesora`. La protección es del lado del servidor.
-  - Menú según rol (`_menu.html`): a la izquierda los links (profesora =
-    Horarios · Alumnas; alumna = Clases); **a la derecha el menú de cuenta**:
-    círculo con las **iniciales** + nombre, que al hacer click despliega **Mi
-    perfil · Mis inscripciones · Mi historial · Mis facturas · Cerrar sesión** (la profesora
-    solo ve Mi perfil y Cerrar sesión). Es un `<details>` que se cierra al
-    clickear afuera o con Escape.
+  - Menú según rol (`_menu.html`, header responsive desde 28/10, rama `header-responsive`):
+    el header va **fuera de `<main>`** (mismo ancho, hasta 1200 px, en todas las pantallas):
+    «Just Show Up» (lleva al inicio del rol) · secciones · **menú de cuenta** (círculo con las
+    **iniciales** + nombre, que despliega solo **Mi perfil · Cerrar sesión** para los dos roles;
+    es un `<details>` que se cierra al clickear afuera o con Escape). Secciones: profesora =
+    Horarios · Tipos de clase · Asistencias · Planificación · Alumnas · Facturación ·
+    Estadísticas; **alumna = Clases · Mis inscripciones · Mi historial · Mis facturas** (ya no
+    están en el menú de cuenta). La activa va en verde menta (Clases también en `/dia/...`).
+    **Hasta 900 px** las secciones se esconden detrás de un botón ☰ (lista vertical debajo del
+    header; se cierra con ✕, tocando afuera, con Escape o al elegir una sección; abrir ☰ cierra el
+    perfil y viceversa); entre 901 y 1100 px se oculta el nombre del perfil. Pruebas:
+    `tests/test_menu.py`.
   - **Mi perfil** (`/perfil`): información de contacto (solo lectura; si algo está
     mal se lo pide a la profesora) + formulario para cambiar la contraseña.
     **Mis inscripciones** (`/mis-inscripciones`): solo lo vigente — próximas
@@ -299,7 +305,8 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 - **Menú de la profesora (hecho 2026-10-27, mismo trabajo)**: orden fijo
   Horarios · Tipos de clase · Asistencias · Planificación · Alumnas ·
   Facturación · Estadísticas (antes "Clases" se llamaba así y "Tipos de clase"
-  solo se llegaba desde un botón dentro de Horarios, que se conservó además).
+  solo se llegaba desde un botón dentro de Horarios; ese botón se quitó el 28/10 en
+  `header-responsive` por estar duplicado con el menú).
   La pestaña de la sección donde está la profesora se resalta en verde menta
   (`--accent`) con `request.url.path.startswith(...)` en `_menu.html` — no hace
   falta tocar las rutas. Se mantiene al entrar a pantallas internas (el detalle

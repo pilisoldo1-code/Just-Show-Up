@@ -7,8 +7,8 @@
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+    {% include "_menu.html" %}
     <main>
-        {% include "_menu.html" %}
         <p><a class="lc-accion" href="/profesora/resumenes?mes={{ mes }}&anio={{ anio }}">‹ Facturación de {{ mes_txt }}</a></p>
         <h1>Confirmar las facturas de {{ mes_txt }}</h1>
 

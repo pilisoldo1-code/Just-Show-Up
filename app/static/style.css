@@ -17,7 +17,8 @@ body {
     background: var(--bg);
     color: var(--text);
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     padding: 48px 16px;
 }
 
@@ -467,29 +468,48 @@ main.ancho {
     color: #0f1115;
 }
 
+/* Header: fuera de <main>, mismo ancho en todas las pantallas.
+   Escritorio: marca · secciones · perfil. Hasta 900px: ☰ + marca · perfil, y las
+   secciones se despliegan debajo en una lista vertical. */
 .menu {
+    width: 100%;
+    max-width: 1200px;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 16px;
     flex-wrap: wrap;
+    gap: 12px 24px;
     padding-bottom: 16px;
     margin-bottom: 24px;
     border-bottom: 1px solid #2a2e37;
 }
 
-.menu-links,
-.menu-cuenta {
+.menu-marca {
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 800;
+    font-size: 1.05rem;
+    white-space: nowrap;
+}
+
+.menu-marca:hover {
+    color: var(--accent);
+}
+
+.menu-links {
+    flex: 1;
     display: flex;
     align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
+    justify-content: space-evenly;
+    gap: 8px 16px;
+    min-width: 0;
 }
 
 .menu-links a {
     color: var(--text);
     text-decoration: none;
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .menu-links a:hover {
@@ -500,6 +520,94 @@ main.ancho {
     color: var(--accent);
     border-bottom: 2px solid var(--accent);
     padding-bottom: 2px;
+}
+
+.menu-cuenta {
+    display: flex;
+    align-items: center;
+}
+
+.menu-boton {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 10px;
+    border: 1px solid #2a2e37;
+    background: var(--card);
+    color: var(--text);
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.menu-boton:hover,
+.menu.abierto .menu-boton {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.menu-icono-cerrar,
+.menu.abierto .menu-icono-abrir {
+    display: none;
+}
+
+.menu.abierto .menu-icono-cerrar {
+    display: inline;
+}
+
+@media (max-width: 1100px) {
+    .menu .cuenta-nombre {
+        display: none;
+    }
+}
+
+@media (max-width: 900px) {
+    .menu {
+        gap: 12px;
+    }
+
+    .menu-boton {
+        display: inline-flex;
+    }
+
+    .menu-cuenta {
+        margin-left: auto;
+    }
+
+    .menu-links {
+        display: none;
+        order: 3;
+        flex: 0 0 100%;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 2px;
+        padding: 6px;
+        background: var(--card);
+        border: 1px solid #2a2e37;
+        border-radius: 12px;
+    }
+
+    .menu.abierto .menu-links {
+        display: flex;
+    }
+
+    .menu-links a {
+        padding: 12px 14px;
+        border-radius: 8px;
+    }
+
+    .menu-links a:hover {
+        background: #1d212b;
+    }
+
+    .menu-links a.activo {
+        border-bottom: none;
+        padding-bottom: 12px;
+        background: rgba(110, 231, 183, 0.12);
+    }
 }
 
 .menu-cuenta form {
