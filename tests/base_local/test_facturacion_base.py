@@ -57,10 +57,12 @@ srv, uri, directorio = localdb.iniciar()
 su = conectar(uri)
 NUEVAS = [a for a in localdb.migraciones() if a.endswith(("_profiles_cedula.sql", "_resumen_mensual_pagos.sql"))]
 assert len(NUEVAS) == 2, NUEVAS
+# Las que dependen de facturación (Mercado Pago) van después de ella.
+DEPENDIENTES = [a for a in localdb.migraciones() if a.endswith("_mercado_pago_prueba.sql")]
 with su.cursor() as cur:
     cur.execute(localdb.SHIM)
     for a in localdb.migraciones():
-        if a not in NUEVAS:
+        if a not in NUEVAS and a not in DEPENDIENTES:
             cur.execute(open(a).read())
 
 usuarias = {}
@@ -106,7 +108,7 @@ COLS_PERFIL = "id, nombre, apellido, mail, telefono, fecha_nacimiento, fecha_ven
 antes = {t: huella(su, t) for t in TABLAS}
 antes["profiles"] = huella(su, "profiles", COLS_PERFIL)
 with su.cursor() as cur:
-    for a in NUEVAS:
+    for a in NUEVAS + DEPENDIENTES:
         cur.execute(open(a).read())
 ok("las migraciones nuevas (cédula y facturación) se aplican después de todas las demás", True)
 despues = {t: huella(su, t) for t in TABLAS}

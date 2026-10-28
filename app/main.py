@@ -7,10 +7,11 @@ from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import auth, clases, estadisticas, factura_pdf, facturas, validaciones
+from app import auth, clases, estadisticas, factura_pdf, facturas, mercadopago, validaciones
 from app.auth import ErrorAuth, Redirigir, Usuario, requiere_alumna, requiere_login, requiere_profesora
 from app.clases import DIAS_ORDEN
 from app import tipos_clase
@@ -337,13 +338,18 @@ def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
 
 
 @app.get("/mis-facturas")
-def mis_facturas(request: Request, aviso: str = "", usuario: Usuario = Depends(requiere_alumna)):
+def mis_facturas(request: Request, aviso: str = "", ok: int = 0, usuario: Usuario = Depends(requiere_alumna)):
+    sb = _sb(usuario)
+    pago_mp = mercadopago.disponible_para(usuario.mail)
+    if pago_mp:
+        mercadopago.conciliar(sb, usuario.id)
     try:
-        lista = facturas.mis_facturas(_sb(usuario), usuario.id)
+        lista = facturas.mis_facturas(sb, usuario.id)
     except Exception:
         logging.exception("No se pudieron cargar las facturas")
-        lista, aviso = [], "No pudimos cargar tus facturas. Probá de nuevo."
-    return _render(request, "mis_facturas.html", usuario, facturas=lista, aviso=aviso, aviso_ok=False)
+        lista, aviso, ok = [], "No pudimos cargar tus facturas. Probá de nuevo.", 0
+    return _render(request, "mis_facturas.html", usuario, facturas=lista, aviso=aviso, aviso_ok=bool(ok),
+                   pago_mp=pago_mp)
 
 
 def _pdf(f: dict, marca: str | None) -> Response:
@@ -1230,3 +1236,39 @@ def profesora_anular_pago(factura_id: int, pago_id: int, motivo: str = Form(""),
         return _volver_factura(factura_id, False, facturas.mensaje("motivo_invalido"))
     ok, aviso = _ejecutar_factura(facturas.anular_pago, _sb(usuario), pago_id, texto)
     return _volver_factura(factura_id, ok, aviso)
+
+
+# ---------- Mercado Pago (SOLO modo de prueba, dinero ficticio) ----------
+
+def _volver_mis_facturas(ok: bool, aviso: str) -> RedirectResponse:
+    return RedirectResponse(url="/mis-facturas?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303)
+
+
+@app.post("/mis-facturas/{factura_id}/mercado-pago")
+def mp_pagar_factura(request: Request, factura_id: int, usuario: Usuario = Depends(requiere_alumna)):
+    ok, destino = mercadopago.iniciar_pago(_sb(usuario), usuario.mail, factura_id,
+                                           mercadopago.sitio_publico(request.url.hostname))
+    if ok:
+        return RedirectResponse(url=destino, status_code=303)
+    return _volver_mis_facturas(False, destino)
+
+
+@app.get("/mis-facturas/mercado-pago/vuelta")
+def mp_vuelta(payment_id: str = "", collection_id: str = "", usuario: Usuario = Depends(requiere_alumna)):
+    ok, aviso = mercadopago.resultado_vuelta(payment_id or collection_id)
+    return _volver_mis_facturas(ok, aviso)
+
+
+@app.post("/webhooks/mercado-pago")
+async def mp_aviso(request: Request):
+    try:
+        cuerpo = await request.json()
+    except Exception:
+        cuerpo = {}
+    params, encabezados = dict(request.query_params), dict(request.headers)
+    try:
+        await run_in_threadpool(mercadopago.procesar_aviso, params, cuerpo if isinstance(cuerpo, dict) else {}, encabezados)
+    except Exception:
+        logging.exception("Mercado Pago: error al procesar un aviso")
+        return Response(status_code=500)  # Mercado Pago lo reintenta
+    return Response(status_code=200)

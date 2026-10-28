@@ -1529,3 +1529,69 @@ main.ancho {
     margin: 0;
     font-weight: 600;
 }
+
+/* ---------- Mercado Pago (solo prueba) ---------- */
+
+.factura-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.factura-acciones form {
+    margin: 0;
+}
+
+/* Botón blanco con el logo oficial a color (las reglas de la marca no permiten el logo sobre
+   celeste ni azul de la marca; sí sobre blanco). El logo no se edita ni se deforma. */
+.btn-mercado-pago {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 52px;
+    padding: 4px 20px 4px 6px;
+    background: #fff;
+    color: #1f2937;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.btn-mercado-pago:hover {
+    box-shadow: 0 0 0 3px rgba(110, 231, 183, 0.35);
+}
+
+.btn-mercado-pago:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.btn-mercado-pago:disabled {
+    opacity: 0.75;
+    cursor: wait;
+}
+
+.btn-mp-logo {
+    display: block;
+    height: 44px;
+    width: auto;
+    flex: none;
+}
+
+@media (max-width: 520px) {
+    .factura-acciones form,
+    .btn-mercado-pago {
+        width: 100%;
+    }
+}
+
+.texto-alerta {
+    color: #fbbf24;
+    font-weight: 600;
+}

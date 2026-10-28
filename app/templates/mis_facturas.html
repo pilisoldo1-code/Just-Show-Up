@@ -41,7 +41,21 @@
             {% set interno = false %}
             {% include "_factura_lineas.html" %}
             {% if f.pago %}<p class="nota">Pagada el {{ f.pago.fecha }} · {{ f.pago.medio }}</p>{% endif %}
-            <a class="btn btn-chico" href="/mis-facturas/{{ f.id }}/pdf">Descargar PDF</a>
+            <div class="factura-acciones">
+                {% if pago_mp and f.estado_factura == 'confirmada' and f.estado_pago == 'pendiente' %}
+                <form action="/mis-facturas/{{ f.id }}/mercado-pago" method="post"
+                      onsubmit="var b = this.querySelector('button'); b.disabled = true; b.querySelector('.btn-mp-texto').textContent = 'Abriendo Mercado Pago…'">
+                    <button type="submit" class="btn-mercado-pago">
+                        <img class="btn-mp-logo" src="/static/img/mercado-pago-logo.svg" alt="Mercado Pago" width="109" height="44" />
+                        <span class="btn-mp-texto">Pagar con Mercado Pago</span>
+                    </button>
+                </form>
+                {% endif %}
+                <a class="btn btn-chico" href="/mis-facturas/{{ f.id }}/pdf">Descargar PDF</a>
+            </div>
+            {% if pago_mp and f.estado_factura == 'confirmada' and f.estado_pago == 'pendiente' %}
+            <p class="nota-chica">Pago de prueba: se usa una cuenta y una tarjeta de prueba de Mercado Pago, con dinero ficticio.</p>
+            {% endif %}
         </section>
         {% endfor %}
         {% else %}

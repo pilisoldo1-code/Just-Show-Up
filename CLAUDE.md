@@ -15,12 +15,16 @@ Mercado Pago y Videos On Demand y las ideas a evaluar. **Orden de trabajo (actua
 1. ~~Integrar el PR #15 (facturación)~~ — **hecho**: integrado en `main` con merge común
    (`568d551`), theta desplegada y verificada (17/17, sin tocar datos reales). El PR #13 de
    Josefina quedó marcado "merged" automáticamente. amber sigue con la versión anterior.
-2. ~~Planificación: cancelar clases puntuales con checkboxes + mejoras del menú~~ — **código
-   integrado** (PR #16, #17 y #18, `main` = `2d3f63c`, desplegado en theta) y migración
-   `planificacion_cancelacion_puntual` aplicada en Supabase (`20261028003643`). **Faltan las
-   pruebas finales contra la base real** (ver Estado actual y `CONTINUIDAD_PROYECTO.md` §9:
-   hay que resolver antes la contradicción de los horarios de prueba inactivos).
-3. Mercado Pago Checkout Pro **solo en modo de prueba** (propuesta presentada, falta aprobación).
+2. ~~Planificación: cancelar clases puntuales con checkboxes + mejoras del menú~~ — **hecho**
+   (PR #16–#18; migración `20261028003643`). Pruebas finales "opción A" (solo lectura, 28/10):
+   función idéntica al repo, permisos de alumna/anon, licencias intactas, 33/33 locales. Header
+   responsive y menú de la alumna (PR #20) integrados y desplegados en theta (`7183efc`).
+3. **Mercado Pago Checkout Pro SOLO EN MODO DE PRUEBA** — **etapa 2 hecha** (rama
+   `mercado-pago-prueba`, commit local, sin push): código + migración (sin aplicar) + pruebas.
+   Siguen: etapa 3 (aplicar la migración con respaldo y guardar el token en Vault), PR, y
+   encender el interruptor en theta desde el 1/11 (ver Estado actual y
+   `CONTINUIDAD_PROYECTO.md` §7). **Decisión: theta es la plataforma de la defensa; la
+   credencial va en Supabase Vault (no en Vercel) para no depender de Pilar.**
 4. Videos On Demand: Zoom gratuito (~40 min, carga manual) + Mux gratuito si pasa la prueba de
    reproducción firmada.
 
@@ -422,6 +426,41 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     del merge** (17 comprobaciones de solo lectura con cuentas de prueba, huella de 12 tablas
     idéntica antes y después). **Desde el último día de cada mes** (31/10 para octubre), abrir
     Facturación en ese mes crea los borradores de las alumnas reales: es lo previsto.
+- **Mercado Pago Checkout Pro — SOLO MODO DE PRUEBA, dinero ficticio (rama `mercado-pago-prueba`,
+  29/10; migración `20261029120000_mercado_pago_prueba.sql` ESCRITA, NO APLICADA; sin push)**.
+  Proyecto universitario: nunca credenciales productivas, tarjetas reales ni costos.
+  - **Cuentas (Julieta, 28/10)**: aplicación Checkout Pro creada desde su cuenta personal; la
+    vendedora de prueba (creada sola con la app; sus credenciales son las "de prueba") y una
+    compradora de prueba de Uruguay con saldo ficticio. Verificado con `GET /users/me`: etiquetas
+    `test_user` + `user_product_seller`, sitio `MLU`. Prueba técnica real: pago aprobado (saldo
+    ficticio) y rechazado (tarjeta de prueba, titular `OTHE`), sin movimientos en la cuenta personal.
+  - **Credenciales**: `MP_ACCESS_TOKEN` y `MP_USER_ID` en el `.env` local (solo para pruebas
+    técnicas); en producción el token va **cifrado en Supabase Vault** (secreto `mp_access_token`;
+    opcional `mp_webhook_secret`) y el **interruptor** en `mp_configuracion.habilitado` (arranca
+    en `false`). Solo los lee `mp_configuracion_servidor()`, que ejecuta únicamente `service_role`:
+    así theta lo usa con su `SUPABASE_SERVICE_KEY` sin variables nuevas en Vercel (theta es de
+    Pilar). Si falta algo o la cuenta no es de prueba, Mercado Pago queda apagado.
+  - **Flujo**: Mis facturas → «Pagar con Mercado Pago» (botón blanco con el logo oficial, solo
+    alumnas `@demo.invalid`/`@prueba.invalid`, factura confirmada, publicada y pendiente) →
+    `crear_intento_mp` (sesión de la alumna; importe = total de la factura) → preferencia (UYU,
+    `binary_mode`, sin `ticket`, 1 cuota, vence en 30 min, `back_urls` y `notification_url` al
+    mismo sitio si está en `auth.SITIOS_PERMITIDOS`) → `init_point` → vuelta
+    `/mis-facturas/mercado-pago/vuelta` y aviso `POST /webhooks/mercado-pago`. Ambos **consultan
+    el pago a Mercado Pago** y llaman a `registrar_pago_mercado_pago` (solo `service_role`).
+    Además, al abrir Mis facturas se concilian los intentos de las últimas 48 h sin resultado
+    (alumna que cerró Mercado Pago sin volver o aviso que no llegó).
+  - **Registro**: solo pago aprobado, cobrado por nuestra vendedora de prueba, pagado por una
+    cuenta `TESTUSER…`, UYU, importe = intento = total actual de una factura confirmada y
+    pendiente → `pago` (`medio_pago = 'mercado_pago'`, `id_transaccion` = n.º de operación,
+    índice único) y factura `pagado`. Cualquier otra cosa → intento `rechazado`/`a_revisar` sin
+    tocar la factura. Idempotente: el mismo n.º de operación nunca se registra dos veces (aunque
+    se anule el pago). La profesora ve el pago (con n.º de operación) y los intentos en el
+    detalle de la factura y puede anularlo como uno manual (para ensayar otra vez).
+  - Pruebas: `python tests/base_local/test_mercado_pago_base.py` (73, Postgres local con Vault
+    simulado) y `tests/test_mercadopago.py` (49, Mercado Pago y Supabase simulados).
+  - Pendiente: etapa 3 (respaldo + aplicar la migración + guardar el token en Vault), PR, y desde
+    el 1/11 encender el interruptor y probar en theta la vuelta automática y los avisos (no se
+    pueden probar en local: Mercado Pago no acepta `localhost` en `back_urls`).
 - **Cédula de identidad (rama `modulo-6-resumen-correcciones`, migración
   `20261021140000_profiles_cedula.sql` APLICADA el 27/10 como `20261027205550 profiles_cedula`)**: `profiles.cedula` opcional (las usuarias
   existentes quedan sin cédula; no se completa nada), solo dígitos, validada con el dígito
@@ -613,7 +652,8 @@ en la web, no solo cambios de esquema.
 4. **Lista de espera** — **hecho** (oferta de 30 min dentro de la app, confirmar,
    rechazar, salir; vista de la profesora). Falta solo el aviso por mail (Resend).
 5. **Asistencia** — **hecho** (profesora marca; la alumna lo ve en Mi historial).
-6. **Facturación mensual y pagos** — **hecho** (simulado): PR #15 integrado en `main` el 27/10
+6. **Facturación mensual y pagos** — **hecho** (simulado; Mercado Pago de prueba en curso, ver
+   Estado actual): PR #15 integrado en `main` el 27/10
    (merge común, `568d551`), desplegado en theta y verificado; migraciones aplicadas en Supabase. Pago con **Mercado Pago Checkout Pro solo en modo de prueba**: paso 3 del
    orden de trabajo (propuesta en `CONTINUIDAD_PROYECTO.md` §7).
 7. **Clases grabadas → "Videos On Demand"** (decidido 27/10): la profesora sube la grabación (Zoom
@@ -769,6 +809,20 @@ Para cada módulo, en este orden:
   SIN dominio (con `domain="localhost"` no se mandan). Las pruebas consumen números de
   `factura_numero_seq`: al terminar, si no hay facturas, reiniciarla con
   `select setval('public.factura_numero_seq', 1, false)`.
+- **Mercado Pago: con las cuentas de prueba actuales los pagos vienen con `live_mode = true`**
+  (las pruebas corren en el entorno productivo entre cuentas ficticias). No sirve para distinguir
+  pagos de prueba: se verifica que la vendedora tenga la etiqueta `test_user` y que el pagador sea
+  `TESTUSER…`. En pagos con tarjeta Mercado Pago **no devuelve el mail del pagador**: mirar
+  `payer.id` → `GET /users/{id}`. La comisión que muestra (ej. $0,06 sobre $1) es simulada y la
+  paga la vendedora de prueba. En el checkout, el documento del titular de prueba va como
+  **Otro / 123456789** (la CI 12345678 no pasa el dígito verificador).
+- **Logo de Mercado Pago**: el oficial está en `app/static/img/mercado-pago-logo.svg` (zip
+  "Logos Mercado Pago 2025", uso digital RGB, color horizontal), **sin editar** (la guía lo
+  prohíbe; una prueba compara su huella). Reglas de la marca: no ponerlo sobre celeste/azul de
+  la marca ni otros colores (sí sobre blanco), no deformarlo ni recolorearlo, respetar su margen.
+- **Pruebas locales con Vault**: `localdb.SHIM` simula el esquema `vault` (sin cifrado, sin acceso
+  para anon/authenticated). `test_facturacion_base.py` aplica la migración de Mercado Pago después
+  de las de facturación (depende de la tabla `pago`).
 - **`public._ahora()`** es el único "ahora" de la facturación: las pruebas locales lo
   reemplazan para simular fechas (último día del mes, día 1, cambio de año). No usar `now()`
   directo en funciones nuevas de facturación (sí en `default` de columnas de auditoría).
