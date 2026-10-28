@@ -7,56 +7,57 @@
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+    {% include "_menu.html" %}
     <main class="ancho">
-        {% include "_menu.html" %}
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
         <div class="header-row">
             <h1>Horarios fijos</h1>
             <div class="header-acciones">
-                <a class="btn btn-secundario-claro" href="/profesora/tipos-clase">Tipos de clase</a>
                 <a class="btn" href="/profesora/horarios/nuevo">+ Nuevo horario</a>
             </div>
         </div>
 
-        <table class="horario-table">
-            <thead>
-                <tr>
-                    <th>Día</th>
-                    <th>Hora de inicio</th>
-                    <th>Tipo de clase</th>
-                    <th>Estado</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for h in horarios %}
-                <tr>
-                    <td>{{ h.dia_semana | nombre_dia }}</td>
-                    <td>{{ h.hora_inicio[:5] }}</td>
-                    <td>{{ h.tipo_clase.nombre if h.tipo_clase else '—' }}</td>
-                    <td>
-                        <span class="badge {{ 'badge-on' if h.activo else 'badge-off' }}">
-                            {{ 'Activo' if h.activo else 'Inactivo' }}
-                        </span>
-                    </td>
-                    <td class="acciones">
-                        <a href="/profesora/horarios/{{ h.id }}/editar">Editar</a>
-                        <form action="/profesora/horarios/{{ h.id }}/toggle" method="post">
-                            <button type="submit" class="link-btn">
-                                {{ 'Desactivar' if h.activo else 'Activar' }}
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="5" class="empty">No hay horarios cargados.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="tabla-scroll">
+            <table class="horario-table">
+                <thead>
+                    <tr>
+                        <th>Día</th>
+                        <th>Hora de inicio</th>
+                        <th>Tipo de clase</th>
+                        <th>Estado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in horarios %}
+                    <tr>
+                        <td>{{ h.dia_semana | nombre_dia }}</td>
+                        <td>{{ h.hora_inicio[:5] }}</td>
+                        <td>{{ h.tipo_clase.nombre if h.tipo_clase else '—' }}</td>
+                        <td>
+                            <span class="badge {{ 'badge-on' if h.activo else 'badge-off' }}">
+                                {{ 'Activo' if h.activo else 'Inactivo' }}
+                            </span>
+                        </td>
+                        <td class="acciones">
+                            <a href="/profesora/horarios/{{ h.id }}/editar">Editar</a>
+                            <form action="/profesora/horarios/{{ h.id }}/toggle" method="post">
+                                <button type="submit" class="link-btn">
+                                    {{ 'Desactivar' if h.activo else 'Activar' }}
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="empty">No hay horarios cargados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </main>
 </body>
 </html>

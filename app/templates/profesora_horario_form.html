@@ -7,8 +7,8 @@
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+    {% include "_menu.html" %}
     <main>
-        {% include "_menu.html" %}
         <h1>{{ 'Editar horario' if horario else 'Nuevo horario' }}</h1>
         <p class="subtitle"><a href="/profesora/horarios">← Volver al listado</a></p>
 

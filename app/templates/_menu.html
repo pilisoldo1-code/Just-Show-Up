@@ -1,17 +1,36 @@
-<nav class="menu">
-    <div class="menu-links">
-        {% if usuario.es_profesora %}
-        <a href="/profesora/horarios" class="{{ 'activo' if request.url.path.startswith('/profesora/horarios') else '' }}">Horarios</a>
-        <a href="/profesora/tipos-clase" class="{{ 'activo' if request.url.path.startswith('/profesora/tipos-clase') else '' }}">Tipos de clase</a>
-        <a href="/profesora/clases" class="{{ 'activo' if request.url.path.startswith('/profesora/clases') else '' }}">Asistencias</a>
-        <a href="/profesora/planificacion" class="{{ 'activo' if request.url.path.startswith('/profesora/planificacion') else '' }}">Planificación</a>
-        <a href="/profesora/alumnas" class="{{ 'activo' if request.url.path.startswith('/profesora/alumnas') else '' }}">Alumnas</a>
-        <a href="/profesora/resumenes" class="{{ 'activo' if request.url.path.startswith('/profesora/resumenes') else '' }}">Facturación</a>
-        <a href="/profesora/estadisticas" class="{{ 'activo' if request.url.path.startswith('/profesora/estadisticas') else '' }}">Estadísticas</a>
-        {% else %}
-        <a href="/">Clases</a>
-        {% endif %}
-    </div>
+{% set ruta = request.url.path %}
+{% if usuario.es_profesora %}
+{% set inicio = "/profesora/horarios" %}
+{% set secciones = [
+    ("/profesora/horarios", "Horarios", ruta.startswith("/profesora/horarios")),
+    ("/profesora/tipos-clase", "Tipos de clase", ruta.startswith("/profesora/tipos-clase")),
+    ("/profesora/clases", "Asistencias", ruta.startswith("/profesora/clases")),
+    ("/profesora/planificacion", "Planificación", ruta.startswith("/profesora/planificacion")),
+    ("/profesora/alumnas", "Alumnas", ruta.startswith("/profesora/alumnas")),
+    ("/profesora/resumenes", "Facturación", ruta.startswith("/profesora/resumenes")),
+    ("/profesora/estadisticas", "Estadísticas", ruta.startswith("/profesora/estadisticas")),
+] %}
+{% else %}
+{% set inicio = "/" %}
+{% set secciones = [
+    ("/", "Clases", ruta == "/" or ruta.startswith("/dia/")),
+    ("/mis-inscripciones", "Mis inscripciones", ruta.startswith("/mis-inscripciones")),
+    ("/mi-historial", "Mi historial", ruta.startswith("/mi-historial")),
+    ("/mis-facturas", "Mis facturas", ruta.startswith("/mis-facturas")),
+] %}
+{% endif %}
+<header class="menu">
+    <button type="button" class="menu-boton" aria-expanded="false" aria-controls="menu-principal" aria-label="Abrir menú">
+        <span class="menu-icono-abrir" aria-hidden="true">☰</span>
+        <span class="menu-icono-cerrar" aria-hidden="true">✕</span>
+    </button>
+    <a class="menu-marca" href="{{ inicio }}">Just Show Up</a>
+
+    <nav id="menu-principal" class="menu-links" aria-label="Menú principal">
+        {% for href, texto, activa in secciones %}
+        <a href="{{ href }}" class="{{ 'activo' if activa else '' }}"{% if activa %} aria-current="page"{% endif %}>{{ texto }}</a>
+        {% endfor %}
+    </nav>
 
     <div class="menu-cuenta">
         <details class="cuenta-menu">
@@ -22,27 +41,54 @@
             </summary>
             <div class="cuenta-opciones">
                 <a href="/perfil">Mi perfil</a>
-                {% if not usuario.es_profesora %}
-                <a href="/mis-inscripciones">Mis inscripciones</a>
-                <a href="/mi-historial">Mi historial</a>
-                <a href="/mis-facturas">Mis facturas</a>
-                {% endif %}
                 <form action="/logout" method="post">
                     <button type="submit">Cerrar sesión</button>
                 </form>
             </div>
         </details>
     </div>
-</nav>
+</header>
 <script>
-    document.addEventListener("click", function (e) {
-        document.querySelectorAll("details.cuenta-menu[open]").forEach(function (d) {
-            if (!d.contains(e.target)) d.removeAttribute("open");
-        });
-    });
-    document.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") {
-            document.querySelectorAll("details.cuenta-menu[open]").forEach(function (d) { d.removeAttribute("open"); });
+    (function () {
+        var menu = document.querySelector("header.menu");
+        if (!menu) return;
+        var boton = menu.querySelector(".menu-boton");
+        var cuenta = menu.querySelector("details.cuenta-menu");
+
+        function abrirMenu(abierto) {
+            menu.classList.toggle("abierto", abierto);
+            boton.setAttribute("aria-expanded", abierto ? "true" : "false");
+            boton.setAttribute("aria-label", abierto ? "Cerrar menú" : "Abrir menú");
         }
-    });
+
+        boton.addEventListener("click", function () {
+            var abrir = !menu.classList.contains("abierto");
+            abrirMenu(abrir);
+            if (abrir && cuenta) cuenta.removeAttribute("open");
+        });
+        if (cuenta) {
+            cuenta.addEventListener("toggle", function () {
+                if (cuenta.open) abrirMenu(false);
+            });
+        }
+        menu.querySelectorAll(".menu-links a").forEach(function (a) {
+            a.addEventListener("click", function () { abrirMenu(false); });
+        });
+        document.addEventListener("click", function (e) {
+            if (cuenta && cuenta.open && !cuenta.contains(e.target)) cuenta.removeAttribute("open");
+            if (menu.classList.contains("abierto") && !menu.contains(e.target)) abrirMenu(false);
+        });
+        document.addEventListener("keydown", function (e) {
+            if (e.key !== "Escape") return;
+            if (cuenta) cuenta.removeAttribute("open");
+            if (menu.classList.contains("abierto")) {
+                abrirMenu(false);
+                boton.focus();
+            }
+        });
+        // Si se agranda la ventana con el menú abierto, vuelve al estado normal.
+        var escritorio = window.matchMedia("(min-width: 901px)");
+        var alCambiar = function (e) { if (e.matches) abrirMenu(false); };
+        if (escritorio.addEventListener) escritorio.addEventListener("change", alCambiar);
+    })();
 </script>
