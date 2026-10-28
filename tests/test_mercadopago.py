@@ -393,8 +393,12 @@ class Rutas(Base):
     def test_boton_con_el_logo_oficial(self):
         self.como(SOFIA)
         html = self.client.get("/mis-facturas").text
-        self.assertIn('src="/static/img/mercado-pago-logo.svg" alt="Mercado Pago"', html)
+        self.assertRegex(html, r'Pagar con Mercado Pago</span>\s*<img class="btn-mp-logo" src="/static/img/mercado-pago-logo.svg"')
         self.assertIn("Pagar con Mercado Pago", html)
+        # orden: mes, PDF y estado arriba; total; botón de Mercado Pago; aclaración
+        orden = [html.index(x) for x in ("Octubre 2026</h2>", "Descargar PDF", "Pendiente de pago", "$1600.00",
+                                         "btn-mercado-pago", "dinero ficticio")]
+        self.assertEqual(orden, sorted(orden))
         r = self.client.get("/static/img/mercado-pago-logo.svg")
         self.assertEqual(r.status_code, 200)
         # el archivo oficial, sin editar (Logos Mercado Pago 2025, uso digital RGB, color horizontal)

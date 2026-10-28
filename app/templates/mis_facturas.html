@@ -19,12 +19,13 @@
         {% if facturas %}
         {% for f in facturas %}
         <section class="panel factura-alumna{% if f.estado_factura == 'anulada' %} factura-anulada{% endif %}">
-            <div class="factura-cabecera">
-                <div>
+            <div class="factura-cabecera factura-cabecera-alumna">
+                <div class="factura-titulo">
                     <h2>{{ f.mes_txt }}</h2>
                     <span class="nota-chica">Factura {{ f.numero }}</span>
                 </div>
-                <div class="factura-estados">
+                <div class="factura-lado">
+                    <a class="btn btn-chico" href="/mis-facturas/{{ f.id }}/pdf">Descargar PDF</a>
                     {% if f.estado_factura == 'anulada' %}
                     <span class="badge badge-off">Anulada</span>
                     {% else %}
@@ -41,19 +42,16 @@
             {% set interno = false %}
             {% include "_factura_lineas.html" %}
             {% if f.pago %}<p class="nota">Pagada el {{ f.pago.fecha }} · {{ f.pago.medio }}</p>{% endif %}
+            {% if pago_mp and f.estado_factura == 'confirmada' and f.estado_pago == 'pendiente' %}
             <div class="factura-acciones">
-                {% if pago_mp and f.estado_factura == 'confirmada' and f.estado_pago == 'pendiente' %}
                 <form action="/mis-facturas/{{ f.id }}/mercado-pago" method="post"
                       onsubmit="var b = this.querySelector('button'); b.disabled = true; b.querySelector('.btn-mp-texto').textContent = 'Abriendo Mercado Pago…'">
                     <button type="submit" class="btn-mercado-pago">
-                        <img class="btn-mp-logo" src="/static/img/mercado-pago-logo.svg" alt="Mercado Pago" width="109" height="44" />
                         <span class="btn-mp-texto">Pagar con Mercado Pago</span>
+                        <img class="btn-mp-logo" src="/static/img/mercado-pago-logo.svg" alt="" width="109" height="44" />
                     </button>
                 </form>
-                {% endif %}
-                <a class="btn btn-chico" href="/mis-facturas/{{ f.id }}/pdf">Descargar PDF</a>
             </div>
-            {% if pago_mp and f.estado_factura == 'confirmada' and f.estado_pago == 'pendiente' %}
             <p class="nota-chica">Pago de prueba: se usa una cuenta y una tarjeta de prueba de Mercado Pago, con dinero ficticio.</p>
             {% endif %}
         </section>

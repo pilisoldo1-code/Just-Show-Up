@@ -1537,6 +1537,25 @@ main.ancho {
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
+    margin-top: 16px;
+}
+
+/* Mis facturas: mes y número a la izquierda; PDF y estado arriba a la derecha. */
+.factura-cabecera-alumna {
+    flex-wrap: nowrap;
+    margin-bottom: 8px;
+}
+
+.factura-titulo {
+    min-width: 0;
+}
+
+.factura-lado {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    flex: none;
 }
 
 .factura-acciones form {
@@ -1551,7 +1570,7 @@ main.ancho {
     justify-content: center;
     gap: 6px;
     min-height: 52px;
-    padding: 4px 20px 4px 6px;
+    padding: 4px 6px 4px 20px;
     background: #fff;
     color: #1f2937;
     border: 1px solid #e5e7eb;
@@ -1584,6 +1603,10 @@ main.ancho {
     flex: none;
 }
 
+.btn-mp-texto {
+    white-space: nowrap;
+}
+
 @media (max-width: 520px) {
     .factura-acciones form,
     .btn-mercado-pago {
@@ -1591,7 +1614,31 @@ main.ancho {
     }
 }
 
+/* Celulares angostos: el logo se achica en proporción para que el texto entre en una línea. */
+@media (max-width: 400px) {
+    .btn-mercado-pago {
+        gap: 4px;
+        padding: 4px 4px 4px 14px;
+        font-size: 0.9rem;
+    }
+
+    .btn-mp-logo {
+        height: 36px;
+    }
+}
+
 .texto-alerta {
     color: #fbbf24;
     font-weight: 600;
+}
+
+@media (max-width: 340px) {
+    .btn-mercado-pago {
+        padding-left: 10px;
+        font-size: 0.82rem;
+    }
+
+    .btn-mp-logo {
+        height: 30px;
+    }
 }
