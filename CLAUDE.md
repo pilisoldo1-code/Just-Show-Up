@@ -443,8 +443,10 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     en `false`). Solo los lee `mp_configuracion_servidor()`, que ejecuta únicamente `service_role`:
     así theta lo usa con su `SUPABASE_SERVICE_KEY` sin variables nuevas en Vercel (theta es de
     Pilar). Si falta algo o la cuenta no es de prueba, Mercado Pago queda apagado.
-  - **Flujo**: Mis facturas → «Pagar con Mercado Pago» (botón blanco con el logo oficial, solo
-    alumnas `@demo.invalid`/`@prueba.invalid`, factura confirmada, publicada y pendiente) →
+  - **Flujo**: Mis facturas → «Pagar con Mercado Pago» (botón blanco con el logo oficial, **solo
+    `alumna@prueba.invalid`** desde la migración `20261029180000_mercado_pago_solo_alumna_demo`
+    (aplicada en Supabase el 29/10 como `20261029152415`)
+    — antes, cualquier alumna `@demo.invalid`/`@prueba.invalid` —, factura confirmada, publicada y pendiente) →
     `crear_intento_mp` (sesión de la alumna; importe = total de la factura) → preferencia (UYU,
     `binary_mode`, sin `ticket`, 1 cuota, vence en 30 min, `back_urls` y `notification_url` al
     mismo sitio si está en `auth.SITIOS_PERMITIDOS`) → `init_point` → vuelta
@@ -460,7 +462,10 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     se anule el pago). La profesora ve el pago (con n.º de operación) y los intentos en el
     detalle de la factura y puede anularlo como uno manual (para ensayar otra vez).
   - Pruebas: `python tests/base_local/test_mercado_pago_base.py` (73, Postgres local con Vault
-    simulado) y `tests/test_mercadopago.py` (49, Mercado Pago y Supabase simulados).
+    simulado; cubre la migración original), `tests/base_local/test_mp_solo_alumna_demo_base.py` (29: la
+    restricción a una sola alumna, sin tocar datos, y su vuelta atrás
+    `supabase/pendientes/vuelta_atras_solo_alumna_demo.sql`, que deja la función byte a byte como en
+    producción) y `tests/test_mercadopago.py` (53, Mercado Pago y Supabase simulados).
   - **Vuelta atrás**: `supabase/pendientes/vuelta_atras_mercado_pago.sql` (borra solo lo de Mercado
     Pago y los secretos `mp_*` del Vault; se niega si ya hay pagos `mercado_pago`; todo o nada).
     Probada con `python tests/base_local/vuelta_atras_mercado_pago.py "<carpeta del respaldo>"`
