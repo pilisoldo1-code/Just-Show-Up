@@ -228,9 +228,17 @@ marca aprobado sin verificarlo con Mercado Pago. **Cada etapa necesita su autori
   simulados.
 
 **Etapas que faltan (cada una con autorización)**
-3. **Base:** respaldo + script de vuelta atrás probado en local → aplicar la migración en Supabase
-   (solo agrega; interruptor apagado) → guardar el token de prueba en Vault desde el `.env` con un
-   script local (nunca por chat) → comprobar que anon, alumna y profesora no pueden leerlo.
+3. **Base**, en 5 pasos con autorización de a uno:
+   - ~~Paso 1: respaldo~~ — **hecho 29/10** (solo lectura): `~/Documents/Just Show Up - respaldos/
+     2026-10-29 antes de Mercado Pago/` (13 tablas, 16 usuarias sin contraseñas, huellas de
+     estructura y datos, secuencia de facturas; bucket `tipos-clase` vacío). Restauración verificada
+     en Postgres local: idéntica. Ver su `LEEME.txt`.
+   - ~~Paso 2: vuelta atrás~~ — **hecho 29/10** (solo local): `supabase/pendientes/
+     vuelta_atras_mercado_pago.sql`, probado con `tests/base_local/vuelta_atras_mercado_pago.py`
+     sobre la copia del respaldo: 24/24 en 3 corridas (aplicar → usar → deshacer ×3 = idéntico).
+   - Paso 3: aplicar la migración en Supabase (solo agrega; interruptor apagado).
+   - Paso 4: guardar el token de prueba en Vault desde el `.env` con un script local (nunca por chat).
+   - Paso 5: comprobar que anon, alumna y profesora no pueden leerlo; huellas finales.
 4. **PR** de `mercado-pago-prueba` a `main` (Julieta lo integra; theta se actualiza con Mercado Pago
    apagado).
 5. **Desde el 1/11** (las facturas de octubre las confirma la profesora desde el 31/10 y se publican

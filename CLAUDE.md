@@ -458,7 +458,12 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     detalle de la factura y puede anularlo como uno manual (para ensayar otra vez).
   - Pruebas: `python tests/base_local/test_mercado_pago_base.py` (73, Postgres local con Vault
     simulado) y `tests/test_mercadopago.py` (49, Mercado Pago y Supabase simulados).
-  - Pendiente: etapa 3 (respaldo + aplicar la migración + guardar el token en Vault), PR, y desde
+  - **Vuelta atrás**: `supabase/pendientes/vuelta_atras_mercado_pago.sql` (borra solo lo de Mercado
+    Pago y los secretos `mp_*` del Vault; se niega si ya hay pagos `mercado_pago`; todo o nada).
+    Probada con `python tests/base_local/vuelta_atras_mercado_pago.py "<carpeta del respaldo>"`
+    (24 casos, 3 corridas): sobre una copia local del respaldo del 29/10, aplicar → usar → deshacer
+    3 veces deja estructura, 13 tablas y secuencia de facturas idénticas al respaldo.
+  - Pendiente: etapa 3 pasos 3–5 (aplicar la migración + guardar el token en Vault), PR, y desde
     el 1/11 encender el interruptor y probar en theta la vuelta automática y los avisos (no se
     pueden probar en local: Mercado Pago no acepta `localhost` en `back_urls`).
 - **Cédula de identidad (rama `modulo-6-resumen-correcciones`, migración
