@@ -241,8 +241,15 @@ marca aprobado sin verificarlo con Mercado Pago. **Cada etapa necesita su autori
      idéntica al respaldo. Después: datos de las 13 tablas y secuencia de facturas **idénticos**,
      estructura **idéntica** a la calculada en local, interruptor apagado, Vault vacío, sin intentos
      ni eventos; sin sesión todo lo nuevo da 401; theta 17/17. Vuelta atrás: el script del paso 2.
-   - Paso 4: guardar el token de prueba en Vault desde el `.env` con un script local (nunca por chat).
-   - Paso 5: comprobar que anon, alumna y profesora no pueden leerlo; huellas finales.
+   - ~~Paso 4: guardar el token~~ — **hecho 29/10**: antes se verificó con `GET /users/me` que es de la
+     vendedora de prueba (test_user, MLU); un script local lo leyó del `.env` y lo guardó con
+     `mp_guardar_secreto`. En Vault queda **cifrado** (secreto `mp_access_token`); la huella sha256 de lo
+     guardado = la del `.env`. Sin clave de avisos (opcional).
+   - ~~Paso 5 (comprobaciones)~~ — hechas junto con el paso 4: sin sesión, alumna y profesora de prueba
+     (sesiones reales) no pueden leer la configuración, el Vault ni la tabla, ni guardar el token ni
+     encender Mercado Pago (401/403/406), y el token no aparece en ninguna respuesta; iniciar un pago
+     devuelve `deshabilitado`. Datos idénticos antes/después, interruptor apagado, theta 17/17, el token
+     no está en ningún archivo fuera del `.env`.
 4. **PR** de `mercado-pago-prueba` a `main` (Julieta lo integra; theta se actualiza con Mercado Pago
    apagado).
 5. **Desde el 1/11** (las facturas de octubre las confirma la profesora desde el 31/10 y se publican
