@@ -236,7 +236,11 @@ marca aprobado sin verificarlo con Mercado Pago. **Cada etapa necesita su autori
    - ~~Paso 2: vuelta atrás~~ — **hecho 29/10** (solo local): `supabase/pendientes/
      vuelta_atras_mercado_pago.sql`, probado con `tests/base_local/vuelta_atras_mercado_pago.py`
      sobre la copia del respaldo: 24/24 en 3 corridas (aplicar → usar → deshacer ×3 = idéntico).
-   - Paso 3: aplicar la migración en Supabase (solo agrega; interruptor apagado).
+   - ~~Paso 3: aplicar la migración~~ — **hecho 29/10** como `20261029134035 mercado_pago_prueba`
+     (14 migraciones). Antes: planes verificados (Supabase Free, Vercel Hobby, GitHub Free) y base
+     idéntica al respaldo. Después: datos de las 13 tablas y secuencia de facturas **idénticos**,
+     estructura **idéntica** a la calculada en local, interruptor apagado, Vault vacío, sin intentos
+     ni eventos; sin sesión todo lo nuevo da 401; theta 17/17. Vuelta atrás: el script del paso 2.
    - Paso 4: guardar el token de prueba en Vault desde el `.env` con un script local (nunca por chat).
    - Paso 5: comprobar que anon, alumna y profesora no pueden leerlo; huellas finales.
 4. **PR** de `mercado-pago-prueba` a `main` (Julieta lo integra; theta se actualiza con Mercado Pago

@@ -427,7 +427,8 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     idéntica antes y después). **Desde el último día de cada mes** (31/10 para octubre), abrir
     Facturación en ese mes crea los borradores de las alumnas reales: es lo previsto.
 - **Mercado Pago Checkout Pro — SOLO MODO DE PRUEBA, dinero ficticio (rama `mercado-pago-prueba`,
-  29/10; migración `20261029120000_mercado_pago_prueba.sql` ESCRITA, NO APLICADA; sin push)**.
+  29/10; migración `20261029120000_mercado_pago_prueba.sql` **APLICADA en Supabase el 29/10 como
+  `20261029134035 mercado_pago_prueba`** con el interruptor apagado y el Vault vacío; código sin push)**.
   Proyecto universitario: nunca credenciales productivas, tarjetas reales ni costos.
   - **Cuentas (Julieta, 28/10)**: aplicación Checkout Pro creada desde su cuenta personal; la
     vendedora de prueba (creada sola con la app; sus credenciales son las "de prueba") y una
@@ -463,7 +464,9 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     Probada con `python tests/base_local/vuelta_atras_mercado_pago.py "<carpeta del respaldo>"`
     (24 casos, 3 corridas): sobre una copia local del respaldo del 29/10, aplicar → usar → deshacer
     3 veces deja estructura, 13 tablas y secuencia de facturas idénticas al respaldo.
-  - Pendiente: etapa 3 pasos 3–5 (aplicar la migración + guardar el token en Vault), PR, y desde
+  - Supabase lo reporta como avisos (intencionales): `mp_configuracion` con RLS y sin políticas (solo la
+    lee el servidor por función) y `crear_intento_mp` ejecutable por `authenticated` (valida adentro).
+  - Pendiente: etapa 3 pasos 4–5 (guardar el token en Vault y comprobar permisos), PR, y desde
     el 1/11 encender el interruptor y probar en theta la vuelta automática y los avisos (no se
     pueden probar en local: Mercado Pago no acepta `localhost` en `back_urls`).
 - **Cédula de identidad (rama `modulo-6-resumen-correcciones`, migración
