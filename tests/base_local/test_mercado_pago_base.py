@@ -61,7 +61,7 @@ q(su, localdb.RELOJ)
 
 usuarias = {}
 for clave, mail in (("Profe", "profe@prueba.invalid"), ("Sofia", "sofia@demo.invalid"), ("Ana", "ana@prueba.invalid"),
-                    ("Real", "alguien.real@gmail.com")):
+                    ("Real", "persona.real@example.com")):
     uid = str(uuid.uuid4())
     q(su, "insert into auth.users (id, email, raw_user_meta_data) values (%s, %s, %s)",
       (uid, mail, f'{{"nombre": "{clave}", "apellido": "Prueba"}}'))

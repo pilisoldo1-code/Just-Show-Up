@@ -17,7 +17,7 @@ VENDEDORA = "1111111111"
 COMPRADORA = "2222222222"
 LOGO_SHA256 = "91eebaceaf93eedd"
 SOFIA = Usuario(id="s", mail="sofia@demo.invalid", nombre="Sofía", apellido="Demo", rol="alumna", token="t")
-REAL = Usuario(id="r", mail="alguien@gmail.com", nombre="Real", apellido="Persona", rol="alumna", token="t")
+REAL = Usuario(id="r", mail="persona@example.com", nombre="Real", apellido="Persona", rol="alumna", token="t")
 
 
 class Respuesta:
@@ -136,7 +136,7 @@ class Disponibilidad(Base):
         self.assertTrue(mercadopago.disponible_para("ana@prueba.invalid"))
 
     def test_nunca_para_alumnas_con_mail_real(self):
-        self.assertFalse(mercadopago.disponible_para("alguien@gmail.com"))
+        self.assertFalse(mercadopago.disponible_para("persona@example.com"))
         self.assertFalse(mercadopago.disponible_para("sofia@demo.invalid.com"))
 
     def test_apagado(self):
