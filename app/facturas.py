@@ -18,7 +18,11 @@ MESES = [
     "", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
     "agosto", "setiembre", "octubre", "noviembre", "diciembre",
 ]
-MEDIOS_PAGO = {"efectivo": "Efectivo", "transferencia": "Transferencia"}
+MEDIOS_PAGO = {"efectivo": "Efectivo", "transferencia": "Transferencia"}  # los que registra la profesora
+# Para mostrar: incluye los pagos que registra el servidor desde Mercado Pago (solo prueba).
+NOMBRES_MEDIO = {**MEDIOS_PAGO, "mercado_pago": "Mercado Pago (prueba)"}
+ESTADOS_INTENTO_MP = {"creado": "Iniciado (sin resultado)", "aprobado": "Aprobado", "rechazado": "Rechazado",
+                      "a_revisar": "A revisar"}
 ESTADOS_FACTURA = {"borrador": "Borrador", "confirmada": "Confirmada", "anulada": "Anulada"}
 ESTADOS_PAGO = {"pendiente": "Pendiente de pago", "pagado": "Pagada", "sin_cargo": "Sin cargo"}
 MOTIVO_MIN, MOTIVO_MAX = 3, 300
@@ -288,7 +292,8 @@ def factura(sb: Client, factura_id: int) -> dict | None:
     salida["pago"], salida["pagos_anulados"] = None, []
     for p in sorted(pagos, key=lambda p: p["id"], reverse=True):
         dato = {
-            "id": p["id"], "monto": plata(p["monto"]), "medio": MEDIOS_PAGO.get(p["medio_pago"], p["medio_pago"]),
+            "id": p["id"], "monto": plata(p["monto"]), "medio": NOMBRES_MEDIO.get(p["medio_pago"], p["medio_pago"]),
+            "operacion": p.get("id_transaccion"), "es_mercado_pago": p["medio_pago"] == "mercado_pago",
             "fecha": _fecha_txt(p["fecha"]), "registrado_en": _momento_txt(p["creado_en"]),
             "registrado_por": nombres.get(p["registrado_por"], ""),
         }
@@ -299,6 +304,7 @@ def factura(sb: Client, factura_id: int) -> dict | None:
             salida["pagos_anulados"].append({**dato, "motivo": a.get("motivo", ""),
                                              "anulado_en": _momento_txt(a.get("anulado_en")),
                                              "anulado_por": nombres.get(a.get("anulado_por"), "")})
+    salida["intentos_mp"] = _intentos_mp(sb, factura_id)
     salida["historial"] = [{
         "en": _momento_txt(h["en"]), "por": nombres.get(h["por"], ""), "accion": _ACCIONES.get(h["accion"], h["accion"]),
         "texto": _historial_txt(h), "motivo": h.get("motivo") or "",
@@ -309,6 +315,18 @@ def factura(sb: Client, factura_id: int) -> dict | None:
     salida["reemplazada_por"] = nueva and (nueva["numero"] or "un borrador nuevo")
     salida["reemplaza"] = vieja and vieja["numero"]
     return salida
+
+
+def _intentos_mp(sb: Client, factura_id: int) -> list[dict]:
+    """Intentos de pago con Mercado Pago de la factura (solo los ve la profesora)."""
+    try:
+        filas = sb.table("mp_intento").select("id, estado, monto, id_pago_mp, detalle, creado_en") \
+            .eq("id_resumen_mensual", factura_id).order("id", desc=True).execute().data
+    except Exception:
+        return []
+    return [{"estado": ESTADOS_INTENTO_MP.get(i["estado"], i["estado"]), "a_revisar": i["estado"] == "a_revisar",
+             "monto": plata(i["monto"]), "operacion": i.get("id_pago_mp") or "", "detalle": i.get("detalle") or "",
+             "en": _momento_txt(i["creado_en"])} for i in filas]
 
 
 def previsualizar_mes(sb: Client, mes: int, anio: int) -> dict:
@@ -434,7 +452,7 @@ def mis_facturas(sb: Client, alumna_id: str) -> list[dict]:
         dato["lineas"] = sorted((_linea(l) for l in lineas if l["id_resumen_mensual"] == f["id"]),
                                 key=lambda l: l["orden"])
         pago = next((p for p in pagos if p["id_resumen_mensual"] == f["id"]), None)
-        dato["pago"] = {"monto": plata(pago["monto"]), "medio": MEDIOS_PAGO.get(pago["medio_pago"], ""),
+        dato["pago"] = {"monto": plata(pago["monto"]), "medio": NOMBRES_MEDIO.get(pago["medio_pago"], ""),
                         "fecha": _fecha_txt(pago["fecha"])} if pago else None
         nueva = next((x for x in filas if x.get("reemplaza_a") == f["id"]), None)
         dato["reemplazada_por"] = nueva["numero"] if nueva else None

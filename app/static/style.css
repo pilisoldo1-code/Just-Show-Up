@@ -1529,3 +1529,116 @@ main.ancho {
     margin: 0;
     font-weight: 600;
 }
+
+/* ---------- Mercado Pago (solo prueba) ---------- */
+
+.factura-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+/* Mis facturas: mes y número a la izquierda; PDF y estado arriba a la derecha. */
+.factura-cabecera-alumna {
+    flex-wrap: nowrap;
+    margin-bottom: 8px;
+}
+
+.factura-titulo {
+    min-width: 0;
+}
+
+.factura-lado {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    flex: none;
+}
+
+.factura-acciones form {
+    margin: 0;
+}
+
+/* Botón blanco con el logo oficial a color (las reglas de la marca no permiten el logo sobre
+   celeste ni azul de la marca; sí sobre blanco). El logo no se edita ni se deforma. */
+.btn-mercado-pago {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 52px;
+    padding: 4px 6px 4px 20px;
+    background: #fff;
+    color: #1f2937;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.btn-mercado-pago:hover {
+    box-shadow: 0 0 0 3px rgba(110, 231, 183, 0.35);
+}
+
+.btn-mercado-pago:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.btn-mercado-pago:disabled {
+    opacity: 0.75;
+    cursor: wait;
+}
+
+.btn-mp-logo {
+    display: block;
+    height: 44px;
+    width: auto;
+    flex: none;
+}
+
+.btn-mp-texto {
+    white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+    .factura-acciones form,
+    .btn-mercado-pago {
+        width: 100%;
+    }
+}
+
+/* Celulares angostos: el logo se achica en proporción para que el texto entre en una línea. */
+@media (max-width: 400px) {
+    .btn-mercado-pago {
+        gap: 4px;
+        padding: 4px 4px 4px 14px;
+        font-size: 0.9rem;
+    }
+
+    .btn-mp-logo {
+        height: 36px;
+    }
+}
+
+.texto-alerta {
+    color: #fbbf24;
+    font-weight: 600;
+}
+
+@media (max-width: 340px) {
+    .btn-mercado-pago {
+        padding-left: 10px;
+        font-size: 0.82rem;
+    }
+
+    .btn-mp-logo {
+        height: 30px;
+    }
+}

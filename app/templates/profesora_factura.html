@@ -108,7 +108,8 @@
             <h2>Pago</h2>
             {% if f.pago %}
             <p>Pago #{{ f.pago.id }}: ${{ f.pago.monto }} · {{ f.pago.medio }} · {{ f.pago.fecha }}
-                <br /><span class="nota-chica">Registrado el {{ f.pago.registrado_en }}{% if f.pago.registrado_por %} por {{ f.pago.registrado_por }}{% endif %}</span></p>
+                {% if f.pago.operacion %}<br />N.º de operación en Mercado Pago: {{ f.pago.operacion }}{% endif %}
+                <br /><span class="nota-chica">{% if f.pago.es_mercado_pago %}Registrado automáticamente el {{ f.pago.registrado_en }}, después de verificarlo con Mercado Pago (pago de prueba, dinero ficticio){% else %}Registrado el {{ f.pago.registrado_en }}{% if f.pago.registrado_por %} por {{ f.pago.registrado_por }}{% endif %}{% endif %}</span></p>
             <button type="button" class="btn btn-chico btn-peligro" onclick="document.getElementById('anular-pago').showModal()">Anular pago</button>
             <dialog id="anular-pago" class="modal">
                 <form action="/profesora/resumenes/{{ f.id }}/pagos/{{ f.pago.id }}/anular" method="post" class="horario-form"
@@ -153,11 +154,22 @@
                 <strong>Pagos anulados</strong>
                 <ul>
                     {% for p in f.pagos_anulados %}
-                    <li>Pago #{{ p.id }}: ${{ p.monto }} · {{ p.medio }} · {{ p.fecha }}
+                    <li>Pago #{{ p.id }}: ${{ p.monto }} · {{ p.medio }} · {{ p.fecha }}{% if p.operacion %} · operación {{ p.operacion }}{% endif %}
                         (registrado el {{ p.registrado_en }}{% if p.registrado_por %} por {{ p.registrado_por }}{% endif %})
                         — anulado el {{ p.anulado_en }}{% if p.anulado_por %} por {{ p.anulado_por }}{% endif %}: «{{ p.motivo }}»</li>
                     {% endfor %}
                 </ul>
+            </div>
+            {% endif %}
+            {% if f.intentos_mp %}
+            <div class="pagos-anulados">
+                <strong>Intentos de pago con Mercado Pago (prueba)</strong>
+                <ul>
+                    {% for i in f.intentos_mp %}
+                    <li>{{ i.en }} · ${{ i.monto }} · <span class="{{ 'texto-alerta' if i.a_revisar else '' }}">{{ i.estado }}</span>{% if i.operacion %} · operación {{ i.operacion }}{% endif %}{% if i.detalle and i.a_revisar %}: {{ i.detalle }}{% endif %}</li>
+                    {% endfor %}
+                </ul>
+                {% if f.intentos_mp | selectattr('a_revisar') | list %}<p class="nota">«A revisar»: Mercado Pago aprobó un pago que no se asoció automáticamente a la factura (por ejemplo, porque ya tenía otro pago). Es dinero ficticio de prueba: no hay nada que devolver.</p>{% endif %}
             </div>
             {% endif %}
         </section>
