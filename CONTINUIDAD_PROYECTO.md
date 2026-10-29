@@ -250,7 +250,8 @@ marca aprobado sin verificarlo con Mercado Pago. **Cada etapa necesita su autori
      encender Mercado Pago (401/403/406), y el token no aparece en ninguna respuesta; iniciar un pago
      devuelve `deshabilitado`. Datos idénticos antes/después, interruptor apagado, theta 17/17, el token
      no está en ningún archivo fuera del `.env`.
-4. **PR** de `mercado-pago-prueba` a `main` (Julieta lo integra; theta se actualiza con Mercado Pago
+4. **PR #21** de `mercado-pago-prueba` a `main` — **abierto el 29/10**, checks de Vercel en verde, sin
+   integrar (Julieta lo integra; theta se actualiza con Mercado Pago
    apagado).
 5. **Desde el 1/11** (las facturas de octubre las confirma la profesora desde el 31/10 y se publican
    el 1/11): encender el interruptor y probar en theta con `alumna@prueba.invalid` (o una alumna

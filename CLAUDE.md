@@ -429,7 +429,7 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 - **Mercado Pago Checkout Pro — SOLO MODO DE PRUEBA, dinero ficticio (rama `mercado-pago-prueba`,
   29/10; migración `20261029120000_mercado_pago_prueba.sql` **APLICADA en Supabase el 29/10 como
   `20261029134035 mercado_pago_prueba`** con el interruptor apagado; **token de prueba guardado cifrado
-  en el Vault el 29/10**; código sin push)**.
+  en el Vault el 29/10**; código en el **PR #21**, abierto sin integrar)**.
   Proyecto universitario: nunca credenciales productivas, tarjetas reales ni costos.
   - **Cuentas (Julieta, 28/10)**: aplicación Checkout Pro creada desde su cuenta personal; la
     vendedora de prueba (creada sola con la app; sus credenciales son las "de prueba") y una
