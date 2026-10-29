@@ -19,12 +19,12 @@ Mercado Pago y Videos On Demand y las ideas a evaluar. **Orden de trabajo (actua
    (PR #16–#18; migración `20261028003643`). Pruebas finales "opción A" (solo lectura, 28/10):
    función idéntica al repo, permisos de alumna/anon, licencias intactas, 33/33 locales. Header
    responsive y menú de la alumna (PR #20) integrados y desplegados en theta (`7183efc`).
-3. **Mercado Pago Checkout Pro SOLO EN MODO DE PRUEBA** — **etapa 2 hecha** (rama
-   `mercado-pago-prueba`, commit local, sin push): código + migración (sin aplicar) + pruebas.
-   Siguen: etapa 3 (aplicar la migración con respaldo y guardar el token en Vault), PR, y
-   encender el interruptor en theta desde el 1/11 (ver Estado actual y
-   `CONTINUIDAD_PROYECTO.md` §7). **Decisión: theta es la plataforma de la defensa; la
-   credencial va en Supabase Vault (no en Vercel) para no depender de Pilar.**
+3. ~~**Mercado Pago Checkout Pro SOLO EN MODO DE PRUEBA**~~ — **hecho**: PR #21 integrado (`0810ee0`),
+   probado de punta a punta en theta el 29/10, **encendido hasta la defensa del 17/11** con la factura
+   de demostración JSU-2026-09-0001 ($800 ficticios, `alumna@prueba.invalid`). Guía:
+   `GUIA_DEFENSA_MERCADO_PAGO.md`; detalle en `CONTINUIDAD_PROYECTO.md` §7. **Theta es la plataforma de
+   la defensa; la credencial de prueba está en Supabase Vault (no en Vercel).** Sigue (con
+   autorización): rediseño visual de la sección «Pago» de la profesora, en un PR aparte.
 4. Videos On Demand: Zoom gratuito (~40 min, carga manual) + Mux gratuito si pasa la prueba de
    reproducción firmada.
 
@@ -429,7 +429,8 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
 - **Mercado Pago Checkout Pro — SOLO MODO DE PRUEBA, dinero ficticio (rama `mercado-pago-prueba`,
   29/10; migración `20261029120000_mercado_pago_prueba.sql` **APLICADA en Supabase el 29/10 como
   `20261029134035 mercado_pago_prueba`** con el interruptor apagado; **token de prueba guardado cifrado
-  en el Vault el 29/10**; código en el **PR #21**, abierto sin integrar)**.
+  en el Vault el 29/10**; código integrado en `main` con el **PR #21** (`0810ee0`) y desplegado en theta; **encendido** desde el
+  29/10 para la defensa del 17/11)**.
   Proyecto universitario: nunca credenciales productivas, tarjetas reales ni costos.
   - **Cuentas (Julieta, 28/10)**: aplicación Checkout Pro creada desde su cuenta personal; la
     vendedora de prueba (creada sola con la app; sus credenciales son las "de prueba") y una
@@ -470,9 +471,13 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   - Para guardar o renovar el token: script local que lo lee del `.env`, verifica `test_user` y llama
     `mp_guardar_secreto` con la clave de administrador (nunca por `execute_sql`: quedaría en el texto de la
     consulta). Se verifica comparando huellas sha256, sin mostrarlo.
-  - Pendiente: PR, y desde
-    el 1/11 encender el interruptor y probar en theta la vuelta automática y los avisos (no se
-    pueden probar en local: Mercado Pago no acepta `localhost` en `back_urls`).
+  - **Probado en theta el 29/10** (vuelta automática y avisos incluidos: no se pueden probar en local,
+    Mercado Pago no acepta `localhost` en `back_urls`): rechazado, aprobado, sin duplicados, anulación.
+  - **Demostración de la defensa**: factura JSU-2026-09-0001 ($800 ficticios) de `alumna@prueba.invalid`,
+    creada con `scripts/factura_demo_mp.py` (tipo y horario inactivos, manifiesto fuera de git). Se repite
+    pagando y **anulando el pago**; nunca «Anular y reemitir» esa factura. Pasos, apagado de emergencia
+    (`select public.mp_cambiar_habilitado(false);` en el SQL Editor) y problemas frecuentes en
+    `GUIA_DEFENSA_MERCADO_PAGO.md`.
 - **Cédula de identidad (rama `modulo-6-resumen-correcciones`, migración
   `20261021140000_profiles_cedula.sql` APLICADA el 27/10 como `20261027205550 profiles_cedula`)**: `profiles.cedula` opcional (las usuarias
   existentes quedan sin cédula; no se completa nada), solo dígitos, validada con el dígito
@@ -828,6 +833,16 @@ Para cada módulo, en este orden:
   `payer.id` → `GET /users/{id}`. La comisión que muestra (ej. $0,06 sobre $1) es simulada y la
   paga la vendedora de prueba. En el checkout, el documento del titular de prueba va como
   **Otro / 123456789** (la CI 12345678 no pasa el dígito verificador).
+- **Factura de demostración y numeración**: el número es `JSU-AAAA-MM-NNNN` con `NNNN` de una sola
+  secuencia global (`factura_numero_seq`) y es único como texto completo. Por eso, con solo la factura
+  de demostración de septiembre (0001) se puede reiniciar el contador a 1 sin que choque la primera de
+  octubre (JSU-2026-10-0001). Consecuencia: **no reemitir la demostración** mientras el contador
+  esté bajo (repetiría JSU-2026-09-0001 y fallaría). Si en algún momento hay facturas reales, no
+  reiniciar el contador.
+- **Comparar los datos reales con el respaldo**: comparar fila por fila contra `datos.json` (descargado
+  con PostgREST), excluyendo los ids del manifiesto de prueba. Un `md5(string_agg(to_jsonb(...)))`
+  hecho en SQL no reproduce las huellas de `huellas_datos_produccion.json` (otro método), así que da
+  diferencias falsas.
 - **Logo de Mercado Pago**: el oficial está en `app/static/img/mercado-pago-logo.svg` (zip
   "Logos Mercado Pago 2025", uso digital RGB, color horizontal), **sin editar** (la guía lo
   prohíbe; una prueba compara su huella). Reglas de la marca: no ponerlo sobre celeste/azul de

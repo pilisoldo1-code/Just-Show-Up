@@ -1,7 +1,7 @@
 # Continuidad del proyecto Just Show Up — traspaso entre sesiones
 
-> Actualizado: **29/10/2026** (computadora de Julieta: Mercado Pago de prueba, etapa 2 terminada
-> en la rama `mercado-pago-prueba`, commit local sin push).
+> Actualizado: **29/10/2026** (computadora de Julieta: Mercado Pago de prueba integrado en theta
+> (PR #21), probado de punta a punta y **factura de demostración lista para la defensa del 17/11**).
 > Leer junto con `CLAUDE.md` (reglas, gotchas, detalle de cada módulo). Este archivo dice
 > **dónde quedamos y qué sigue**; `CLAUDE.md` es la referencia permanente.
 > No contiene contraseñas, tokens ni claves: esas viven solo en `.env` y `.env.cuentas-prueba`
@@ -11,15 +11,17 @@
 
 ## 0. Resumen en 30 segundos
 
-- **En `main` y desplegado en theta (`7183efc`)**: módulo 6 (facturación + cédula, PR #15),
-  cancelación de clases puntuales + menú de la profesora (PR #16–#18), traspaso (PR #19) y
-  **header responsive** con menú ☰ y menú de la alumna (PR #20).
+- **En `main` y desplegado en theta (`0810ee0`)**: módulo 6 (facturación + cédula, PR #15),
+  cancelación de clases puntuales + menú de la profesora (PR #16–#18), traspaso (PR #19),
+  **header responsive** con menú ☰ y menú de la alumna (PR #20) y **Mercado Pago de prueba (PR #21)**.
 - **Planificación: terminada.** Pruebas finales "opción A" (solo lectura) hechas el 28/10 (§9) y
   revisión visual en theta (escritorio y celular).
-- **En curso: Mercado Pago Checkout Pro, SOLO MODO DE PRUEBA** (§7). Etapa 1 (prueba técnica con
-  la vendedora y la compradora de prueba) y etapa 2 (código + migración + pruebas, rama
-  `mercado-pago-prueba`) **hechas**. **Próximo paso: etapa 3** (con autorización de Julieta):
-  respaldo, aplicar la migración en Supabase y guardar el token de prueba en Vault.
+- **Mercado Pago Checkout Pro, SOLO MODO DE PRUEBA** (§7): integrado en theta, **encendido** y
+  probado de punta a punta el 29/10 (rechazado, aprobado, sin duplicados, vista de la profesora,
+  anulación). **Factura de demostración** JSU-2026-09-0001 ($800 ficticios, `alumna@prueba.invalid`)
+  lista para la **defensa del 17/11**: guía en `GUIA_DEFENSA_MERCADO_PAGO.md`.
+- **Siguiente (con autorización):** rediseño visual de la sección «Pago» de la profesora, en un PR
+  aparte. Julieta entra al sitio más de una vez por semana para que Supabase no se pause.
 - **Theta es la plataforma de la defensa.** Mercado Pago se enciende con un interruptor en la base
   (no hace falta tocar el Vercel de Pilar).
 - Después: Videos On Demand (§8). **Cinco ideas para evaluar, no aprobadas** (§11).
@@ -250,15 +252,28 @@ marca aprobado sin verificarlo con Mercado Pago. **Cada etapa necesita su autori
      encender Mercado Pago (401/403/406), y el token no aparece en ninguna respuesta; iniciar un pago
      devuelve `deshabilitado`. Datos idénticos antes/después, interruptor apagado, theta 17/17, el token
      no está en ningún archivo fuera del `.env`.
-4. **PR #21** de `mercado-pago-prueba` a `main` — **abierto el 29/10**, checks de Vercel en verde, sin
-   integrar (Julieta lo integra; theta se actualiza con Mercado Pago
-   apagado).
-5. **Desde el 1/11** (las facturas de octubre las confirma la profesora desde el 31/10 y se publican
-   el 1/11): encender el interruptor y probar en theta con `alumna@prueba.invalid` (o una alumna
-   demo): aprobado, rechazado, que no se duplique, que la profesora lo vea; probar la vuelta
-   automática y los avisos (no se pueden probar en local). Después "Anular pago" para dejar la
-   factura pendiente otra vez.
-6. Ensayo de la defensa (alumna demo, por ejemplo `sofia@demo.invalid`).
+4. ~~**PR #21**~~ — **integrado el 29/10** por Julieta (`0810ee0`); theta desplegada con Mercado Pago apagado.
+5. ~~Prueba de punta a punta en theta~~ — **hecha el 29/10** (no hizo falta esperar al 1/11): factura
+   ficticia de $1 de septiembre para `alumna@prueba.invalid`; Julieta confirmó que theta está en el
+   plan gratuito de Vercel; interruptor **encendido** desde las 11:24. Pago rechazado (186675619836,
+   registrado por el aviso y por la vuelta) y aprobado (185628106611: aviso `ok`, vuelta
+   `ya_registrado`, sin duplicado), vista de la profesora correcta y anulación del pago (factura otra
+   vez pendiente). Datos reales idénticos al respaldo.
+6. ~~Factura de demostración para la defensa~~ — **hecha el 29/10**: se borró solo lo de la prueba de $1
+   (factura 18, pago 9 y su anulación, intentos 1–4, avisos 1–4, tipo 80, horario 203, clase 6480,
+   reserva 1191) y se creó con `scripts/factura_demo_mp.py` la factura **19 = JSU-2026-09-0001, $800**,
+   confirmada, publicada y pendiente (tipo «Gimnasia (demostración)» 81 y horario lunes 10:00 204,
+   **inactivos**; clase 6531 del 7/9; reserva 1192). Manifiesto en
+   `~/Documents/Just Show Up - respaldos/registro_demo_mp.json`. Contador de facturas reiniciado
+   (`setval(..., 1, false)`) antes y después: la primera factura real de octubre será
+   **JSU-2026-10-0001** (el número incluye año y mes: no chocan). Comparación fila por fila con el
+   respaldo antes y después: idéntica. En theta (solo lectura, sin pagar): la alumna ve la factura y
+   el botón; la profesora la ve sin botón. **Mercado Pago queda encendido hasta la defensa.**
+   Guía: `GUIA_DEFENSA_MERCADO_PAGO.md`. **Nunca «Anular y reemitir» la factura de demostración**
+   (con el contador en 1 chocaría el número): solo anular el pago.
+7. Pendiente de decisión de Julieta: restringir el botón solo a `alumna@prueba.invalid` (hoy cualquier
+   `@demo.invalid`/`@prueba.invalid` con factura pendiente; desde el 1/11 las alumnas demo tendrán
+   facturas de octubre). Requiere cambiar la función de la base y el código: consultar antes.
 
 **Datos para pagar en las pruebas:** compradora de prueba (usuario y contraseña en la nota de
 Julieta) en ventana de incógnito; tarjeta Mastercard 5031 7557 3453 0604, venc. 11/30, CVV 123,
@@ -409,5 +424,7 @@ Cada una necesita su propuesta y autorización antes de programar.
    está activo (sin modificar nada).
 2. Avisar si faltan `.env` (con `MP_ACCESS_TOKEN` y `MP_USER_ID`) / `.env.cuentas-prueba` o el
    conector de Supabase en la computadora.
-3. Seguir con Mercado Pago, **etapa 3** (§7), solo con autorización de Julieta.
+3. Mercado Pago está **encendido** para la defensa del 17/11 (§7, `GUIA_DEFENSA_MERCADO_PAGO.md`):
+   no hacer pagos, no tocar la factura de demostración ni el interruptor sin pedido de Julieta.
+   Siguiente trabajo autorizado en principio: rediseño visual de la sección «Pago» (PR aparte).
 4. Las ideas de §11 solo se evalúan si Julieta lo pide.
