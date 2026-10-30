@@ -31,6 +31,7 @@
                 </div>
                 {% endif %}
                 <ul class="card-datos">
+                    {% if c.profesora %}<li>Profesora: {{ c.profesora }}</li>{% endif %}
                     <li>Duración: {{ c.duracion }} min</li>
                     <li>Precio: ${{ '%g'|format(c.precio) }}</li>
                     <li>Cupo máximo: {{ c.cupo_max }}</li>

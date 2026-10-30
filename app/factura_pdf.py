@@ -62,7 +62,7 @@ def generar(f: dict, ahora: datetime, marca: str | None = None) -> bytes:
     pdf.set_xy(16, 9)
     pdf.set_text_color(*TINTA)
     pdf.set_font("Helvetica", "B", 22)
-    pdf.cell(110, 10, "Just Show Up")
+    pdf.cell(110, 10, _txt(f.get("empresa_nombre") or "Just Show Up"))  # multiempresa: la empresa que factura
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(0, 10, _txt("Factura mensual"), align="R", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 9)
@@ -109,8 +109,13 @@ def generar(f: dict, ahora: datetime, marca: str | None = None) -> bytes:
     pdf.ln(18)
 
     # tabla de clases
-    cols = [("Fecha", 34, "L"), ("Hora", 16, "L"), ("Clase", 42, "L"), ("Precio original", 30, "R"),
-            ("Ajuste", 28, "R"), ("Importe", ancho - 150, "R")]
+    con_profesora = any(l.get("profesora") for l in f.get("lineas", []))
+    if con_profesora:  # multiempresa: cada línea dice qué profesora dio la clase
+        cols = [("Fecha", 24, "L"), ("Hora", 13, "L"), ("Clase", 32, "L"), ("Profesora", 36, "L"),
+                ("Precio original", 26, "R"), ("Ajuste", 22, "R"), ("Importe", ancho - 153, "R")]
+    else:
+        cols = [("Fecha", 34, "L"), ("Hora", 16, "L"), ("Clase", 42, "L"), ("Precio original", 30, "R"),
+                ("Ajuste", 28, "R"), ("Importe", ancho - 150, "R")]
     pdf.set_fill_color(*TINTA)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 8.5)
@@ -129,10 +134,14 @@ def generar(f: dict, ahora: datetime, marca: str | None = None) -> bytes:
             ajuste = _plata(l["ajuste"])
         else:
             ajuste = "-"
-        valores = [l.get("fecha_corta") or l["fecha_txt"], l["hora"], l["tipo"], _plata(l["precio_original"]),
-                   ajuste, _plata(l["importe_final"])]
+        valores = [l.get("fecha_corta") or l["fecha_txt"], l["hora"], l["tipo"]] + \
+            ([l.get("profesora") or "-"] if con_profesora else []) + \
+            [_plata(l["precio_original"]), ajuste, _plata(l["importe_final"])]
         for (_, w, al), v in zip(cols, valores):
-            pdf.cell(w, 6.4, _txt(v), fill=True, align=al)
+            v = _txt(v)
+            while len(v) > 1 and pdf.get_string_width(v) > w - 1.5:  # nombres largos: se recortan, no se pisan
+                v = v[:-2] + "."
+            pdf.cell(w, 6.4, v, fill=True, align=al)
         pdf.ln()
 
     # totales

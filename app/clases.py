@@ -3,6 +3,8 @@ from zoneinfo import ZoneInfo
 
 from supabase import Client
 
+from app import personas
+
 TZ = ZoneInfo("America/Montevideo")
 DIAS_ORDEN = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
 # DIAS_ORDEN son los valores guardados en la base (sin tilde); esto es lo que se muestra.
@@ -66,6 +68,7 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
         .eq("id_alumna", alumna_id).eq("estado", "confirmada").in_("id_clase", ids)
         .execute().data
     }
+    profesoras = personas.nombres_profesoras(sb) if any(c.get("id_profesora") for c in clases) else {}
     # Posición actual (entre las que siguen en la lista) y oferta vigente de esta alumna.
     en_espera = {r["id_clase"]: r for r in sb.rpc("mi_lista_espera", {"p_ids": ids}).execute().data}
     ofertas = {r["id_clase"]: r["cantidad"] for r in sb.rpc("ofertas_vigentes", {"p_ids": ids}).execute().data}
@@ -112,6 +115,7 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
                 "cupo_max": cupo_max,
                 "tipo": c["tipo_clase"]["nombre"] if c.get("tipo_clase") else "",
                 "imagen": c["tipo_clase"]["imagen_url"] if c.get("tipo_clase") else None,
+                "profesora": profesoras.get(c.get("id_profesora"), ""),
                 "disponibles": disponibles,
                 "estado": estado,
                 "posicion_espera": espera["posicion"] if espera else None,
@@ -335,6 +339,7 @@ def clases_del_dia(sb: Client, fecha: date) -> list[dict]:
         r["id_clase"]: r["cantidad"]
         for r in sb.rpc("reservas_confirmadas", {"p_ids": [c["id"] for c in filas]}).execute().data
     }
+    profesoras = personas.nombres_profesoras(sb) if any(c.get("id_profesora") for c in filas) else {}
     return [
         {
             "id": c["id"],
@@ -342,6 +347,7 @@ def clases_del_dia(sb: Client, fecha: date) -> list[dict]:
             "duracion": c["duracion"],
             "cupo_max": c["cupo_max"],
             "tipo": c["tipo_clase"]["nombre"] if c.get("tipo_clase") else "",
+            "profesora": profesoras.get(c.get("id_profesora"), ""),
             "reservadas": confirmadas.get(c["id"], 0),
             "ventana": _ventana_asistencia(c),
         }

@@ -11,7 +11,7 @@ from decimal import Decimal, InvalidOperation
 
 from supabase import Client
 
-from app import clases
+from app import clases, personas
 from app.clases import TZ, nombre_dia
 from app.validaciones import formatear_cedula
 
@@ -103,12 +103,13 @@ def _dia_txt(iso: str) -> str:
 
 
 def _perfiles(sb: Client, ids) -> dict:
-    """id -> perfil (nombre, apellido, cédula). RLS: la profesora lee todos; la alumna, el suyo."""
+    """id -> perfil (nombre, apellido, cédula). La administradora ve los de su empresa; la alumna, el suyo."""
     ids = sorted({i for i in ids if i})
     if not ids:
         return {}
-    filas = sb.table("profiles").select("id, nombre, apellido, cedula").in_("id", ids).execute().data
-    return {p["id"]: p for p in filas}
+    filas = sb.table("profiles").select("id, nombre, apellido").in_("id", ids).execute().data
+    cedulas = personas.datos_personales(sb, ids)
+    return {p["id"]: {**p, "cedula": cedulas.get(p["id"], {}).get("cedula")} for p in filas}
 
 
 def _nombres(sb: Client, ids) -> dict:
@@ -244,7 +245,7 @@ def _linea(l: dict) -> dict:
     return {
         "id": l["id"], "orden": (l["fecha"], l["hora_inicio"]),
         "fecha_txt": _dia_txt(l["fecha"]), "fecha_corta": _fecha_txt(l["fecha"]), "hora": l["hora_inicio"][:5],
-        "tipo": l.get("tipo_nombre") or "Clase", "precio_original": precio,
+        "tipo": l.get("tipo_nombre") or "Clase", "profesora": l.get("profesora_nombre") or "", "precio_original": precio,
         "ajuste_tipo": l["ajuste_tipo"], "importe_final": importe, "ajuste": importe - precio,
         "ajuste_txt": {"ninguno": "", "bonificada": "Bonificada", "importe": "Descuento"}[l["ajuste_tipo"]],
     }

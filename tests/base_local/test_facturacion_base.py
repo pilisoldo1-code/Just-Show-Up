@@ -238,11 +238,14 @@ ok("cédula repetida entre alumnas: cedula_repetida", rpc(p, "actualizar_cedula"
 ok("no se le carga cédula a quien no es alumna", rpc(p, "actualizar_cedula", p_id_alumna=prof, p_cedula="98765430") == "no_existe")
 ok("la alumna no puede cambiar su cédula directo",
    error_de(conectar(uri, A2, "authenticated"), f"update profiles set cedula = '12345672' where id = '{A2}'") == "42501")
+# desde multiempresa (parte 4) los datos personales se leen con datos_personales(), no directo de profiles
 ok("cada alumna lee solo su fila y su cédula",
-   [x["cedula"] for x in leer(AL(A2, T1), "profiles")] == ["12345672"] and [x["cedula"] for x in leer(AL(A1, T1), "profiles")] == [None])
+   [x["cedula"] for x in rpc(AL(A2, T1), "datos_personales", p_ids=[A1, A2])] == ["12345672"]
+   and [x["cedula"] for x in rpc(AL(A1, T1), "datos_personales", p_ids=[A1, A2])] == [None]
+   and len(AL(A2, T1).table("profiles").select("id, nombre").execute().data) == 1)
 ok("sin sesión no se lee profiles", error_de(ANON, "select cedula from profiles") is not None
    or q(ANON, "select count(*) n from profiles", uno=True)["n"] == 0)
-ok("la profesora lee las cédulas de todas", len(leer(P(T1), "profiles")) == 6)
+ok("la profesora lee las cédulas de todas", len(rpc(P(T1), "datos_personales", p_ids=list(usuarias.values()))) == 6)
 d2 = facturas.factura(P(T1), F2)
 ok("app: el borrador muestra los datos actuales del perfil", d2["cedula_txt"] == "1.234.567-2" and not d2["identificacion_fija"]
    and d2["alumna"] == "Dos Prueba")

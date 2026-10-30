@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import auth, clases, estadisticas, factura_pdf, facturas, mercadopago, validaciones
+from app import auth, clases, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones
 from app.auth import (ErrorAuth, Redirigir, Usuario, requiere_admin, requiere_alumna, requiere_login, requiere_profesora,
                       requiere_superadmin)
 from app.clases import DIAS_ORDEN
@@ -213,11 +213,8 @@ def _datos_perfil(usuario: Usuario) -> dict:
     datos = {"nombre": usuario.nombre, "apellido": usuario.apellido, "mail": usuario.mail,
              "telefono": "", "fecha_nacimiento": "", "fecha_vencimiento_carne_salud": "", "cedula": ""}
     try:
-        filas = (
-            auth.cliente_con_token(usuario.token).table("profiles")
-            .select("telefono, fecha_nacimiento, fecha_vencimiento_carne_salud, cedula")
-            .eq("id", usuario.id).execute().data
-        )
+        sb = auth.cliente_con_token(usuario.token)
+        filas = personas.completar(sb, sb.table("profiles").select("id, telefono").eq("id", usuario.id).execute().data)
     except Exception:
         logging.exception("No se pudo leer el perfil")
         return datos
@@ -353,7 +350,9 @@ def mis_facturas(request: Request, aviso: str = "", ok: int = 0, usuario: Usuari
                    pago_mp=pago_mp)
 
 
-def _pdf(f: dict, marca: str | None) -> Response:
+def _pdf(f: dict, marca: str | None, usuario: Usuario | None = None) -> Response:
+    if usuario and usuario.empresa_nombre:
+        f = {**f, "empresa_nombre": usuario.empresa_nombre}
     contenido = factura_pdf.generar(f, clases.ahora(), marca)
     return Response(contenido, media_type="application/pdf", headers={
         "Content-Disposition": f'attachment; filename="{factura_pdf.nombre_archivo(f)}"',
@@ -370,7 +369,7 @@ def mi_factura_pdf(factura_id: int, usuario: Usuario = Depends(requiere_alumna))
         return RedirectResponse(url="/mis-facturas?" + urlencode({"aviso": "No pudimos generar el PDF. Probá de nuevo."}), status_code=303)
     if f is None:
         return RedirectResponse(url="/mis-facturas?" + urlencode({"aviso": "No encontramos esa factura."}), status_code=303)
-    return _pdf(f, "ANULADA" if f["estado_factura"] == "anulada" else None)
+    return _pdf(f, "ANULADA" if f["estado_factura"] == "anulada" else None, usuario)
 
 
 @app.post("/clases/{clase_id}/inscribirse")
@@ -877,7 +876,7 @@ def profesora_planificacion_puntual_cancelar(
 
 # ---------- profesora: alumnas ----------
 
-COLUMNAS_ALUMNA = "id, nombre, apellido, mail, telefono, fecha_nacimiento, fecha_vencimiento_carne_salud, cedula"
+COLUMNAS_ALUMNA = "id, nombre, apellido, mail, telefono"  # + datos personales (personas.completar), solo administradora
 
 
 # Lo que ve una profesora que no es administradora: nombre y contacto, sin cédula ni otros datos personales.
@@ -892,6 +891,8 @@ def _personas_empresa(usuario: Usuario) -> list[dict]:
     if usuario.empresa_id is None:  # sesión armada sin membresías (pruebas): alumnas como antes
         filas = sb.table("profiles").select(COLUMNAS_ALUMNA if usuario.es_admin else COLUMNAS_PERSONA_PROFESORA) \
             .eq("rol", "alumna").order("apellido").order("nombre").execute().data
+        if usuario.es_admin:
+            personas.completar(sb, filas)
         return [{**f, "roles": ["Alumna"], "es_alumna": True} for f in filas]
     membresias = {m["id_usuario"]: m for m in sb.table("membresia").select("id_usuario, es_admin, es_profesora, es_alumna")
                   .eq("id_empresa", usuario.empresa_id).eq("activa", True).execute().data}
@@ -899,6 +900,8 @@ def _personas_empresa(usuario: Usuario) -> list[dict]:
         return []
     filas = sb.table("profiles").select(COLUMNAS_ALUMNA if usuario.es_admin else COLUMNAS_PERSONA_PROFESORA) \
         .in_("id", list(membresias)).execute().data
+    if usuario.es_admin:
+        personas.completar(sb, filas)
     for f in filas:
         m = membresias[f["id"]]
         f["roles"] = [t for t, si in (("Administradora", m["es_admin"]), ("Profesora", m["es_profesora"]),
@@ -1008,7 +1011,8 @@ def alumna_crear(
 
 
 def _cedula_en_uso(usuario: Usuario, cedula: str) -> bool:
-    return bool(_sb(usuario).table("profiles").select("id").eq("cedula", cedula).execute().data)
+    # con la clave del servidor: la cédula es única en todas las empresas
+    return bool(auth.cliente_admin().table("profiles").select("id").eq("cedula", cedula).execute().data)
 
 
 @app.post("/profesora/alumnas/{alumna_id}/cedula")
@@ -1223,7 +1227,7 @@ def profesora_factura_pdf(factura_id: int, usuario: Usuario = Depends(requiere_a
     if f is None:
         return _volver_mes(0, 0, False, "No encontramos esa factura.")
     marca = {"borrador": "BORRADOR - vista previa, todavía no confirmada", "anulada": "ANULADA"}.get(f["estado_factura"])
-    return _pdf(f, marca)
+    return _pdf(f, marca, usuario)
 
 
 @app.post("/profesora/resumenes/{factura_id}/lineas/{linea_id}/ajustar")

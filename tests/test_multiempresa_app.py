@@ -168,10 +168,13 @@ class ListaPersonas(Base):
 
     def test_admin_ve_cedula_y_acciones(self):
         self.como(ADMIN)
-        self.preparar(self.MEMB, [{"id": "a1", "nombre": "Eva", "apellido": "Uno", "mail": "e@x.uy", "cedula": "12345672"},
+        self.preparar(self.MEMB, [{"id": "a1", "nombre": "Eva", "apellido": "Uno", "mail": "e@x.uy"},
                                   {"id": "p1", "nombre": "Pia", "apellido": "Dos", "mail": "p@x.uy"}])
+        self.rpc([{"id": "a1", "cedula": "12345672", "fecha_nacimiento": None, "fecha_vencimiento_carne_salud": "2027-01-31"}])
         r = self.get("/profesora/alumnas")
-        self.assertIn("1.234.567-2", r.text)
+        self.sb.rpc.assert_called_once_with("datos_personales", {"p_ids": ["a1", "p1"]})
+        self.assertIn("<td>1.234.567-2</td>", r.text)
+        self.assertIn("<td>2027-01-31</td>", r.text)
         self.assertIn("Reiniciar contraseña", r.text)
         self.assertIn("Profesora", r.text)
         self.assertLess(r.text.index("Eva"), r.text.index("Pia"))  # alumnas primero
@@ -184,8 +187,9 @@ class ListaPersonas(Base):
         r = self.get("/profesora/alumnas")
         self.assertEqual(self.sb.table.return_value.select.call_args_list[-1].args[0], main.COLUMNAS_PERSONA_PROFESORA)
         self.assertNotIn("cedula", main.COLUMNAS_PERSONA_PROFESORA)
-        for texto in ("Cédula", "Reiniciar contraseña", "Carné"):
+        for texto in ("Cédula", "cédula", "Reiniciar contraseña", "Carné", "1.234.567"):
             self.assertNotIn(texto, r.text)
+        self.sb.rpc.assert_not_called()  # ni siquiera pide los datos personales
         self.assertIn("099123456", r.text)
 
 
@@ -236,6 +240,43 @@ class AltaPersonas(Base):
             auth.crear_cuenta("e@x.uy", "Eva", "Uno", id_empresa=2, rol_empresa="admin_profesora", contrasena="Clave123")
         meta = admin.auth.admin.create_user.call_args.args[0]["user_metadata"]
         self.assertEqual(meta, {"nombre": "Eva", "apellido": "Uno", "id_empresa": 2, "rol_empresa": "admin_profesora"})
+
+
+class DatosPersonales(unittest.TestCase):
+    def test_usa_la_funcion_de_la_base(self):
+        from app import personas
+        sb = mock.MagicMock()
+        sb.rpc.return_value.execute.return_value.data = [{"id": "a", "cedula": "12345672", "fecha_nacimiento": None,
+                                                          "fecha_vencimiento_carne_salud": None}]
+        filas = personas.completar(sb, [{"id": "a"}, {"id": "b", "cedula": "colada"}])
+        self.assertEqual(filas[0]["cedula"], "12345672")
+        self.assertIsNone(filas[1]["cedula"])  # lo que la función no devuelve no se ve
+        sb.table.assert_not_called()
+
+    def test_sin_la_funcion_lee_profiles(self):
+        from app import personas
+        sb = mock.MagicMock()
+        sb.rpc.return_value.execute.side_effect = RuntimeError("no existe")
+        sb.table.return_value.select.return_value.in_.return_value.execute.return_value.data = [{"id": "a", "cedula": "1"}]
+        self.assertEqual(personas.datos_personales(sb, ["a"])["a"]["cedula"], "1")
+        self.assertEqual(personas.datos_personales(sb, []), {})
+
+
+class FacturaConProfesora(unittest.TestCase):
+    def test_linea_y_pdf_con_profesora_y_empresa(self):
+        import zlib, re
+        from app import facturas, factura_pdf
+        l = facturas._linea({"id": 1, "fecha": "2026-11-03", "hora_inicio": "18:00:00", "tipo_nombre": "Pilates",
+                             "precio_original": 900, "importe_final": 900, "ajuste_tipo": "ninguno",
+                             "profesora_nombre": "Paula Ruiz"})
+        self.assertEqual(l["profesora"], "Paula Ruiz")
+        f = {"numero": "PIL-2026-11-0001", "alumna": "Eva Uno", "mes_txt": "Noviembre 2026", "cantidad_clases": 1,
+             "estado_factura": "confirmada", "estado_pago_txt": "Pendiente", "lineas": [l], "subtotal_original": l["precio_original"],
+             "total_lineas": l["importe_final"], "total": l["importe_final"], "empresa_nombre": "Pilates Centro"}
+        crudo = factura_pdf.generar(f, AHORA)
+        texto = b"".join(zlib.decompress(m) for m in re.findall(rb"stream\r?\n(.*?)\r?\nendstream", crudo, re.S))
+        for t in (b"Pilates Centro", b"Profesora", b"Paula Ruiz"):
+            self.assertIn(t, texto)
 
 
 class ReiniciarContrasena(Base):
