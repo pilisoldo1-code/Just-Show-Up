@@ -16,7 +16,7 @@
         {% if f %}
         <p><a class="lc-accion" href="/profesora/resumenes?mes={{ f.mes }}&anio={{ f.anio }}">‹ Facturación de {{ f.mes_txt }}</a></p>
         <h1>Factura de {{ f.alumna }}</h1>
-        <p class="subtitle">{{ f.mes_txt }}{% if f.numero %} · {{ f.numero }}{% endif %}{% if f.confirmada_txt %} · confirmada el {{ f.confirmada_txt }}{% endif %}</p>
+        <p class="subtitle">{{ f.mes_txt }}{% if f.numero %} · {{ f.numero }}{% endif %}{% if f.confirmada_txt %} · confirmada el {{ f.confirmada_txt }}{% endif %}{% if f.vence_txt and f.estado_factura == 'confirmada' %} · vence el {{ f.vence_txt }}{% endif %}</p>
         {% include "_factura_identificacion.html" %}
         {% if not f.identificacion_fija %}
         <p class="nota">En borrador se muestran los datos actuales del perfil; al confirmar quedan fijos en la factura.</p>
@@ -30,7 +30,7 @@
         <div class="factura-estados">
             <span class="badge {{ 'badge-espera' if f.estado_factura == 'borrador' else ('badge-off' if f.estado_factura == 'anulada' else 'badge-on') }}">{{ f.estado_factura_txt }}</span>
             {% if f.estado_factura == 'confirmada' %}
-            <span class="badge {{ 'badge-on' if f.estado_pago != 'pendiente' else 'badge-espera' }}">{{ f.estado_pago_txt }}</span>
+            <span class="badge {{ f.estado_pago_clase }}">{{ f.estado_pago_txt }}</span>
             {% endif %}
         </div>
 
@@ -39,7 +39,11 @@
             {% if f.reemplazada_por_id %}Reemplazada por <a class="lc-accion" href="/profesora/resumenes/{{ f.reemplazada_por_id }}">{{ f.reemplazada_por }}</a>.{% endif %}</div>
         {% endif %}
         {% if f.reemplaza_id %}
-        <p class="nota">Reemplaza a la factura <a class="lc-accion" href="/profesora/resumenes/{{ f.reemplaza_id }}">{{ f.reemplaza }}</a>.</p>
+        <p class="nota">Reemplaza a la factura <a class="lc-accion" href="/profesora/resumenes/{{ f.reemplaza_id }}">{{ f.reemplaza }}</a>{% if f.tipo_reemision_txt %} · {{ f.tipo_reemision_txt }}{% endif %}.</p>
+        {% if f.estado_factura == 'borrador' %}
+        <p class="aviso-suave">{% if f.tipo_reemision == 'correccion' %}Corrección de un error: al confirmarla, si cambió algo en las clases cobradas, los ajustes o el importe,
+            la alumna tendrá 10 días para pagar (como máximo {{ max_plazos }} nuevos plazos por factura mensual). Si no cambió nada, conserva el vencimiento anterior.{% else %}Reemisión administrativa: al confirmarla conserva el vencimiento de la factura anterior.{% endif %}</p>
+        {% endif %}
         {% endif %}
 
         {% set editable = f.estado_factura == 'borrador' %}
@@ -104,11 +108,10 @@
         {% endif %}
 
         {% if f.estado_factura == 'confirmada' %}
-        {% set clase_estado_pago = {'pagado': 'badge-on', 'sin_cargo': 'badge-off'} %}
         <section class="panel pago-panel" aria-labelledby="titulo-pago">
             <div class="panel-cabecera">
                 <h2 id="titulo-pago">Pago</h2>
-                <span class="badge {{ clase_estado_pago.get(f.estado_pago, 'badge-espera') }}">{{ f.estado_pago_txt }}</span>
+                <span class="badge {{ f.estado_pago_clase }}">{{ f.estado_pago_txt }}</span>
             </div>
             {% if f.pago %}
             <div class="pago-resumen">
@@ -154,6 +157,7 @@
                     <span class="pago-etiqueta">Importe a cobrar</span>
                     <strong>${{ f.total }}</strong>
                     <span class="nota-chica">El total de la factura (no hay pagos parciales)</span>
+                    {% if f.vence_txt %}<span class="nota-chica vence-linea{% if f.vencida %} vence-vencida{% endif %}">{% if f.vencida %}Venció el {{ f.vence_txt }}: se puede cobrar igual{% else %}Vence el {{ f.vence_txt }}{% endif %}</span>{% endif %}
                 </div>
                 <div class="pago-campos">
                     <label>
@@ -244,6 +248,9 @@
                 <p class="nota">Una factura confirmada no se modifica. Para corregirla se anula (queda en el historial con el motivo)
                     y se crea un borrador nuevo con las mismas clases y ajustes, que después se confirma con otro número.
                     Si la alumna ya la veía, va a ver la anulada marcada como tal y la nueva cuando la confirmes.</p>
+                <p class="nota">Vencimiento: si corregís un error de facturación (con un cambio real en clases, ajustes o importe),
+                    la alumna tiene 10 días para pagar desde que confirmás la factura corregida, hasta {{ max_plazos }} veces por
+                    factura mensual. Una reemisión administrativa mantiene el vencimiento.</p>
             </details>
             {% if not f.pago %}
             <dialog id="anular-factura" class="modal">
@@ -252,6 +259,20 @@
                     <h2>Anular la factura {{ f.numero }}</h2>
                     <p class="modal-clase">{{ f.alumna }} · {{ f.mes_txt }} · ${{ f.total }}</p>
                     <p>La factura queda anulada (no se borra) y se crea un borrador que la reemplaza.</p>
+                    <fieldset class="tipo-reemision">
+                        <legend>¿Por qué se reemite?</legend>
+                        <label class="opcion-reemision">
+                            <input type="radio" name="tipo" value="correccion" required />
+                            <span><strong>Corrección de un error de facturación</strong>
+                                <span class="nota-chica">La alumna reclamó y comprobaste el error. Al confirmar la factura corregida
+                                    (con un cambio real), tendrá 10 días para pagar. Máximo {{ max_plazos }} nuevos plazos por factura mensual.</span></span>
+                        </label>
+                        <label class="opcion-reemision">
+                            <input type="radio" name="tipo" value="administrativa" required />
+                            <span><strong>Reemisión administrativa</strong>
+                                <span class="nota-chica">No corrige un error de cobro. Mantiene el vencimiento actual{% if f.vence_txt %} ({{ f.vence_txt }}){% endif %}.</span></span>
+                        </label>
+                    </fieldset>
                     <label>
                         Motivo (interno)
                         <textarea name="motivo" rows="3" minlength="{{ motivo_min }}" maxlength="{{ motivo_max }}" required></textarea>

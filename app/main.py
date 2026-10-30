@@ -1135,7 +1135,7 @@ def profesora_factura(request: Request, factura_id: int, ok: int = 0, aviso: str
     hoy = clases.ahora().date()
     return _render(request, "profesora_factura.html", usuario, f=f, hoy_iso=hoy.isoformat(), periodo_finalizado=periodo_finalizado,
                    medios_pago=facturas.MEDIOS_PAGO, motivo_min=facturas.MOTIVO_MIN, motivo_max=facturas.MOTIVO_MAX,
-                   aviso=aviso, aviso_ok=bool(ok))
+                   max_plazos=facturas.MAX_PLAZOS_CORRECCION, aviso=aviso, aviso_ok=bool(ok))
 
 
 @app.get("/profesora/resumenes/{factura_id}/pdf")
@@ -1216,12 +1216,15 @@ def profesora_registrar_pago(factura_id: int, monto: str = Form(...), medio_pago
 
 
 @app.post("/profesora/resumenes/{factura_id}/anular")
-def profesora_anular_factura(factura_id: int, motivo: str = Form(""), usuario: Usuario = Depends(requiere_profesora)):
+def profesora_anular_factura(factura_id: int, motivo: str = Form(""), tipo: str = Form(""),
+                             usuario: Usuario = Depends(requiere_profesora)):
     texto = _motivo(motivo)
     if texto is None:
         return _volver_factura(factura_id, False, facturas.mensaje("motivo_invalido"))
+    if tipo not in facturas.TIPOS_REEMISION:
+        return _volver_factura(factura_id, False, facturas.mensaje("tipo_invalido"))
     try:
-        ok, aviso, nueva = facturas.anular_factura(_sb(usuario), factura_id, texto)
+        ok, aviso, nueva = facturas.anular_factura(_sb(usuario), factura_id, texto, tipo)
     except Exception:
         logging.exception("Error al anular factura")
         ok, aviso, nueva = False, "Ocurrió un error, probá de nuevo.", None

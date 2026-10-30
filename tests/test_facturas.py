@@ -396,17 +396,21 @@ class AnularFactura(Base):
         super().setUp()
         self.como(PROFESORA)
 
-    def test_exige_motivo_y_lleva_al_borrador_nuevo(self):
+    def test_exige_motivo_y_tipo_y_lleva_al_borrador_nuevo(self):
         with mock.patch.object(facturas, "anular_factura", return_value=(True, "ok", 8)) as af:
-            r = self.post("/profesora/resumenes/1/anular", {"motivo": "x"})
+            r = self.post("/profesora/resumenes/1/anular", {"motivo": "x", "tipo": "correccion"})
             self.assertIn("ok=0", r.headers["location"])
             r = self.post("/profesora/resumenes/1/anular", {"motivo": "se cobró de más"})
-        af.assert_called_once_with("SB", 1, "se cobró de más")
+            self.assertIn("ok=0", r.headers["location"])
+            r = self.post("/profesora/resumenes/1/anular", {"motivo": "se cobró de más", "tipo": "otro"})
+            self.assertIn("ok=0", r.headers["location"])
+            r = self.post("/profesora/resumenes/1/anular", {"motivo": "se cobró de más", "tipo": "correccion"})
+        af.assert_called_once_with("SB", 1, "se cobró de más", "correccion")
         self.assertTrue(r.headers["location"].startswith("/profesora/resumenes/8?ok=1"))
 
     def test_error_vuelve_a_la_misma(self):
         with mock.patch.object(facturas, "anular_factura", return_value=(False, "tiene pago", None)):
-            r = self.post("/profesora/resumenes/1/anular", {"motivo": "se cobró de más"})
+            r = self.post("/profesora/resumenes/1/anular", {"motivo": "se cobró de más", "tipo": "administrativa"})
         self.assertTrue(r.headers["location"].startswith("/profesora/resumenes/1?ok=0"))
 
     def ver(self, f):
@@ -590,3 +594,89 @@ class Logica(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Vencimiento(Base):
+    """Vencimiento para mostrar: lo guarda la base al confirmar (vence_el); acá solo se compara con hoy."""
+
+    def base(self, **cambios):
+        return {"estado_factura": "confirmada", "estado_pago": "pendiente", "vence_el": "2026-11-10", **cambios}
+
+    def test_dia_10_inclusive_y_vencida_desde_el_11(self):
+        v = facturas.vencimiento(self.base(), date(2026, 11, 10))
+        self.assertEqual((v["vencida"], v["estado_pago_txt"], v["estado_pago_clase"]), (False, "Pendiente de pago", "badge-espera"))
+        self.assertEqual(v["vence_txt"], "10/11/2026")
+        v = facturas.vencimiento(self.base(), date(2026, 11, 11))
+        self.assertEqual((v["vencida"], v["estado_pago_txt"], v["estado_pago_clase"]),
+                         (True, "Vencida — deuda pendiente", "badge-rojo"))
+
+    def test_usa_la_fecha_de_montevideo(self):
+        # 11/11 a las 00:30 en Montevideo = 11/11 03:30 UTC; 10/11 23:30 en Montevideo = 11/11 02:30 UTC
+        with mock.patch.object(facturas.clases, "ahora", return_value=datetime(2026, 11, 10, 23, 30, tzinfo=TZ)):
+            self.assertFalse(facturas.vencimiento(self.base())["vencida"])
+        with mock.patch.object(facturas.clases, "ahora", return_value=datetime(2026, 11, 11, 0, 30, tzinfo=TZ)):
+            self.assertTrue(facturas.vencimiento(self.base())["vencida"])
+
+    def test_nunca_vencidas(self):
+        hoy = date(2027, 1, 1)
+        for cambios in ({"estado_pago": "pagado"}, {"estado_pago": "sin_cargo"}, {"estado_factura": "anulada"},
+                        {"estado_factura": "borrador", "vence_el": None}, {"vence_el": None}):
+            self.assertFalse(facturas.vencimiento(self.base(**cambios), hoy)["vencida"], cambios)
+        self.assertEqual(facturas.vencimiento(self.base(estado_pago="pagado"), hoy)["estado_pago_txt"], "Pagada")
+
+    def vencida(self, **cambios):
+        f = factura(estado_factura="confirmada", estado_factura_txt="Confirmada", numero="JSU-2026-06-0001",
+                    vence_el="2026-06-10", **cambios)
+        f.update(facturas.vencimiento(f))  # AHORA = 30/06/2026: vencida
+        return f
+
+    def test_profesora_ve_vencida_y_puede_registrar_el_pago(self):
+        self.como(PROFESORA)
+        with mock.patch.object(facturas, "factura", return_value=self.vencida()), \
+                mock.patch.object(facturas, "previsualizar_mes", return_value={"periodo_finalizado": True}):
+            t = self.client.get("/profesora/resumenes/1").text
+        for texto in ('badge-rojo">Vencida — deuda pendiente', "vence el 10/06/2026", "Venció el 10/06/2026: se puede cobrar igual",
+                      'action="/profesora/resumenes/1/pagar"'):
+            self.assertIn(texto, t)
+
+    def test_lista_del_mes_muestra_vencida(self):
+        self.como(PROFESORA)
+        with mock.patch.object(facturas, "sincronizar"), \
+                mock.patch.object(facturas, "facturas_del_mes", return_value=[self.vencida()]), \
+                mock.patch.object(facturas, "previsualizar_mes", return_value={}):
+            t = self.client.get("/profesora/resumenes?mes=6&anio=2026").text
+        self.assertIn('badge-rojo">Vencida — deuda pendiente', t)
+
+    def test_pdf_muestra_vencimiento_y_estado(self):
+        self.como(ALUMNA)
+        with mock.patch.object(facturas, "mi_factura", return_value=self.vencida()):
+            t = _texto_pdf(self.client.get("/mis-facturas/1/pdf").content)
+        for texto in ("VENCIMIENTO", "10/06/2026", "Vencida - deuda pendiente"):
+            self.assertIn(texto, t)
+
+    def test_dialogo_pide_el_tipo_de_reemision(self):
+        self.como(PROFESORA)
+        with mock.patch.object(facturas, "factura", return_value=self.vencida()), \
+                mock.patch.object(facturas, "previsualizar_mes", return_value={"periodo_finalizado": True}):
+            t = self.client.get("/profesora/resumenes/1").text
+        self.assertIn('name="tipo" value="correccion" required', t)
+        self.assertIn('name="tipo" value="administrativa" required', t)
+        self.assertIn("Máximo 2 nuevos plazos", t)
+
+    def test_borrador_de_correccion_explica_el_plazo(self):
+        self.como(PROFESORA)
+        f = factura(reemplaza_id=3, reemplaza="JSU-2026-06-0001", tipo_reemision="correccion",
+                    tipo_reemision_txt="Corrección de un error de facturación")
+        with mock.patch.object(facturas, "factura", return_value=f), \
+                mock.patch.object(facturas, "previsualizar_mes", return_value={"periodo_finalizado": True}):
+            t = self.client.get("/profesora/resumenes/1").text
+        self.assertIn("Corrección de un error: al confirmarla", t)
+        self.assertIn("Corrección de un error de facturación", t)
+
+    def test_historial_explica_el_vencimiento(self):
+        t = facturas._historial_txt({"accion": "confirmada", "detalle": {
+            "total": "800", "vence_el": "2026-11-12", "regla_vencimiento": "correccion_nuevo_plazo", "plazos_correccion": 1}})
+        self.assertIn("vence el 12/11/2026", t)
+        self.assertIn("1 de 2", t)
+        t = facturas._historial_txt({"accion": "reemision", "detalle": {"texto": "Reemplaza a la factura JSU-1", "tipo": "correccion"}})
+        self.assertIn("corrección de un error de facturación", t)

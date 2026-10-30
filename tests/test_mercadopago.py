@@ -426,6 +426,15 @@ class Rutas(Base):
         self.como(ALUMNA)
         self.assertNotIn('action="/mis-facturas/1/mercado-pago"', self.client.get("/mis-facturas").text)
 
+    def test_factura_vencida_sigue_con_boton(self):
+        self.factura.update(estado_pago_txt="Vencida — deuda pendiente", estado_pago_clase="badge-rojo",
+                            vencida=True, vence_txt="10/11/2026")
+        self.como(ALUMNA)
+        t = self.client.get("/mis-facturas").text
+        self.assertIn('badge-rojo">Vencida — deuda pendiente', t)
+        self.assertIn("Venció el 10/11/2026: podés pagarla igual.", t)
+        self.assertIn('action="/mis-facturas/1/mercado-pago"', t)
+
     def test_pagar_redirige_a_mercado_pago(self):
         self.como(ALUMNA)
         r = self.client.post("/mis-facturas/1/mercado-pago", follow_redirects=False)
