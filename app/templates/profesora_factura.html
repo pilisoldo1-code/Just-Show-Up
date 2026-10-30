@@ -104,13 +104,29 @@
         {% endif %}
 
         {% if f.estado_factura == 'confirmada' %}
-        <section class="panel">
-            <h2>Pago</h2>
+        {% set clase_estado_pago = {'pagado': 'badge-on', 'sin_cargo': 'badge-off'} %}
+        <section class="panel pago-panel" aria-labelledby="titulo-pago">
+            <div class="panel-cabecera">
+                <h2 id="titulo-pago">Pago</h2>
+                <span class="badge {{ clase_estado_pago.get(f.estado_pago, 'badge-espera') }}">{{ f.estado_pago_txt }}</span>
+            </div>
             {% if f.pago %}
-            <p>Pago #{{ f.pago.id }}: ${{ f.pago.monto }} · {{ f.pago.medio }} · {{ f.pago.fecha }}
-                {% if f.pago.operacion %}<br />N.º de operación en Mercado Pago: {{ f.pago.operacion }}{% endif %}
-                <br /><span class="nota-chica">{% if f.pago.es_mercado_pago %}Registrado automáticamente el {{ f.pago.registrado_en }}, después de verificarlo con Mercado Pago (pago de prueba, dinero ficticio){% else %}Registrado el {{ f.pago.registrado_en }}{% if f.pago.registrado_por %} por {{ f.pago.registrado_por }}{% endif %}{% endif %}</span></p>
-            <button type="button" class="btn btn-chico btn-peligro" onclick="document.getElementById('anular-pago').showModal()">Anular pago</button>
+            <div class="pago-resumen">
+                <div class="pago-importe">
+                    <span class="pago-etiqueta">Importe pagado</span>
+                    <strong>${{ f.pago.monto }}</strong>
+                </div>
+                <dl class="pago-datos">
+                    <div><dt>Medio</dt><dd>{{ f.pago.medio }}</dd></div>
+                    <div><dt>Fecha de pago</dt><dd>{{ f.pago.fecha }}</dd></div>
+                    {% if f.pago.operacion %}<div><dt>N.º de operación</dt><dd class="pago-operacion">{{ f.pago.operacion }}</dd></div>{% endif %}
+                </dl>
+            </div>
+            <div class="pago-pie">
+                <p class="nota-chica">Pago #{{ f.pago.id }} ·
+                    {% if f.pago.es_mercado_pago %}verificado con Mercado Pago el {{ f.pago.registrado_en }} (prueba, dinero ficticio){% else %}registrado el {{ f.pago.registrado_en }}{% if f.pago.registrado_por %} por {{ f.pago.registrado_por }}{% endif %}{% endif %}</p>
+                <button type="button" class="btn btn-chico btn-peligro" onclick="document.getElementById('anular-pago').showModal()">Anular pago</button>
+            </div>
             <dialog id="anular-pago" class="modal">
                 <form action="/profesora/resumenes/{{ f.id }}/pagos/{{ f.pago.id }}/anular" method="post" class="horario-form"
                       onsubmit="this.querySelector('button[type=submit]').disabled = true">
@@ -129,62 +145,107 @@
                 </form>
             </dialog>
             {% elif f.estado_pago == 'sin_cargo' %}
-            <p>Factura sin cargo: no hay nada que cobrar.</p>
+            <p class="pago-sin-cargo">Factura sin cargo: no hay nada que cobrar.</p>
             {% else %}
-            <form action="/profesora/resumenes/{{ f.id }}/pagar" method="post" class="horario-form form-en-linea"
+            <form action="/profesora/resumenes/{{ f.id }}/pagar" method="post" class="horario-form pago-registrar"
                   onsubmit="this.querySelector('button[type=submit]').disabled = true">
                 <input type="hidden" name="monto" value="{{ f.total }}" />
-                <p>Monto: <strong>${{ f.total }}</strong> (el total; no hay pagos parciales)</p>
-                <label>
-                    Medio de pago
-                    <select name="medio_pago" required>
-                        {% for valor, texto in medios_pago.items() %}<option value="{{ valor }}">{{ texto }}</option>{% endfor %}
-                    </select>
-                </label>
-                <label>
-                    Fecha
-                    <input type="date" name="fecha" value="{{ hoy_iso }}" max="{{ hoy_iso }}" required />
-                </label>
-                <button type="submit" class="btn">Registrar pago</button>
+                <div class="pago-importe">
+                    <span class="pago-etiqueta">Importe a cobrar</span>
+                    <strong>${{ f.total }}</strong>
+                    <span class="nota-chica">El total de la factura (no hay pagos parciales)</span>
+                </div>
+                <div class="pago-campos">
+                    <label>
+                        Medio de pago
+                        <select name="medio_pago" required>
+                            {% for valor, texto in medios_pago.items() %}<option value="{{ valor }}">{{ texto }}</option>{% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        Fecha de pago
+                        <input type="date" name="fecha" value="{{ hoy_iso }}" max="{{ hoy_iso }}" required />
+                    </label>
+                </div>
+                <div class="pago-pie">
+                    <p class="nota-chica">Pago simulado: solo deja registrado que la alumna pagó.</p>
+                    <button type="submit" class="btn">Registrar pago</button>
+                </div>
             </form>
-            <p class="nota">Pago simulado: solo deja registrado que la alumna pagó.</p>
             {% endif %}
+
             {% if f.pagos_anulados %}
-            <div class="pagos-anulados">
-                <strong>Pagos anulados</strong>
-                <ul>
+            <details class="desplegable">
+                <summary>
+                    <span>Pagos anulados</span>
+                    <span class="contador" aria-label="{{ f.pagos_anulados | length }} pagos anulados">{{ f.pagos_anulados | length }}</span>
+                </summary>
+                <ul class="lista-compacta">
                     {% for p in f.pagos_anulados %}
-                    <li>Pago #{{ p.id }}: ${{ p.monto }} · {{ p.medio }} · {{ p.fecha }}{% if p.operacion %} · operación {{ p.operacion }}{% endif %}
-                        (registrado el {{ p.registrado_en }}{% if p.registrado_por %} por {{ p.registrado_por }}{% endif %})
-                        — anulado el {{ p.anulado_en }}{% if p.anulado_por %} por {{ p.anulado_por }}{% endif %}: «{{ p.motivo }}»</li>
+                    <li>
+                        <div class="fila-compacta">
+                            <span class="fila-principal">Pago #{{ p.id }} · ${{ p.monto }} · {{ p.medio }}</span>
+                            <span class="badge badge-rojo">Anulado</span>
+                        </div>
+                        <p class="fila-detalle">Pagado el {{ p.fecha }}{% if p.operacion %} · operación {{ p.operacion }}{% endif %} ·
+                            anulado el {{ p.anulado_en }}{% if p.anulado_por %} por {{ p.anulado_por }}{% endif %}</p>
+                        {% if p.motivo %}<p class="fila-detalle">Motivo: «{{ p.motivo }}»</p>{% endif %}
+                    </li>
                     {% endfor %}
                 </ul>
-            </div>
+            </details>
             {% endif %}
+
             {% if f.intentos_mp %}
-            <div class="pagos-anulados">
-                <strong>Intentos de pago con Mercado Pago (prueba)</strong>
-                <ul>
+            {% set hay_a_revisar = f.intentos_mp | selectattr('a_revisar') | list %}
+            {% set estilo_intento = {'Aprobado': ('badge-on', 'Aprobado'), 'Rechazado': ('badge-rojo', 'Rechazado'),
+                                     'A revisar': ('badge-espera', 'A revisar')} %}
+            <details class="desplegable"{% if hay_a_revisar %} open{% endif %}>
+                <summary>
+                    <span>Intentos con Mercado Pago</span>
+                    <span class="contador" aria-label="{{ f.intentos_mp | length }} intentos">{{ f.intentos_mp | length }}</span>
+                    {% if hay_a_revisar %}<span class="badge badge-espera">A revisar</span>{% endif %}
+                </summary>
+                <ul class="lista-compacta">
                     {% for i in f.intentos_mp %}
-                    <li>{{ i.en }} · ${{ i.monto }} · <span class="{{ 'texto-alerta' if i.a_revisar else '' }}">{{ i.estado }}</span>{% if i.operacion %} · operación {{ i.operacion }}{% endif %}{% if i.detalle and i.a_revisar %}: {{ i.detalle }}{% endif %}</li>
+                    {% set estilo = estilo_intento.get(i.estado, ('badge-off', 'Sin completar')) %}
+                    <li>
+                        <div class="fila-compacta">
+                            <span class="fila-principal">{{ i.en }} · ${{ i.monto }}</span>
+                            <span class="badge {{ estilo[0] }}">{{ estilo[1] }}</span>
+                        </div>
+                        {% if i.operacion or (i.a_revisar and i.detalle) %}
+                        <p class="fila-detalle">{% if i.operacion %}Operación {{ i.operacion }}{% endif %}{% if i.a_revisar and i.detalle %}{% if i.operacion %} · {% endif %}{{ i.detalle }}{% endif %}</p>
+                        {% endif %}
+                    </li>
                     {% endfor %}
                 </ul>
-                {% if f.intentos_mp | selectattr('a_revisar') | list %}<p class="nota">«A revisar»: Mercado Pago aprobó un pago que no se asoció automáticamente a la factura (por ejemplo, porque ya tenía otro pago). Es dinero ficticio de prueba: no hay nada que devolver.</p>{% endif %}
-            </div>
+                {% if hay_a_revisar %}<p class="nota-chica">«A revisar»: Mercado Pago aprobó un pago que no se asoció automáticamente a la factura (por ejemplo, porque ya tenía otro pago). Es dinero ficticio de prueba: no hay nada que devolver.</p>{% endif %}
+                <p class="nota-chica">Pagos de prueba con dinero ficticio. «Sin completar»: se abrió Mercado Pago pero no se pagó.</p>
+            </details>
             {% endif %}
         </section>
         {% endif %}
 
         {% if f.estado_factura == 'confirmada' %}
-        <section class="panel">
-            <h2>Corregir la factura</h2>
-            <p class="nota">Una factura confirmada no se modifica. Para corregirla se anula (queda en el historial con el motivo)
-                y se crea un borrador nuevo con las mismas clases y ajustes, que después se confirma con otro número.
-                Si la alumna ya la veía, va a ver la anulada marcada como tal y la nueva cuando la confirmes.</p>
+        <section class="panel" aria-labelledby="titulo-corregir">
+            <div class="panel-cabecera">
+                <h2 id="titulo-corregir">Corregir la factura</h2>
+                {% if not f.pago %}
+                <button type="button" class="btn btn-chico btn-peligro" onclick="document.getElementById('anular-factura').showModal()">Anular y reemitir</button>
+                {% endif %}
+            </div>
+            <p class="nota">Se anula (queda en el historial) y se crea un borrador nuevo con las mismas clases y ajustes.</p>
             {% if f.pago %}
-            <p class="nota"><strong>Tiene un pago registrado:</strong> primero anulá el pago.</p>
-            {% else %}
-            <button type="button" class="btn btn-chico btn-peligro" onclick="document.getElementById('anular-factura').showModal()">Anular y reemitir</button>
+            <p class="aviso-suave"><strong>Tiene un pago registrado:</strong> primero anulá el pago.</p>
+            {% endif %}
+            <details class="desplegable desplegable-chico">
+                <summary><span>Cómo funciona</span></summary>
+                <p class="nota">Una factura confirmada no se modifica. Para corregirla se anula (queda en el historial con el motivo)
+                    y se crea un borrador nuevo con las mismas clases y ajustes, que después se confirma con otro número.
+                    Si la alumna ya la veía, va a ver la anulada marcada como tal y la nueva cuando la confirmes.</p>
+            </details>
+            {% if not f.pago %}
             <dialog id="anular-factura" class="modal">
                 <form action="/profesora/resumenes/{{ f.id }}/anular" method="post" class="horario-form"
                       onsubmit="this.querySelector('button[type=submit]').disabled = true">
@@ -206,14 +267,20 @@
         {% endif %}
 
         {% if f.historial %}
-        <section class="panel">
-            <h2>Historial</h2>
-            <ul class="historial-factura">
+        <section class="panel" aria-labelledby="titulo-historial">
+            <h2 id="titulo-historial">Historial</h2>
+            <ol class="linea-tiempo">
                 {% for h in f.historial %}
-                <li><span class="nota-chica">{{ h.en }}{% if h.por %} · {{ h.por }}{% endif %}</span><br />
-                    <strong>{{ h.accion }}</strong>{% if h.texto %}: {{ h.texto }}{% endif %}{% if h.motivo %} · «{{ h.motivo }}»{% endif %}</li>
+                <li>
+                    <div class="lt-cabecera">
+                        <strong>{{ h.accion }}</strong>
+                        <span class="lt-cuando">{{ h.en }}{% if h.por %} · {{ h.por }}{% endif %}</span>
+                    </div>
+                    {% if h.texto %}<p class="lt-texto">{{ h.texto }}</p>{% endif %}
+                    {% if h.motivo %}<p class="lt-motivo">Motivo: «{{ h.motivo }}»</p>{% endif %}
+                </li>
                 {% endfor %}
-            </ul>
+            </ol>
         </section>
         {% endif %}
         {% endif %}
