@@ -757,6 +757,21 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **Multiempresa, parte 4 (datos personales)**: con la migración 4 aplicada, una sesión NO puede leer `cedula`,
+  `fecha_nacimiento` ni `fecha_vencimiento_carne_salud` de `profiles` (ni `select *`: da 42501). Leerlos siempre con
+  `personas.datos_personales(sb, ids)` / `personas.completar(sb, filas)`, que usan la función de la base y, si todavía
+  no existe, leen la tabla (por eso el código funciona antes y después del merge). Los nombres de las profesoras para
+  las alumnas salen de `personas.nombres_profesoras(sb)`.
+- **Roles en el servidor**: `usuario.es_profesora` = docente de la empresa activa (administradora o profesora);
+  `usuario.es_admin` = administradora. Lo de plata, altas, cédula y tipos de clase va con `Depends(requiere_admin)`.
+  Un `Usuario` armado a mano sin `con_membresias` toma `rol` de profiles («profesora» = administradora + profesora): así
+  siguen funcionando las pruebas viejas.
+- **`tests/base_local/clientefalso.py`** pasa las listas de `rpc` como literal de arreglo (como PostgREST), así toman el
+  tipo del parámetro (`uuid[]`, `bigint[]`).
+- **`scripts/empresa_demo.py`** crea/borra la Empresa 2 de demostración con la clave de administrador del `.env`:
+  correrlo contra Supabase escribe en producción (necesita autorización). Se prueba con
+  `tests/base_local/test_empresa_demo_base.py "<respaldo>"`.
+
 - **PENDIENTE DE SEGURIDAD — rotar las claves de Supabase antes de cargar
   alumnas reales.** La `service_role` legacy fue pegada en el chat el 2026-10-06:
   tratarla como expuesta. El proyecto ya usa el sistema nuevo de JWT Signing

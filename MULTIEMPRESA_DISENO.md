@@ -70,7 +70,7 @@ desde el contador global actual: la factura `JSU-2026-09-0001` no cambia y la pr
 | 1 | Tablas `empresa` y `membresia`, columnas nuevas, Empresa 1 con todos los datos, membresías desde `profiles.rol`, profesora asignada, triggers que completan la empresa | Sí: no cambia permisos |
 | 2 | Funciones de ayuda, políticas por empresa, protección general, índices únicos por empresa, cierre de `anon` | Sí: todas las cuentas tienen la Empresa 1 activa |
 | 3 | Funciones por rol y por empresa, numeración por empresa, profesora en las líneas, Mercado Pago solo en la Empresa 1, funciones de superadministradora y de membresías | Sí: mismas firmas (se agregan parámetros con valor por defecto) |
-| 4 | Ajustes que solo funcionan con el código nuevo (por ejemplo, ocultar la cédula a profesoras no administradoras) | No: se aplica justo después del merge |
+| 4 | Datos personales protegidos: cédula, fecha de nacimiento y carné solo con `datos_personales()` (la persona o la administradora de su empresa); `profesoras_empresa()` para que las alumnas vean el nombre de las profesoras | No: se aplica justo después del merge (el código nuevo funciona antes y después) |
 
 Cada una con respaldo previo, prueba en Postgres local que reconstruye producción, vuelta atrás probada
 y comparación de estructura y datos antes y después.

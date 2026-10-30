@@ -8,9 +8,9 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
 | Vie 30/10 | Multiempresa 1: diseño técnico; empresas, membresías, empresa activa, `id_empresa` en todas las tablas, datos actuales a la Empresa 1 | **Hecho** |
 | Sáb 31/10 | Multiempresa 2: políticas por empresa, protección general, cierre de `anon`, contador por empresa | **Hecho (adelantado el 30/10)** |
 | Dom 1/11 | Multiempresa 3: funciones por rol y por empresa, factura con profesora, Mercado Pago solo Empresa 1 | **Hecho (adelantado el 30/10)** |
-| Lun 2/11 | Multiempresa 4 (servidor): empresa activa, selector, rutas por rol. En paralelo: Estadísticas y prototipo de Videos | |
-| Mar 3/11 | Multiempresa 5 (pantallas): altas, profesora asignada, alumnas sin cédula para profesoras | |
-| Mié 4/11 | Multiempresa 6: panel de superadministradora, script de la Empresa 2, todas las pruebas | |
+| Lun 2/11 | Multiempresa 4 (servidor): empresa activa, selector, rutas por rol. En paralelo: Estadísticas y prototipo de Videos | **Hecho (adelantado el 30/10)** (sin las sesiones paralelas) |
+| Mar 3/11 | Multiempresa 5 (pantallas): altas, profesora asignada, alumnas sin cédula para profesoras | **Hecho (adelantado el 30/10)** |
+| Mié 4/11 | Multiempresa 6: panel de superadministradora, script de la Empresa 2, todas las pruebas | **Hecho (adelantado el 30/10)**; falta la revisión con datos reales en el PR |
 | Jue 5/11 | Respaldo y PR de multiempresa → **① M** | |
 | Vie 6/11 | Aplicar y verificar → **① Merge** y creación de la Empresa 2 | |
 | Sáb 7/11 | Verificación en theta y Empresa 2 de demostración — **Hito 1** | |
@@ -82,3 +82,33 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
   planificación 33/33, vencimiento 48/48, app 183. Las pruebas históricas aplican solo las migraciones anteriores a la
   que prueban.
 - Siguiente: parte 4, servidor (empresa activa, selector, rutas por rol).
+
+### Vie 30/10 (noche) — adelanto de las partes 4, 5 y 6
+- **Servidor** (`app/auth.py`): la sesión trae la empresa activa y los roles de esa empresa (administradora, profesora,
+  alumna) o la superadministradora. Con una sola empresa se entra directo; con varias, `/empresa/elegir` y «Cambiar de
+  empresa» en el menú de cuenta. Facturación, pagos, tipos de clase, altas, cédula y reinicio de contraseña: solo la
+  administradora (25 rutas). La base vuelve a comprobar todo.
+- **Pantallas**: menú por rol (la profesora no administradora no ve Facturación ni Tipos de clase; la superadministradora
+  solo ve Empresas); el menú de cuenta muestra la empresa. Alumnas: lista de las personas de la empresa con su rol; la
+  profesora no administradora ve nombre y contacto, sin cédula, carné ni acciones. «Nueva persona» con rol (alumna,
+  profesora, administradora, administradora y profesora); si el mail ya tiene cuenta se suma a la empresa con la misma
+  contraseña. Reiniciar contraseña solo a personas que están únicamente en esta empresa. La profesora aparece en el día de
+  la alumna, en Asistencias (administradora), en las líneas de la factura y en el PDF, que lleva el nombre de la empresa.
+- **Panel de la superadministradora** (`/admin/empresas`): crear, editar (el código queda fijo después de la primera
+  factura), desactivar/reactivar y asignar administradora (cuenta nueva con contraseña temporal o cuenta existente).
+  Solo ve nombre, código, estado, cantidad de profesoras y alumnas y quién administra.
+- **Migración 4** (`20261031000400_multiempresa_4_datos_personales.sql`, se aplica después del merge): la cédula, la
+  fecha de nacimiento y el carné ya no se leen directo de `profiles` con una sesión: solo con `datos_personales()` (la
+  persona misma o la administradora de su empresa). `profesoras_empresa()` da a las alumnas solo el nombre de las
+  profesoras. El código funciona antes y después de aplicarla. Vuelta atrás incluida.
+- **Script de la Empresa 2** (`scripts/empresa_demo.py crear|borrar`): Pilates Centro (PIL) con administradora y
+  profesora, otra profesora, 5 alumnas `@demo.invalid` y alumna@prueba.invalid compartida; tipos, horarios, clases,
+  reservas y asistencias; sin facturas; Mercado Pago apagado. **No se corrió en Supabase** (necesita autorización y los
+  nombres definitivos).
+- **Pruebas**: app 216 (28 nuevas de multiempresa); base local: multiempresa 1 39/39, 2 52/52, 3 57/57, **4 37/37**,
+  **script de la Empresa 2 19/19** (borrar deja todo idéntico), facturación 180/180, Mercado Pago 73/73, restricción
+  29/29, planificación 33/33, vencimiento 48/48. Revisión visual en celular con datos simulados (selector, empresas, lista
+  de la profesora, menú de cuenta) y del PDF con profesora.
+- Siguiente (jueves 5/11 o antes): respaldo de producción y PR de multiempresa → **autorización ①** para aplicar las
+  migraciones 1–3, merge y migración 4.
+
