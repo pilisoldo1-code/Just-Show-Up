@@ -26,6 +26,7 @@
                         <th>Día</th>
                         <th>Hora de inicio</th>
                         <th>Tipo de clase</th>
+                        {% if usuario.es_admin and usuario.empresa_id %}<th>Profesora</th>{% endif %}
                         <th>Estado</th>
                         <th></th>
                     </tr>
@@ -36,6 +37,7 @@
                         <td>{{ h.dia_semana | nombre_dia }}</td>
                         <td>{{ h.hora_inicio[:5] }}</td>
                         <td>{{ h.tipo_clase.nombre if h.tipo_clase else '—' }}</td>
+                        {% if usuario.es_admin and usuario.empresa_id %}<td>{{ h.profesora or '—' }}</td>{% endif %}
                         <td>
                             <span class="badge {{ 'badge-on' if h.activo else 'badge-off' }}">
                                 {{ 'Activo' if h.activo else 'Inactivo' }}
@@ -52,7 +54,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="empty">No hay horarios cargados.</td>
+                        <td colspan="{{ 6 if usuario.es_admin and usuario.empresa_id else 5 }}" class="empty">No hay horarios cargados.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

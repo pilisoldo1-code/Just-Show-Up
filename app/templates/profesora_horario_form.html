@@ -48,7 +48,22 @@
                 </select>
             </label>
             <p class="nota" id="tipo-detalle">La duración, el precio y el cupo los define el tipo de clase.</p>
-            <p class="nota"><a href="/profesora/tipos-clase">Ver o editar los tipos de clase ›</a></p>
+            {% if usuario.es_admin %}<p class="nota"><a href="/profesora/tipos-clase">Ver o editar los tipos de clase ›</a></p>{% endif %}
+            {% if profesoras %}
+            {% if horario and horario.id %}
+            <p class="nota">Profesora: {{ (profesoras | selectattr(0, 'equalto', horario.id_profesora) | map(attribute=1) | first) or '—' }}
+                (se elige al crear el horario).</p>
+            {% else %}
+            <label>
+                Profesora
+                <select name="id_profesora">
+                    {% for id, nombre in profesoras %}
+                    <option value="{{ id }}" {{ 'selected' if (horario and horario.id_profesora == id) or (not (horario and horario.id_profesora) and id == usuario.id) }}>{{ nombre }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% endif %}
+            {% endif %}
 
             <label class="checkbox-label">
                 <input type="checkbox" name="activo" value="true"

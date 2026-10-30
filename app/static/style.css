@@ -2064,3 +2064,67 @@ main.ancho {
 .opcion-check input {
     width: auto;
 }
+
+.menu-links a.menu-otro-rol {
+    color: var(--accent);
+    border: 1px solid #2a2e37;
+}
+
+.panel-numeros {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+}
+
+.panel-numeros > div {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.panel-numero {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.panel-secciones {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+}
+
+.panel-seccion {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.panel-seccion strong {
+    color: var(--text);
+    font-size: 1.05rem;
+}
+
+.panel-seccion:hover {
+    border-color: var(--accent);
+}
+
+@media (max-width: 720px) {
+    .panel-numeros {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

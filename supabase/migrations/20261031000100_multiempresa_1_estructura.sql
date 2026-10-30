@@ -250,7 +250,9 @@ create trigger membresia_inicial after insert on public.profiles
     for each row execute function public._membresia_inicial();
 
 -- Compatibilidad: el script actual de alta de profesora crea la cuenta y después cambia profiles.rol.
--- Mientras exista ese flujo, el cambio de rol se refleja en la membresía de la empresa activa.
+-- Mientras exista ese flujo, el cambio de rol se refleja en la membresía de la empresa activa. Las cuentas
+-- creadas con rol de empresa (código multiempresa) no se tocan: su rol lo define la membresía (si no, una
+-- profesora creada así quedaría como administradora).
 create or replace function public._membresia_desde_rol()
 returns trigger
 language plpgsql
@@ -258,6 +260,9 @@ security definer
 set search_path = ''
 as $$
 begin
+    if exists (select 1 from auth.users where id = new.id and raw_user_meta_data ? 'rol_empresa') then
+        return new;
+    end if;
     update public.membresia
     set es_admin = new.rol = 'profesora', es_profesora = new.rol = 'profesora', es_alumna = new.rol = 'alumna'
     where id_usuario = new.id and id_empresa = new.empresa_activa;

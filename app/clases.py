@@ -317,22 +317,28 @@ def _ventana_asistencia(c: dict) -> str:
     return "cerrada"
 
 
-def dias_con_clases(sb: Client, desde: date, hasta: date) -> list[date]:
+def _de(c: dict, id_profesora: str | None) -> bool:
+    """Multiempresa: una profesora que no es administradora trabaja solo con sus clases y horarios."""
+    return id_profesora is None or c.get("id_profesora") == id_profesora
+
+
+def dias_con_clases(sb: Client, desde: date, hasta: date, id_profesora: str | None = None) -> list[date]:
     filas = (
-        sb.table("clase").select("fecha, horario(activo)")
+        sb.table("clase").select("fecha, id_profesora, horario(activo)")
         .gte("fecha", desde.isoformat()).lte("fecha", hasta.isoformat())
         .eq("estado", "programada").execute().data
     )
-    return sorted({date.fromisoformat(c["fecha"]) for c in filas if c["horario"] and c["horario"]["activo"]})
+    return sorted({date.fromisoformat(c["fecha"]) for c in filas
+                   if c["horario"] and c["horario"]["activo"] and _de(c, id_profesora)})
 
 
-def clases_del_dia(sb: Client, fecha: date) -> list[dict]:
+def clases_del_dia(sb: Client, fecha: date, id_profesora: str | None = None) -> list[dict]:
     filas = (
         sb.table("clase").select("*, horario(activo), tipo_clase(nombre)")
         .eq("fecha", fecha.isoformat()).eq("estado", "programada")
         .order("hora_inicio").execute().data
     )
-    filas = [c for c in filas if c["horario"] and c["horario"]["activo"]]
+    filas = [c for c in filas if c["horario"] and c["horario"]["activo"] and _de(c, id_profesora)]
     if not filas:
         return []
     confirmadas = {
@@ -386,6 +392,7 @@ def clase_con_asistencia(sb: Client, clase_id: int) -> dict | None:
     ]
     return {
         "id": c["id"],
+        "id_profesora": c.get("id_profesora"),
         "fecha": fecha,
         "titulo": f"{nombre_dia(fecha)} {fecha.day}/{fecha.month} · {c['hora_inicio'][:5]}"
                   + (f" · {c['tipo_clase']['nombre']}" if c.get("tipo_clase") else ""),
@@ -434,8 +441,9 @@ def _estado_bloqueo(desde: date, hasta: date, hoy: date) -> str:
     return "en_curso" if desde <= hoy else "proximo"
 
 
-def horarios_para_elegir(sb: Client) -> list[dict]:
-    filas = sb.table("horario").select("id, dia_semana, hora_inicio").eq("activo", True).execute().data
+def horarios_para_elegir(sb: Client, id_profesora: str | None = None) -> list[dict]:
+    filas = [h for h in sb.table("horario").select("id, dia_semana, hora_inicio, id_profesora").eq("activo", True).execute().data
+             if _de(h, id_profesora)]
     filas.sort(key=lambda h: (DIAS_ORDEN.index(h["dia_semana"]), h["hora_inicio"]))
     return [{"id": h["id"], "texto": f"{nombre_dia(h['dia_semana'])} {h['hora_inicio'][:5]}"} for h in filas]
 
@@ -604,15 +612,15 @@ def eliminar_bloqueo(sb: Client, id_bloqueo: int) -> tuple[bool, str]:
 # checkboxes una o varias de sus clases. Por abajo crea un bloqueo puntual por cada clase elegida
 # (ver crear_bloqueos_puntuales en la base), así se puede deshacer cada cancelación por separado.
 
-def clases_para_cancelar(sb: Client, fecha: date) -> list[dict]:
+def clases_para_cancelar(sb: Client, fecha: date, id_profesora: str | None = None) -> list[dict]:
     """Clases del día (programadas o ya canceladas) para la pantalla de checkboxes.
     Las ya canceladas o ya empezadas se devuelven igual, marcadas como no seleccionables."""
     filas = (
-        sb.table("clase").select("id, hora_inicio, duracion, estado, horario(activo), tipo_clase(nombre)")
+        sb.table("clase").select("id, hora_inicio, duracion, estado, id_profesora, horario(activo), tipo_clase(nombre)")
         .eq("fecha", fecha.isoformat()).in_("estado", ["programada", "cancelada"])
         .order("hora_inicio").execute().data
     )
-    filas = [c for c in filas if c["horario"] and c["horario"]["activo"]]
+    filas = [c for c in filas if c["horario"] and c["horario"]["activo"] and _de(c, id_profesora)]
     ahora_dt = ahora()
     resultado = []
     for c in filas:

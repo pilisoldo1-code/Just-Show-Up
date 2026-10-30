@@ -1,5 +1,5 @@
-"""Multiempresa en el servidor: roles por empresa, menú, selector de empresa, alta de personas y panel de la
-superadministradora. Sin base (se mockea Supabase); las reglas de la base se prueban en tests/base_local.
+"""Multiempresa en el servidor: inicio de sesión con el nombre del lugar, roles por empresa (y combinados),
+menú, alta de personas y panel de la superadministradora. Sin base (se mockea Supabase); las reglas de la base se prueban en tests/base_local.
 
 Uso: python -m unittest tests.test_multiempresa_app -v
 """
@@ -14,22 +14,20 @@ from app import auth, main
 from app.auth import Usuario
 from app.clases import TZ
 
-EMPRESAS = [{"id": 1, "nombre": "Just Show Up", "codigo": "JSU"}, {"id": 2, "nombre": "Pilates Centro", "codigo": "PIL"}]
-
-
 def persona(**cambios):
     datos = dict(id="u", mail="u@prueba.invalid", nombre="Ana", apellido="Prueba", rol="alumna", token="t",
-                 con_membresias=True, empresa_id=1, empresa_nombre="Just Show Up", empresa_codigo="JSU",
-                 empresas=EMPRESAS[:1])
+                 con_membresias=True, empresa_id=1, empresa_nombre="Just Show Up", empresa_codigo="JSU")
     datos.update(cambios)
     return Usuario(**datos)
 
 
 ADMIN = persona(id="ad", rol="profesora", nombre="Ada", es_admin=True, es_docente=True)
 PROFE = persona(id="pr", rol="profesora", nombre="Paula", es_docente=True)  # profesora, no administradora
-ALUMNA_DOS = persona(id="al", es_alumna=True, empresas=EMPRESAS)
-SIN_ELEGIR = persona(id="al", es_alumna=False, empresa_id=None, empresa_nombre="", empresas=EMPRESAS)
-SUPER = persona(id="su", rol="alumna", nombre="Sara", es_superadmin=True, empresa_id=None, empresa_nombre="", empresas=[])
+ALUMNA_DOS = persona(id="al", es_alumna=True)  # alumna en dos empresas: la sesión solo conoce la suya
+PROFE_ALUMNA = persona(id="pa", rol="profesora", es_docente=True, es_alumna=True)
+ADMIN_ALUMNA = persona(id="aa", rol="profesora", es_admin=True, es_docente=True, es_alumna=True)
+SIN_ELEGIR = persona(id="al", es_alumna=False, empresa_id=None, empresa_nombre="")
+SUPER = persona(id="su", rol="alumna", nombre="Sara", es_superadmin=True, empresa_id=None, empresa_nombre="")
 AHORA = datetime(2026, 11, 2, 10, 0, tzinfo=TZ)
 
 
@@ -66,10 +64,13 @@ class Roles(unittest.TestCase):
 
     def test_destino(self):
         self.assertEqual(auth.destino(SUPER), "/admin/empresas")
-        self.assertEqual(auth.destino(SIN_ELEGIR), "/empresa/elegir")
-        self.assertEqual(auth.destino(ADMIN), "/profesora/horarios")
+        self.assertTrue(auth.destino(SIN_ELEGIR).startswith("/login?"))
+        self.assertEqual(auth.destino(ADMIN), "/administracion")
+        self.assertEqual(auth.destino(ADMIN_ALUMNA), "/administracion")  # administración tiene prioridad
         self.assertEqual(auth.destino(PROFE), "/profesora/horarios")
+        self.assertEqual(auth.destino(PROFE_ALUMNA), "/profesora/horarios")  # panel de profesora primero
         self.assertEqual(auth.destino(ALUMNA_DOS), "/")
+        self.assertFalse(hasattr(ALUMNA_DOS, "empresas"))  # la sesión no lleva la lista de empresas de la cuenta
 
     def test_rol_de_profiles_no_cuenta_con_membresias(self):
         # con membresías, el rol viejo de profiles no da permisos: solo los de la empresa activa
@@ -106,10 +107,44 @@ class Permisos(Base):
         self.assertEqual(self.get("/profesora/horarios").headers["location"], "/admin/empresas")
         self.assertEqual(self.get("/").headers["location"], "/admin/empresas")
 
-    def test_sin_empresa_elegida_va_al_selector(self):
+    def test_sin_empresa_vuelve_a_iniciar_sesion(self):
         self.como(SIN_ELEGIR)
-        for url in ("/", "/mis-facturas", "/profesora/horarios"):
-            self.assertEqual(self.get(url).headers["location"], "/empresa/elegir", url)
+        with mock.patch.object(auth, "cerrar_sesion") as cs:
+            for url in ("/", "/mis-facturas", "/profesora/horarios", "/administracion"):
+                r = self.get(url)
+                self.assertTrue(r.headers["location"].startswith("/login?"), url)
+                self.assertIn("sb_empresa=", r.headers.get("set-cookie", ""), url)  # se borran las cookies
+        self.assertTrue(cs.called)
+        self.assertEqual(self.get("/empresa/elegir").status_code, 404)  # ya no existe el selector
+
+    def test_panel_de_administracion_solo_administradora(self):
+        self.como(PROFE)
+        self.assertTrue(self.get("/administracion").headers["location"].startswith("/profesora/horarios?"))
+        self.como(ALUMNA_DOS)
+        self.assertTrue(self.get("/administracion").headers["location"].startswith("/?"))
+        self.como(ADMIN)
+        r = self.get("/administracion")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Panel de administración", r.text)
+        for href, *_ in main.SECCIONES_ADMIN:
+            self.assertIn(f'href="{href}"', r.text)
+
+    def test_roles_combinados(self):
+        self.sb.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = []
+        # profesora que no es alumna no entra a lo de alumna; con los dos roles, sí, sin cerrar sesión
+        self.como(PROFE)
+        self.assertEqual(self.get("/mis-facturas").headers["location"], "/profesora/horarios")
+        self.como(PROFE_ALUMNA)
+        with mock.patch.object(main.facturas, "facturas_alumna", return_value=[], create=True):
+            r = self.get("/mi-historial")
+        self.assertNotEqual(r.status_code, 303)
+        self.assertIn('href="/profesora/horarios" class="menu-otro-rol">Panel de profesora', r.text)
+        self.assertIn('href="/" class="menu-otro-rol">Mis clases', self.get("/profesora/alumnas").text)
+        self.como(ADMIN_ALUMNA)
+        r = self.get("/mi-historial")
+        self.assertIn('href="/administracion" class="menu-otro-rol">Panel de administración', r.text)
+        self.como(ADMIN)
+        self.assertNotIn("menu-otro-rol", self.get("/profesora/alumnas").text)
 
     def test_panel_de_empresas_solo_superadmin(self):
         for u in (ADMIN, PROFE, ALUMNA_DOS):
@@ -138,13 +173,13 @@ class Menu(Base):
         for texto in ("Horarios", "Asistencias", "Planificación", "Estadísticas"):
             self.assertIn(texto, r.text)
 
-    def test_alumna_con_dos_empresas_puede_cambiar(self):
+    def test_el_menu_solo_muestra_la_empresa_de_la_sesion(self):
         self.como(ALUMNA_DOS)
-        r = self.get("/empresa/elegir")
-        self.assertEqual(r.status_code, 200)
-        self.assertIn("Cambiar de empresa", r.text)
-        self.assertIn("Pilates Centro", r.text)
-        self.assertIn("Estás acá", r.text)
+        with mock.patch.object(main.facturas, "facturas_alumna", return_value=[], create=True):
+            r = self.get("/mi-historial")
+        self.assertIn("Just Show Up", r.text)
+        for texto in ("Pilates", "Cambiar de empresa", "/empresa/elegir"):
+            self.assertNotIn(texto, r.text)
 
     def test_superadmin_solo_ve_empresas(self):
         self.como(SUPER)
@@ -241,6 +276,17 @@ class AltaPersonas(Base):
         meta = admin.auth.admin.create_user.call_args.args[0]["user_metadata"]
         self.assertEqual(meta, {"nombre": "Eva", "apellido": "Uno", "id_empresa": 2, "rol_empresa": "admin_profesora"})
 
+    def test_alta_con_empresa_no_cambia_el_rol_viejo(self):
+        # profiles.rol = 'profesora' haría administradora a la persona por el trigger de compatibilidad
+        admin = mock.MagicMock()
+        admin.auth.admin.create_user.return_value.user.id = "nuevo"
+        with mock.patch.object(auth, "cliente_admin", return_value=admin):
+            auth.crear_cuenta("p@x.uy", "Pia", "Dos", rol="profesora", id_empresa=2, rol_empresa="profesora")
+        admin.table.assert_not_called()
+        with mock.patch.object(auth, "cliente_admin", return_value=admin):
+            auth.crear_cuenta("p@x.uy", "Pia", "Dos", rol="profesora")  # alta vieja (script), sin empresa
+        self.assertEqual(admin.table.return_value.update.call_args.args[0], {"rol": "profesora"})
+
 
 class DatosPersonales(unittest.TestCase):
     def test_usa_la_funcion_de_la_base(self):
@@ -313,32 +359,228 @@ class ReiniciarContrasena(Base):
         rc.assert_called_once_with(self.ID)
 
 
-class Selector(Base):
-    def test_elegir_empresa(self):
-        self.como(ALUMNA_DOS)
-        self.rpc("ok")
-        r = self.post("/empresa/elegir", {"id_empresa": 2})
-        self.assertEqual(r.headers["location"], "/")
-        self.sb.rpc.assert_called_once_with("elegir_empresa", {"p_id_empresa": 2})
+class Login(Base):
+    """POST /login con lugar, mail y contraseña. Lo que decide la base (entrar_a_empresa) se simula."""
 
-    def test_empresa_ajena_rechazada(self):
-        self.como(ALUMNA_DOS)
-        self.rpc("no_autorizada")
-        r = self.post("/empresa/elegir", {"id_empresa": 9})
-        self.assertTrue(r.headers["location"].startswith("/empresa/elegir?"))
+    def entrar(self, tokens=("A", "R"), empresa=1, datos=None, usuario=None):
+        datos = datos or {"lugar": "  just   SHOW up ", "mail": "Ana@Prueba.Invalid ", "contrasena": "clave123"}
+        efecto = tokens if isinstance(tokens, Exception) else None
+        with mock.patch.object(auth, "iniciar_sesion", return_value=tokens, side_effect=efecto) as ini, \
+                mock.patch.object(auth, "entrar_a_empresa", return_value=empresa) as ent, \
+                mock.patch.object(auth, "usuario_de_acceso", return_value=usuario or ALUMNA_DOS) as uda, \
+                mock.patch.object(auth, "cerrar_sesion") as cs:
+            r = self.post("/login", datos)
+        return r, ini, ent, uda, cs
 
-    def test_sin_empresas(self):
-        self.como(persona(es_alumna=False, empresa_id=None, empresas=[]))
-        self.assertIn("no está habilitada", self.get("/empresa/elegir").text)
+    def test_ingresa_y_va_a_la_pantalla_de_su_rol(self):
+        for u, destino in ((ALUMNA_DOS, "/"), (PROFE, "/profesora/horarios"), (ADMIN, "/administracion"),
+                           (ADMIN_ALUMNA, "/administracion"), (PROFE_ALUMNA, "/profesora/horarios")):
+            r, ini, ent, uda, cs = self.entrar(usuario=u)
+            self.assertEqual(r.headers["location"], destino)
+        ini.assert_called_once_with("ana@prueba.invalid", "clave123")
+        ent.assert_called_once_with("A", "just SHOW up")  # espacios de más fuera; el resto lo normaliza la base
+        uda.assert_called_once_with("A", 1)
+        cookies = r.headers.get_list("set-cookie")
+        self.assertTrue(any(c.startswith("sb_empresa=1;") and "HttpOnly" in c for c in cookies))
+        cs.assert_not_called()
+
+    def test_mismo_mensaje_para_cualquier_falla(self):
+        # contraseña mal, lugar inexistente/desactivado o persona que no es de ese lugar: idéntico
+        r1, *_ = self.entrar(tokens=auth.ErrorAuth("El mail o la contraseña no son correctos."))
+        r2, _, _, _, cs = self.entrar(empresa=None)
+        for r in (r1, r2):
+            self.assertEqual(r.status_code, 401)
+            self.assertIn(auth.MSG_INGRESO, r.text)
+            self.assertNotIn("sb_acceso", r.headers.get("set-cookie", ""))
+        self.assertEqual(r1.text.replace("ana@prueba.invalid", ""), r2.text.replace("ana@prueba.invalid", ""))
+        cs.assert_called_once_with("A")  # la sesión de credenciales correctas en otro lugar se revoca
+
+    def test_ningun_mensaje_menciona_empresas(self):
+        r, *_ = self.entrar(empresa=None)
+        for texto in ("Pilates", "pertenec", "no existe", "desactivad"):
+            self.assertNotIn(texto, r.text)
+
+    def test_campos_obligatorios(self):
+        r, ini, *_ = self.entrar(datos={"lugar": "", "mail": "a@b.uy", "contrasena": "x"})
+        self.assertEqual(r.status_code, 400)
+        ini.assert_not_called()
+
+    def test_errores_de_conexion_se_informan(self):
+        r, *_ = self.entrar(tokens=auth.ErrorAuth(auth.MSG_CONEXION))
+        self.assertEqual(r.status_code, 503)
+        self.assertIn(auth.MSG_CONEXION, r.text)
+
+    def test_formulario_tiene_los_tres_campos(self):
+        r = self.get("/login")
+        for campo in ('name="lugar"', 'name="mail"', 'name="contrasena"', "Ingresar"):
+            self.assertIn(campo, r.text)
+        self.assertNotIn("Pilates", r.text)
+
+    def test_superadmin_no_entra_por_el_login_de_lugares(self):
+        r, *_ = self.entrar(empresa=None, usuario=SUPER)
+        self.assertEqual(r.status_code, 401)
+
+
+class LoginSuperadmin(Base):
+    def entrar(self, usuario, tokens=("A", "R")):
+        with mock.patch.object(auth, "iniciar_sesion", return_value=tokens), \
+                mock.patch.object(auth, "usuario_de_acceso", return_value=usuario) as uda, \
+                mock.patch.object(auth, "cerrar_sesion") as cs:
+            r = self.post("/admin/login", {"mail": "superadmin@prueba.invalid", "contrasena": "clave123"})
+        return r, uda, cs
+
+    def test_superadmin_entra_sin_lugar(self):
+        r, uda, cs = self.entrar(SUPER)
+        self.assertEqual(r.headers["location"], "/admin/empresas")
+        uda.assert_called_once_with("A")
+        cs.assert_not_called()
+        self.assertFalse(any(c.startswith("sb_empresa=") for c in r.headers.get_list("set-cookie")))
+
+    def test_otras_cuentas_reciben_el_error_generico(self):
+        for u in (ADMIN, PROFE, ALUMNA_DOS, None):
+            r, _, cs = self.entrar(u)
+            self.assertEqual(r.status_code, 401)
+            self.assertIn(auth.MSG_INGRESO_ADMIN, r.text)
+            cs.assert_called_once_with("A")
+
+    def test_formulario_sin_lugar(self):
+        r = self.get("/admin/login")
+        self.assertNotIn('name="lugar"', r.text)
+        self.assertIn('action="/admin/login"', r.text)
+
+
+class SesionPorEmpresa(unittest.TestCase):
+    """auth.usuario_de_acceso: la empresa sale de la cookie de la sesión y la base la valida."""
+
+    def cliente(self, perfil, membresia, empresa, elegir="ok"):
+        cli = mock.MagicMock()
+        cli.auth.get_user.return_value.user.id = "u"
+        tablas = {"profiles": [perfil], "membresia": membresia, "empresa": empresa}
+        def tabla(nombre):
+            t = mock.MagicMock()
+            consulta = t.select.return_value
+            consulta.eq.return_value = consulta
+            consulta.execute.return_value.data = tablas[nombre]
+            return t
+        cli.table.side_effect = tabla
+        cli.rpc.return_value.execute.return_value.data = elegir
+        return cli
+
+    PERFIL = {"nombre": "Ana", "apellido": "P", "mail": "a@b.uy", "rol": "alumna", "es_superadmin": False, "empresa_activa": 2}
+
+    def cargar(self, cli, empresa_id):
+        with mock.patch.object(auth, "cliente_nuevo", return_value=cli):
+            return auth.usuario_de_acceso("tok", empresa_id)
+
+    def test_sin_cookie_queda_sin_empresa(self):
+        u = self.cargar(self.cliente(self.PERFIL, [], []), None)
+        self.assertTrue(u.sin_empresa)
+
+    def test_cookie_de_otra_sesion_se_reelige(self):
+        cli = self.cliente(self.PERFIL, [{"es_admin": False, "es_profesora": False, "es_alumna": True}],
+                           [{"id": 1, "nombre": "Just Show Up", "codigo": "JSU", "activa": True}])
+        u = self.cargar(cli, 1)
+        cli.rpc.assert_called_once_with("elegir_empresa", {"p_id_empresa": 1})
+        self.assertEqual((u.empresa_id, u.empresa_nombre, u.es_alumna), (1, "Just Show Up", True))
+
+    def test_cookie_de_empresa_ajena_no_da_nada(self):
+        u = self.cargar(self.cliente(self.PERFIL, [], []), 9)
+        self.assertTrue(u.sin_empresa)
+        self.assertFalse(u.es_alumna or u.es_docente or u.es_admin)
+
+    def test_empresa_desactivada_no_da_nada(self):
+        u = self.cargar(self.cliente(self.PERFIL, [{"es_admin": True, "es_profesora": True, "es_alumna": False}],
+                                     [{"id": 1, "nombre": "X", "codigo": "JSU", "activa": False}]), 1)
+        self.assertTrue(u.sin_empresa)
+
+
+class ProfesoraSoloLoSuyo(Base):
+    HORARIOS = [{"id": 1, "dia_semana": "lunes", "hora_inicio": "08:00:00", "id_profesora": "pr", "activo": True,
+                 "tipo_clase": {"nombre": "Pilates", "activo": True}},
+                {"id": 2, "dia_semana": "martes", "hora_inicio": "09:00:00", "id_profesora": "otra", "activo": True,
+                 "tipo_clase": {"nombre": "Yoga", "activo": True}}]
+
+    def test_horarios(self):
+        self.sb.table.return_value.select.return_value.execute.return_value.data = self.HORARIOS
+        self.como(PROFE)
+        r = self.get("/profesora/horarios")
+        self.assertIn("Pilates", r.text)
+        self.assertNotIn("Yoga", r.text)
+        self.como(ADMIN)
+        with mock.patch.object(main.personas, "nombres_profesoras", return_value={"pr": "Paula Ruiz", "otra": "Olga"}):
+            r = self.get("/profesora/horarios")
+        self.assertIn("Yoga", r.text)
+        self.assertIn("Olga", r.text)
+
+    def test_no_edita_horarios_ajenos(self):
+        self.sb.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [self.HORARIOS[1]]
+        self.como(PROFE)
+        self.assertEqual(self.get("/profesora/horarios/2/editar").headers["location"], "/profesora/horarios")
+        r = self.post("/profesora/horarios/2/editar", {"dia_semana": "martes", "hora_inicio": "10:00", "id_tipo_clase": "1"})
+        self.assertEqual(r.headers["location"], "/profesora/horarios")
+        self.sb.table.return_value.update.assert_not_called()
+
+    def test_filtros_de_clases(self):
+        from datetime import date
+        from app import clases
+        sb = mock.MagicMock()
+        consulta = sb.table.return_value.select.return_value
+        consulta.gte.return_value.lte.return_value.eq.return_value.execute.return_value.data = [
+            {"fecha": "2026-11-03", "id_profesora": "pr", "horario": {"activo": True}},
+            {"fecha": "2026-11-04", "id_profesora": "otra", "horario": {"activo": True}}]
+        self.assertEqual(clases.dias_con_clases(sb, date(2026, 11, 2), date(2026, 11, 9), "pr"), [date(2026, 11, 3)])
+        self.assertEqual(len(clases.dias_con_clases(sb, date(2026, 11, 2), date(2026, 11, 9))), 2)
+        sb.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
+            {"id": 1, "dia_semana": "lunes", "hora_inicio": "08:00:00", "id_profesora": "pr"},
+            {"id": 2, "dia_semana": "martes", "hora_inicio": "09:00:00", "id_profesora": "otra"}]
+        self.assertEqual([h["id"] for h in clases.horarios_para_elegir(sb, "pr")], [1])
+
+    def test_admin_elige_la_profesora_del_horario(self):
+        self.como(ADMIN)
+        with mock.patch.object(main.personas, "nombres_profesoras", return_value={"pr": "Paula Ruiz"}), \
+                mock.patch.object(main, "_validar_horario", return_value=({"dia_semana": "lunes", "hora_inicio": "10:00",
+                                                                           "id_tipo_clase": 1}, [])):
+            r = self.post("/profesora/horarios/nuevo", {"dia_semana": "lunes", "hora_inicio": "10:00", "id_tipo_clase": "1",
+                                                         "id_profesora": "pr"})
+            self.assertEqual(r.status_code, 303)
+            fila = self.sb.table.return_value.insert.call_args.args[0]
+            self.assertEqual(fila["id_profesora"], "pr")
+            r = self.post("/profesora/horarios/nuevo", {"dia_semana": "lunes", "hora_inicio": "10:00", "id_tipo_clase": "1",
+                                                         "id_profesora": "intrusa"})
+        self.assertEqual(r.status_code, 400)
 
 
 class PanelEmpresas(Base):
-    def test_crear_empresa_normaliza_codigo(self):
+    ADMIN_INICIAL = {"admin_nombre": "Lia", "admin_apellido": "Paz", "admin_mail": "lia@prueba.invalid"}
+
+    def test_crear_empresa_con_administradora_inicial(self):
         self.como(SUPER)
         self.rpc({"resultado": "ok", "id": 2})
-        r = self.post("/admin/empresas", {"nombre": " Pilates Centro ", "codigo": "pil"})
+        with mock.patch.object(main, "_cuenta_existente", return_value=None), \
+                mock.patch.object(main.auth, "crear_cuenta", return_value=("id", "Temporal1")) as cc:
+            r = self.post("/admin/empresas", {"nombre": " Pilates   Centro ", "codigo": "pil", **self.ADMIN_INICIAL})
         self.sb.rpc.assert_called_once_with("crear_empresa", {"p_nombre": "Pilates Centro", "p_codigo": "PIL"})
-        self.assertIn("ok=1", r.headers["location"])
+        self.assertEqual((cc.call_args.kwargs["id_empresa"], cc.call_args.kwargs["rol_empresa"]), (2, "admin"))
+        self.assertIn("Temporal1", r.text)
+        self.assertIn("Empresa «Pilates Centro» creada", r.text)
+
+    def test_sin_administradora_inicial_no_crea_nada(self):
+        self.como(SUPER)
+        r = self.post("/admin/empresas", {"nombre": "Pilates Centro", "codigo": "PIL"})
+        self.assertIn("ok=0", r.headers["location"])
+        self.sb.rpc.assert_not_called()
+
+    def test_nombre_repetido(self):
+        self.como(SUPER)
+        self.rpc({"resultado": "nombre_repetido"})
+        r = self.post("/admin/empresas", {"nombre": "just-show up", "codigo": "JSX", **self.ADMIN_INICIAL})
+        self.assertIn("ok=0", r.headers["location"])
+        self.assertIn("iniciar+sesi", r.headers["location"])
+
+    def test_no_hay_ruta_para_borrar_empresas(self):
+        self.como(SUPER)
+        self.assertEqual(self.post("/admin/empresas/2/borrar", {}).status_code, 404)
+        self.assertIn(self.client.delete("/admin/empresas/2").status_code, (404, 405))
 
     def test_errores_traducidos(self):
         self.como(SUPER)

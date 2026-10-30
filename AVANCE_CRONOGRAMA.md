@@ -112,3 +112,25 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
 - Siguiente (jueves 5/11 o antes): respaldo de producción y PR de multiempresa → **autorización ①** para aplicar las
   migraciones 1–3, merge y migración 4.
 
+### Vie 30/10 (noche, segunda parte) — ajustes pedidos por Julieta antes de producción
+- **Inicio de sesión** con «Nombre del lugar», «Correo electrónico» y «Contraseña» + «Ingresar». Sin selector ni lista
+  de empresas (se quitaron `/empresa/elegir` y «Cambiar de empresa»; la sesión ya no conoce las otras empresas de la
+  cuenta). Migración **3b** (`20261031000350_multiempresa_3b_acceso.sql`, se aplica con las 1–3 antes del merge): clave
+  normalizada y **única** del nombre del lugar (sin mayúsculas, tildes, espacios ni signos) y `entrar_a_empresa()`, que
+  valida lugar existente y activo + membresía activa con rol. Cualquier falla → el mismo mensaje y se revoca la sesión.
+  La empresa de cada sesión va en una cookie que la base revalida en cada pedido.
+- **Superadministradora**: acceso propio `/admin/login` (sin lugar); el alta de empresa exige la administradora
+  inicial; nombres de lugar repetidos rechazados; no hay forma de borrar empresas. Script `scripts/crear_superadmin.py`.
+- **Redirección por rol**: administradora → `/administracion` (panel nuevo: resumen y accesos); profesora →
+  sus horarios; alumna → clases. Roles combinados: «Mis clases →» desde el panel y «Panel de profesora/administración →»
+  desde lo de alumna, sin cerrar sesión. La profesora no administradora ve solo sus horarios, clases, días y
+  planificación; la administradora elige la profesora de cada horario nuevo y la ve en la lista.
+- **Error de seguridad encontrado y corregido**: al crear una profesora desde la app, el trigger de compatibilidad
+  de la parte 1 la convertía en administradora (copiaba `profiles.rol`). Corregido en la app y en la base.
+- Procedimiento de respaldo, despliegue y vuelta atrás + texto del PR: `MULTIEMPRESA_DESPLIEGUE.md`.
+- **Pruebas**: app 237; base local multiempresa 1 39/39, 2 52/52, 3 57/57, **3b 48/48**, 4 37/37, Empresa 2 19/19,
+  facturación 180/180, Mercado Pago 73/73, restricción 29/29, planificación 33/33, vencimiento 48/48. Revisión visual
+  del login, el panel de administración y los menús (celular y escritorio) con datos simulados.
+- **Decisión pendiente (cédula)**: propuesta de cédula por empresa, esperando la aprobación de Julieta antes de
+  cambiar la estructura.
+

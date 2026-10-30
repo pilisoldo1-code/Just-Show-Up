@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import secrets
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -17,6 +17,9 @@ from app import validaciones
 
 COOKIE_ACCESO = "sb_acceso"
 COOKIE_REFRESCO = "sb_refresco"
+# Empresa elegida al iniciar sesión (por el nombre del lugar). Es de cada sesión: la base la vuelve a validar
+# (membresía activa en una empresa activa) en cada pedido, así que cambiarla a mano no da acceso a nada ajeno.
+COOKIE_EMPRESA = "sb_empresa"
 DURACION_COOKIE = 60 * 60 * 24 * 30
 LARGO_MINIMO_CONTRASENA = 8
 ALFABETO_TEMPORAL = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
@@ -24,6 +27,11 @@ ALFABETO_TEMPORAL = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
 MSG_CONEXION = "No pudimos conectarnos con el servidor. Revisá tu conexión y probá de nuevo."
 MSG_GENERICO = "No pudimos completar la operación. Probá de nuevo en unos minutos."
 MSG_SESION_VENCIDA = "Tu sesión venció. Iniciá sesión de nuevo."
+# Mismo mensaje para lugar inexistente o desactivado, mail o contraseña incorrectos y persona que no es del lugar.
+MSG_INGRESO = "No pudimos iniciar sesión con esos datos. Revisá el nombre del lugar, tu mail y tu contraseña."
+MSG_INGRESO_ADMIN = "No pudimos iniciar sesión con esos datos. Revisá tu mail y tu contraseña."
+MSG_DEMASIADOS_INTENTOS = "Hiciste demasiados intentos. Esperá unos minutos y probá de nuevo."
+MSG_REINGRESAR = "Volvé a iniciar sesión escribiendo el nombre de tu lugar."
 MSG_LINK_INVALIDO = "El link para restablecer la contraseña venció o ya se usó. Pedí uno nuevo."
 
 # Solo a estos sitios puede apuntar el link del mail: armarlo con cualquier Host
@@ -62,7 +70,6 @@ class Usuario:
     empresa_id: Optional[int] = None
     empresa_nombre: str = ""
     empresa_codigo: str = ""
-    empresas: list = field(default_factory=list)  # [{"id", "nombre", "codigo"}] donde tiene membresía activa
     con_membresias: bool = False
 
     def __post_init__(self):
@@ -80,6 +87,17 @@ class Usuario:
     @property
     def sin_empresa(self) -> bool:
         return self.con_membresias and not self.es_superadmin and self.empresa_id is None
+
+    @property
+    def inicio(self) -> str:
+        """Pantalla de inicio según los roles en la empresa activa: administradora > profesora > alumna."""
+        if self.es_superadmin:
+            return "/admin/empresas"
+        if self.es_admin:
+            return "/administracion"
+        if self.es_docente:
+            return "/profesora/horarios"
+        return "/"
 
 
 # ---------- clientes de Supabase ----------
@@ -119,7 +137,7 @@ def traducir_error(error: Exception) -> str:
         if codigo == "email_not_confirmed":
             return "Tu cuenta todavía no está confirmada."
         if codigo == "over_request_rate_limit" or getattr(error, "status", None) == 429:
-            return "Hiciste demasiados intentos. Esperá unos minutos y probá de nuevo."
+            return MSG_DEMASIADOS_INTENTOS
         if codigo == "same_password" or "different from the old" in texto:
             return "La contraseña nueva tiene que ser distinta a la anterior."
         if codigo == "validation_failed" or "valid email" in texto:
@@ -152,7 +170,13 @@ def iniciar_sesion(mail: str, contrasena: str) -> tuple[str, str]:
     return sesion.access_token, sesion.refresh_token
 
 
-def usuario_de_acceso(acceso: str) -> Optional[Usuario]:
+def entrar_a_empresa(acceso: str, lugar: str) -> Optional[int]:
+    """Valida en la base que el lugar exista, esté activo y la persona tenga un rol ahí. None si algo falla."""
+    r = cliente_con_token(acceso).rpc("entrar_a_empresa", {"p_lugar": lugar}).execute().data or {}
+    return r.get("id") if r.get("resultado") == "ok" else None
+
+
+def usuario_de_acceso(acceso: str, empresa_id: Optional[int] = None) -> Optional[Usuario]:
     cliente = cliente_nuevo()
     try:
         respuesta = cliente.auth.get_user(acceso)
@@ -174,26 +198,25 @@ def usuario_de_acceso(acceso: str) -> Optional[Usuario]:
     )
     if usuario.es_superadmin:
         return usuario
-    membresias = (cliente.table("membresia").select("id_empresa, es_admin, es_profesora, es_alumna")
-                  .eq("id_usuario", usuario.id).eq("activa", True).execute().data)
-    empresas = {e["id"]: e for e in (cliente.table("empresa").select("id, nombre, codigo, activa")
-                                     .in_("id", [m["id_empresa"] for m in membresias]).execute().data
-                                     if membresias else [])}
-    validas = [m for m in membresias if empresas.get(m["id_empresa"], {}).get("activa")]
-    usuario.empresas = sorted(({"id": m["id_empresa"], "nombre": empresas[m["id_empresa"]]["nombre"],
-                                "codigo": empresas[m["id_empresa"]]["codigo"]} for m in validas),
-                              key=lambda e: e["nombre"].lower())
-    activa = next((m for m in validas if m["id_empresa"] == p.get("empresa_activa")), None)
-    if activa is None and len(validas) == 1:
-        # una sola empresa: entra directo (la base registra la elección y la valida)
-        if cliente.rpc("elegir_empresa", {"p_id_empresa": validas[0]["id_empresa"]}).execute().data == "ok":
-            activa = validas[0]
-    if activa is not None:
-        e = empresas[activa["id_empresa"]]
-        usuario.empresa_id, usuario.empresa_nombre, usuario.empresa_codigo = e["id"], e["nombre"], e["codigo"]
-        usuario.es_admin = bool(activa["es_admin"])
-        usuario.es_docente = bool(activa["es_admin"] or activa["es_profesora"])
-        usuario.es_alumna = bool(activa["es_alumna"])
+    if empresa_id is None:
+        return usuario  # sin empresa elegida en esta sesión: tiene que volver a iniciar sesión con el lugar
+    # La empresa de esta sesión es la que se eligió al iniciar sesión (cookie). Solo se lee esa: la sesión
+    # nunca conoce las otras empresas de la cuenta.
+    membresia = (cliente.table("membresia").select("es_admin, es_profesora, es_alumna")
+                 .eq("id_usuario", usuario.id).eq("id_empresa", empresa_id).eq("activa", True).execute().data)
+    empresa = (cliente.table("empresa").select("id, nombre, codigo, activa").eq("id", empresa_id).execute().data
+               if membresia else [])
+    if not empresa or not empresa[0]["activa"]:
+        return usuario
+    if p.get("empresa_activa") != empresa_id:
+        # la cuenta usó otra empresa en otro dispositivo: se vuelve a elegir esta (la base valida la membresía)
+        if cliente.rpc("elegir_empresa", {"p_id_empresa": empresa_id}).execute().data != "ok":
+            return usuario
+    m, e = membresia[0], empresa[0]
+    usuario.empresa_id, usuario.empresa_nombre, usuario.empresa_codigo = e["id"], e["nombre"], e["codigo"]
+    usuario.es_admin = bool(m["es_admin"])
+    usuario.es_docente = bool(m["es_admin"] or m["es_profesora"])
+    usuario.es_alumna = bool(m["es_alumna"])
     return usuario
 
 
@@ -202,15 +225,17 @@ def _validar(request: Request) -> Optional[Usuario]:
     refresco = request.cookies.get(COOKIE_REFRESCO)
     if not acceso and not refresco:
         return None
+    empresa = request.cookies.get(COOKIE_EMPRESA, "")
+    empresa_id = int(empresa) if empresa.isdigit() else None
     try:
         if acceso:
-            usuario = usuario_de_acceso(acceso)
+            usuario = usuario_de_acceso(acceso, empresa_id)
             if usuario:
                 return usuario
         if refresco:
             sesion = cliente_nuevo().auth.refresh_session(refresco).session
             if sesion:
-                usuario = usuario_de_acceso(sesion.access_token)
+                usuario = usuario_de_acceso(sesion.access_token, empresa_id)
                 if usuario:
                     request.state.tokens_nuevos = (sesion.access_token, sesion.refresh_token)
                     return usuario
@@ -256,18 +281,17 @@ def _exigir_sesion(request: Request) -> Usuario:
 # ---------- dependencias de FastAPI ----------
 
 def destino(usuario: Usuario) -> str:
-    """Pantalla de inicio según el rol en la empresa activa."""
-    if usuario.es_superadmin:
-        return "/admin/empresas"
-    if usuario.sin_empresa:
-        return "/empresa/elegir"
-    return "/profesora/horarios" if usuario.es_profesora else "/"
+    """Pantalla de inicio según el rol en la empresa activa (sin empresa: volver a iniciar sesión)."""
+    return url_login(MSG_REINGRESAR) if usuario.sin_empresa else usuario.inicio
 
 
 def _con_empresa(request: Request) -> Usuario:
     usuario = _exigir_sesion(request)
-    if usuario.es_superadmin or usuario.sin_empresa:
-        raise Redirigir(destino(usuario))
+    if usuario.es_superadmin:
+        raise Redirigir(usuario.inicio)
+    if usuario.sin_empresa:
+        cerrar_sesion(request.cookies.get(COOKIE_ACCESO))
+        raise Redirigir(url_login(MSG_REINGRESAR), borrar_cookies=True)
     return usuario
 
 
@@ -276,11 +300,10 @@ def requiere_login(request: Request) -> Usuario:
 
 
 def requiere_alumna(request: Request) -> Usuario:
+    """Alumna de la empresa activa (también una profesora o administradora que además es alumna ahí)."""
     usuario = _con_empresa(request)
-    if usuario.es_profesora:
-        raise Redirigir("/profesora/horarios")
     if not usuario.es_alumna:
-        raise Redirigir("/empresa/elegir")
+        raise Redirigir(usuario.inicio)
     return usuario
 
 
@@ -316,8 +339,12 @@ def _es_https(request: Request) -> bool:
     return request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
 
 
-def poner_cookies(response: Response, request: Request, acceso: str, refresco: str) -> None:
-    for nombre, valor in ((COOKIE_ACCESO, acceso), (COOKIE_REFRESCO, refresco)):
+def poner_cookies(response: Response, request: Request, acceso: str, refresco: str,
+                  empresa_id: Optional[int] = None) -> None:
+    cookies = [(COOKIE_ACCESO, acceso), (COOKIE_REFRESCO, refresco)]
+    if empresa_id is not None:
+        cookies.append((COOKIE_EMPRESA, str(empresa_id)))
+    for nombre, valor in cookies:
         response.set_cookie(
             nombre, valor, max_age=DURACION_COOKIE, httponly=True,
             samesite="lax", secure=_es_https(request), path="/",
@@ -325,7 +352,7 @@ def poner_cookies(response: Response, request: Request, acceso: str, refresco: s
 
 
 def borrar_cookies(response: Response) -> None:
-    for nombre in (COOKIE_ACCESO, COOKIE_REFRESCO):
+    for nombre in (COOKIE_ACCESO, COOKIE_REFRESCO, COOKIE_EMPRESA):
         response.delete_cookie(nombre, path="/")
 
 
@@ -347,6 +374,7 @@ def generar_contrasena_temporal(largo: int = 10) -> str:
 def crear_cuenta(
     mail: str, nombre: str, apellido: str, rol: str = "alumna", extras: Optional[dict] = None,
     contrasena: Optional[str] = None, id_empresa: Optional[int] = None, rol_empresa: Optional[str] = None,
+    sin_empresa: bool = False,
 ) -> tuple[str, str]:
     """Crea la cuenta (ya confirmada). Con id_empresa y rol_empresa la base crea la membresía en esa
     empresa (alumna, profesora, admin o admin_profesora); sin_empresa=True es para la superadministradora."""
@@ -355,6 +383,8 @@ def crear_cuenta(
     meta = {"nombre": nombre, "apellido": apellido}
     if id_empresa is not None:
         meta.update({"id_empresa": id_empresa, "rol_empresa": rol_empresa or "alumna"})
+    elif sin_empresa:
+        meta["sin_empresa"] = True
     try:
         creada = admin.auth.admin.create_user(
             {
@@ -368,7 +398,8 @@ def crear_cuenta(
         raise ErrorAuth(traducir_error(e)) from e
 
     cambios = {k: v for k, v in (extras or {}).items() if v}
-    if rol != "alumna":
+    if rol != "alumna" and id_empresa is None:
+        # solo el alta vieja (sin empresa) usa profiles.rol; con empresa, el rol es el de la membresía
         cambios["rol"] = rol
     if cambios:
         try:

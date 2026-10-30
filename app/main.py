@@ -61,6 +61,12 @@ def _destino(usuario: Usuario) -> str:
     return auth.destino(usuario)
 
 
+def _mias(usuario: Usuario) -> str | None:
+    """Multiempresa: la profesora que no es administradora ve y gestiona solo sus horarios y clases
+    (la base también lo limita). None = todas las de la empresa (administradora)."""
+    return usuario.id if usuario.empresa_id is not None and not usuario.es_admin else None
+
+
 def _rango_semana(offset: int) -> tuple[date, date]:
     hoy = clases.ahora().date()
     lunes_actual = hoy - timedelta(days=hoy.weekday())
@@ -114,30 +120,77 @@ def _ejecutar(accion, usuario: Usuario, clase_id: int) -> tuple[bool, str]:
 @app.get("/login")
 def login_form(request: Request, ok: int = 0, aviso: str = ""):
     usuario = auth.usuario_opcional(request)
-    if usuario is not None:
+    if usuario is not None and not usuario.sin_empresa:
         return RedirectResponse(url=_destino(usuario), status_code=303)
-    return _render(request, "login.html", aviso=aviso, aviso_ok=bool(ok), mail="")
+    return _render(request, "login.html", aviso=aviso, aviso_ok=bool(ok), mail="", lugar="")
+
+
+def _ingresar(mail: str, contrasena: str) -> tuple[str, str] | None:
+    """Tokens si el mail y la contraseña son correctos; None si no (sin decir qué falló)."""
+    try:
+        return auth.iniciar_sesion(mail, contrasena)
+    except ErrorAuth as e:
+        if str(e) in (auth.MSG_CONEXION, auth.MSG_DEMASIADOS_INTENTOS):
+            raise  # problemas de conexión o de demasiados intentos: se informan (no dicen nada de la cuenta)
+        return None
 
 
 @app.post("/login")
-def login(request: Request, mail: str = Form(""), contrasena: str = Form("")):
-    mail = mail.strip().lower()
-    if not mail or not contrasena:
-        return _render(request, "login.html", status_code=400, mail=mail, aviso_ok=False,
-                       aviso="Ingresá tu mail y tu contraseña.")
+def login(request: Request, lugar: str = Form(""), mail: str = Form(""), contrasena: str = Form("")):
+    lugar, mail = " ".join(lugar.split()), mail.strip().lower()
+    datos = {"mail": mail, "lugar": lugar}
+    if not lugar or not mail or not contrasena:
+        return _render(request, "login.html", status_code=400, aviso_ok=False, **datos,
+                       aviso="Completá el nombre del lugar, tu mail y tu contraseña.")
     try:
-        acceso, refresco = auth.iniciar_sesion(mail, contrasena)
-        usuario = auth.usuario_de_acceso(acceso)
+        tokens = _ingresar(mail, contrasena)
+        empresa_id = auth.entrar_a_empresa(tokens[0], lugar) if tokens else None
     except ErrorAuth as e:
-        return _render(request, "login.html", status_code=401, mail=mail, aviso_ok=False, aviso=str(e))
+        return _render(request, "login.html", status_code=503, aviso_ok=False, aviso=str(e), **datos)
     except Exception:
         logging.exception("Error inesperado al iniciar sesión")
-        return _render(request, "login.html", status_code=503, mail=mail, aviso_ok=False, aviso=auth.MSG_CONEXION)
-    if usuario is None:
-        return _render(request, "login.html", status_code=403, mail=mail, aviso_ok=False,
-                       aviso="Tu cuenta no está habilitada todavía. Avisale a tu profesora.")
-    respuesta = RedirectResponse(url=_destino(usuario), status_code=303)
-    auth.poner_cookies(respuesta, request, acceso, refresco)
+        return _render(request, "login.html", status_code=503, aviso_ok=False, aviso=auth.MSG_CONEXION, **datos)
+    if empresa_id is None:
+        if tokens:
+            auth.cerrar_sesion(tokens[0])  # credenciales correctas pero no es de ese lugar: la sesión no queda
+        return _render(request, "login.html", status_code=401, aviso_ok=False, aviso=auth.MSG_INGRESO, **datos)
+    usuario = auth.usuario_de_acceso(tokens[0], empresa_id)
+    respuesta = RedirectResponse(url=_destino(usuario) if usuario else "/", status_code=303)
+    auth.poner_cookies(respuesta, request, tokens[0], tokens[1], empresa_id)
+    return respuesta
+
+
+@app.get("/admin/login")
+def admin_login_form(request: Request, ok: int = 0, aviso: str = ""):
+    usuario = auth.usuario_opcional(request)
+    if usuario is not None and usuario.es_superadmin:
+        return RedirectResponse(url=usuario.inicio, status_code=303)
+    return _render(request, "login.html", aviso=aviso, aviso_ok=bool(ok), mail="", superadmin=True)
+
+
+@app.post("/admin/login")
+def admin_login(request: Request, mail: str = Form(""), contrasena: str = Form("")):
+    """Acceso propio de la superadministradora (sin lugar). Cualquier otra cuenta recibe el error genérico."""
+    mail = mail.strip().lower()
+    if not mail or not contrasena:
+        return _render(request, "login.html", status_code=400, aviso_ok=False, mail=mail, superadmin=True,
+                       aviso="Completá tu mail y tu contraseña.")
+    try:
+        tokens = _ingresar(mail, contrasena)
+        usuario = auth.usuario_de_acceso(tokens[0]) if tokens else None
+    except ErrorAuth as e:
+        return _render(request, "login.html", status_code=503, aviso_ok=False, aviso=str(e), mail=mail, superadmin=True)
+    except Exception:
+        logging.exception("Error inesperado al iniciar sesión (superadministradora)")
+        return _render(request, "login.html", status_code=503, aviso_ok=False, aviso=auth.MSG_CONEXION, mail=mail,
+                       superadmin=True)
+    if usuario is None or not usuario.es_superadmin:
+        if tokens:
+            auth.cerrar_sesion(tokens[0])
+        return _render(request, "login.html", status_code=401, aviso_ok=False, aviso=auth.MSG_INGRESO_ADMIN, mail=mail,
+                       superadmin=True)
+    respuesta = RedirectResponse(url=usuario.inicio, status_code=303)
+    auth.poner_cookies(respuesta, request, tokens[0], tokens[1])
     return respuesta
 
 
@@ -424,17 +477,25 @@ def health():
 def profesora_horarios(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_profesora)):
     supabase = _sb(usuario)
     result = supabase.table(TABLE).select("*, tipo_clase(nombre, activo)").execute()
-    horarios = sorted(result.data, key=_orden_horario)
+    mias = _mias(usuario)
+    horarios = sorted((h for h in result.data if mias is None or h.get("id_profesora") == mias), key=_orden_horario)
+    if usuario.es_admin and usuario.empresa_id is not None:
+        nombres = personas.nombres_profesoras(supabase)
+        for h in horarios:
+            h["profesora"] = nombres.get(h.get("id_profesora"), "")
     return _render(request, "profesora_horarios.html", usuario, horarios=horarios,
                    aviso=aviso, aviso_ok=bool(ok))
 
 
 def _form_horario(request: Request, usuario: Usuario, horario: dict | None, accion: str,
                   errores: list[str] | None = None, status_code: int = 200):
+    sb = _sb(usuario)
+    profesoras = (sorted(personas.nombres_profesoras(sb).items(), key=lambda p: p[1].lower())
+                  if usuario.es_admin and usuario.empresa_id is not None else [])
     return _render(
         request, "profesora_horario_form.html", usuario, status_code=status_code,
         horario=horario, dias=DIAS_ORDEN, accion=accion, errores=errores or [],
-        tipos=tipos_clase.activos(_sb(usuario)),
+        tipos=tipos_clase.activos(sb), profesoras=profesoras,
     )
 
 
@@ -462,10 +523,17 @@ def crear_horario(
     hora_inicio: str = Form(""),
     id_tipo_clase: str = Form(""),
     activo: bool = Form(False),
+    id_profesora: str = Form(""),
     usuario: Usuario = Depends(requiere_profesora),
 ):
     supabase = _sb(usuario)
     datos, errores = _validar_horario(supabase, dia_semana, hora_inicio, id_tipo_clase)
+    if usuario.es_admin and usuario.empresa_id is not None:
+        # la administradora elige quién da la clase; sin elegir, es ella (lo completa la base)
+        if id_profesora and id_profesora not in personas.nombres_profesoras(supabase):
+            errores.append("Elegí una profesora de tu empresa.")
+        elif id_profesora:
+            datos["id_profesora"] = id_profesora
     if errores:
         return _form_horario(request, usuario, {**datos, "activo": activo}, "/profesora/horarios/nuevo", errores, 400)
     # Duración, cupo y precio los completa la base a partir del tipo de clase.
@@ -479,9 +547,14 @@ def crear_horario(
 def editar_horario_form(request: Request, horario_id: int, usuario: Usuario = Depends(requiere_profesora)):
     supabase = _sb(usuario)
     filas = supabase.table(TABLE).select("*").eq("id", horario_id).execute().data
-    if not filas:
+    if not filas or not _puede_editar_horario(usuario, filas[0]):
         return RedirectResponse(url="/profesora/horarios", status_code=303)
     return _form_horario(request, usuario, filas[0], f"/profesora/horarios/{horario_id}/editar")
+
+
+def _puede_editar_horario(usuario: Usuario, horario: dict) -> bool:
+    mias = _mias(usuario)
+    return mias is None or horario.get("id_profesora") == mias
 
 
 @app.post("/profesora/horarios/{horario_id}/editar")
@@ -496,7 +569,7 @@ def actualizar_horario(
 ):
     supabase = _sb(usuario)
     filas = supabase.table(TABLE).select("*").eq("id", horario_id).execute().data
-    if not filas:
+    if not filas or not _puede_editar_horario(usuario, filas[0]):
         return RedirectResponse(url="/profesora/horarios", status_code=303)
     actual = filas[0]
     datos, errores = _validar_horario(supabase, dia_semana, hora_inicio, id_tipo_clase)
@@ -550,7 +623,9 @@ def confirmar_tipo_horario(
 @app.post("/profesora/horarios/{horario_id}/toggle")
 def toggle_horario(horario_id: int, usuario: Usuario = Depends(requiere_profesora)):
     supabase = _sb(usuario)
-    actual = supabase.table(TABLE).select("activo, tipo_clase(activo, nombre)").eq("id", horario_id).single().execute().data
+    actual = supabase.table(TABLE).select("activo, id_profesora, tipo_clase(activo, nombre)").eq("id", horario_id).single().execute().data
+    if not _puede_editar_horario(usuario, actual):
+        return RedirectResponse(url="/profesora/horarios", status_code=303)
     if not actual["activo"] and not actual["tipo_clase"]["activo"]:
         aviso = (f"No se puede activar: el tipo de clase \"{actual['tipo_clase']['nombre']}\" está desactivado. "
                  "Activalo o cambiá el tipo del horario.")
@@ -699,7 +774,7 @@ def profesora_clases(request: Request, fecha: str = "", usuario: Usuario = Depen
     for lunes in {d - timedelta(days=d.weekday()) for d in (rango[0], rango[-1])}:
         clases.generar_clases(sb, lunes)
     # Solo los días que tienen clases: si mañana no hay (ej. sábado), se pasa al siguiente.
-    dias = clases.dias_con_clases(sb, rango[0], rango[-1])
+    dias = clases.dias_con_clases(sb, rango[0], rango[-1], _mias(usuario))
     if fecha:
         f = _parse_fecha(fecha)
         if f not in dias:
@@ -711,7 +786,7 @@ def profesora_clases(request: Request, fecha: str = "", usuario: Usuario = Depen
     etiquetas = {hoy: "Hoy", hoy + timedelta(days=1): "Mañana"}
     return _render(
         request, "profesora_clases.html", usuario,
-        clases=clases.clases_del_dia(sb, f),
+        clases=clases.clases_del_dia(sb, f, _mias(usuario)),
         titulo_dia=f"{clases.nombre_dia(f)} {f.day} de {MESES[f.month]}",
         es_hoy=f == hoy,
         dias=[
@@ -726,7 +801,7 @@ def profesora_clases(request: Request, fecha: str = "", usuario: Usuario = Depen
 def profesora_clase(request: Request, clase_id: int, ok: int = 0, aviso: str = "",
                     usuario: Usuario = Depends(requiere_profesora)):
     clase = clases.clase_con_asistencia(_sb(usuario), clase_id)
-    if clase is None or clase["fecha"] > _dias_profesora()[-1]:
+    if clase is None or clase["fecha"] > _dias_profesora()[-1] or not _puede_editar_horario(usuario, clase):
         return RedirectResponse(url="/profesora/clases", status_code=303)
     return _render(request, "profesora_clase.html", usuario, clase=clase, aviso=aviso, aviso_ok=bool(ok))
 
@@ -765,7 +840,7 @@ def _render_planificacion(request: Request, usuario: Usuario, modo: str = "licen
     contexto.setdefault("clases_dia", None)
     return _render(
         request, "profesora_planificacion.html", usuario, status_code=status_code, modo=modo,
-        bloqueos=clases.bloqueos(sb), horarios=clases.horarios_para_elegir(sb),
+        bloqueos=clases.bloqueos(sb), horarios=clases.horarios_para_elegir(sb, _mias(usuario)),
         hoy_iso=hoy.isoformat(), largo_motivo=clases.LARGO_MAX_MOTIVO, **contexto,
     )
 
@@ -783,7 +858,7 @@ def profesora_planificacion(request: Request, modo: str = "licencia", fecha: str
             clases.generar_clases(sb, lunes)
             contexto["fecha_puntual"] = f.isoformat()
             contexto["titulo_puntual"] = f"{clases.nombre_dia(f)} {f.day} de {MESES[f.month]}"
-            contexto["clases_dia"] = clases.clases_para_cancelar(sb, f)
+            contexto["clases_dia"] = clases.clases_para_cancelar(sb, f, _mias(usuario))
     return _render_planificacion(request, usuario, modo=modo, **contexto)
 
 
@@ -1356,32 +1431,14 @@ async def mp_aviso(request: Request):
     return Response(status_code=200)
 
 
-# ---------- multiempresa: elegir empresa y superadministradora ----------
-
-@app.get("/empresa/elegir")
-def empresa_elegir_form(request: Request, aviso: str = "", usuario: Usuario = Depends(requiere_login)):
-    if usuario.es_superadmin:
-        return RedirectResponse(url=_destino(usuario), status_code=303)
-    return _render(request, "empresa_elegir.html", usuario, aviso=aviso)
-
-
-@app.post("/empresa/elegir")
-def empresa_elegir(id_empresa: int = Form(...), usuario: Usuario = Depends(requiere_login)):
-    try:
-        r = _sb(usuario).rpc("elegir_empresa", {"p_id_empresa": id_empresa}).execute().data
-    except Exception:
-        logging.exception("No se pudo elegir la empresa")
-        r = None
-    if r != "ok":
-        return RedirectResponse(url="/empresa/elegir?" + urlencode({"aviso": "No pudimos abrir esa empresa. Probá de nuevo."}),
-                                status_code=303)
-    return RedirectResponse(url="/", status_code=303)
-
+# ---------- multiempresa: superadministradora ----------
 
 MSG_EMPRESA = {
     "no_autorizada": "No tenés permiso para hacer eso.",
     "datos_invalidos": "Revisá los datos: el nombre lleva entre 2 y 80 caracteres y el código, de 2 a 6 letras mayúsculas (sin tildes).",
     "codigo_repetido": "Ya existe otra empresa con ese código.",
+    "nombre_repetido": "Ya existe otra empresa con ese nombre (o uno que se escribe igual sin mayúsculas, tildes, espacios ni signos). "
+                       "El nombre es lo que se escribe para iniciar sesión, así que tiene que ser distinto.",
     "codigo_fijo": "El código ya no se puede cambiar: la empresa ya emitió facturas con él.",
     "no_existe": "Esa empresa no existe.",
 }
@@ -1406,22 +1463,32 @@ def admin_empresas(request: Request, ok: int = 0, aviso: str = "", usuario: Usua
 
 
 @app.post("/admin/empresas")
-def admin_empresa_crear(nombre: str = Form(""), codigo: str = Form(""), usuario: Usuario = Depends(requiere_superadmin)):
+def admin_empresa_crear(
+    request: Request, nombre: str = Form(""), codigo: str = Form(""), admin_nombre: str = Form(""),
+    admin_apellido: str = Form(""), admin_mail: str = Form(""), tambien_profesora: str = Form(""),
+    usuario: Usuario = Depends(requiere_superadmin),
+):
+    nombre = " ".join(nombre.split())
+    datos, errores = validaciones.validar_alumna({"nombre": admin_nombre, "apellido": admin_apellido, "mail": admin_mail},
+                                                 clases.ahora().date())
+    if errores:  # la administradora inicial es obligatoria: se valida antes de crear nada
+        return _volver_empresas(False, "Administradora inicial: " + " ".join(errores))
     try:
-        r = _sb(usuario).rpc("crear_empresa", {"p_nombre": nombre.strip(), "p_codigo": _codigo(codigo)}).execute().data or {}
+        r = _sb(usuario).rpc("crear_empresa", {"p_nombre": nombre, "p_codigo": _codigo(codigo)}).execute().data or {}
     except Exception:
         logging.exception("No se pudo crear la empresa")
         r = {}
-    if r.get("resultado") == "ok":
-        return _volver_empresas(True, f"Empresa «{nombre.strip()}» creada. Ahora asignale una administradora.")
-    return _volver_empresas(False, MSG_EMPRESA.get(r.get("resultado"), auth.MSG_GENERICO))
+    if r.get("resultado") != "ok":
+        return _volver_empresas(False, MSG_EMPRESA.get(r.get("resultado"), auth.MSG_GENERICO))
+    return _asignar_administradora(request, usuario, r["id"], datos, bool(tambien_profesora),
+                                   f"Empresa «{nombre}» creada. ")
 
 
 @app.post("/admin/empresas/{empresa_id}/editar")
 def admin_empresa_editar(empresa_id: int, nombre: str = Form(""), codigo: str = Form(""),
                          usuario: Usuario = Depends(requiere_superadmin)):
     try:
-        r = _sb(usuario).rpc("editar_empresa", {"p_id": empresa_id, "p_nombre": nombre.strip(),
+        r = _sb(usuario).rpc("editar_empresa", {"p_id": empresa_id, "p_nombre": " ".join(nombre.split()),
                                                 "p_codigo": _codigo(codigo)}).execute().data
     except Exception:
         logging.exception("No se pudo editar la empresa")
@@ -1452,7 +1519,11 @@ def admin_empresa_administradora(
     datos, errores = validaciones.validar_alumna({"nombre": nombre, "apellido": apellido, "mail": mail}, clases.ahora().date())
     if errores:
         return _volver_empresas(False, " ".join(errores))
-    es_profesora = bool(tambien_profesora)
+    return _asignar_administradora(request, usuario, empresa_id, datos, bool(tambien_profesora))
+
+
+def _asignar_administradora(request: Request, usuario: Usuario, empresa_id: int, datos: dict, es_profesora: bool,
+                            prefijo: str = ""):
     try:
         existente = _cuenta_existente(datos["mail"])
         if existente:
@@ -1461,18 +1532,54 @@ def admin_empresa_administradora(
             r = _sb(usuario).rpc("asignar_administradora", {"p_id_empresa": empresa_id, "p_id_usuario": existente["id"],
                                                            "p_es_profesora": es_profesora}).execute().data
             if r == "ok":
-                return _volver_empresas(True, f"{existente['nombre']} {existente['apellido']} ya tenía cuenta: ahora administra "
-                                              "la empresa con su misma contraseña.")
-            return _volver_empresas(False, MSG_EMPRESA.get(r, auth.MSG_GENERICO))
+                return _volver_empresas(True, prefijo + f"{existente['nombre']} {existente['apellido']} ya tenía cuenta: "
+                                              "ahora administra la empresa con su misma contraseña.")
+            return _volver_empresas(False, prefijo + MSG_EMPRESA.get(r, auth.MSG_GENERICO))
         _, contrasena = auth.crear_cuenta(
             datos["mail"], datos["nombre"], datos["apellido"], rol="profesora",
             id_empresa=empresa_id, rol_empresa="admin_profesora" if es_profesora else "admin",
         )
     except ErrorAuth as e:
-        return _volver_empresas(False, str(e))
+        return _volver_empresas(False, prefijo + "No se pudo crear la administradora: " + str(e))
     except Exception:
         logging.exception("No se pudo asignar la administradora")
-        return _volver_empresas(False, auth.MSG_GENERICO)
-    return _render(request, "alumna_credenciales.html", usuario, titulo="Administradora: cuenta creada",
+        return _volver_empresas(False, prefijo + "No se pudo crear la administradora: " + auth.MSG_GENERICO)
+    return _render(request, "alumna_credenciales.html", usuario, titulo=prefijo + "Administradora: cuenta creada",
                    nombre=f"{datos['nombre']} {datos['apellido']}", mail=datos["mail"], contrasena=contrasena,
                    volver=("/admin/empresas", "Volver a empresas"))
+
+
+# ---------- multiempresa: panel de la administradora ----------
+
+SECCIONES_ADMIN = [
+    ("/profesora/alumnas", "Personas", "Alumnas y profesoras: altas, roles, cédula y contraseñas."),
+    ("/profesora/tipos-clase", "Tipos de clase", "Nombre, duración, precio y cupo de cada clase."),
+    ("/profesora/horarios", "Horarios", "Horarios fijos de cada profesora."),
+    ("/profesora/planificacion", "Planificación", "Licencias, vacaciones y clases puntuales canceladas."),
+    ("/profesora/clases", "Asistencias", "Quién reservó cada clase y presente / ausente."),
+    ("/profesora/resumenes", "Facturación y pagos", "Facturas mensuales, ajustes y cobros."),
+    ("/profesora/estadisticas", "Estadísticas", "Asistencia de toda la empresa."),
+]
+
+
+def _resumen_admin(usuario: Usuario) -> dict:
+    sb = _sb(usuario)
+    resumen = {"profesoras": 0, "alumnas": 0, "clases_hoy": 0, "facturas_pendientes": 0}
+    try:
+        miembros = (sb.table("membresia").select("es_admin, es_profesora, es_alumna")
+                    .eq("id_empresa", usuario.empresa_id).eq("activa", True).execute().data)
+        resumen["profesoras"] = sum(1 for m in miembros if m["es_profesora"])
+        resumen["alumnas"] = sum(1 for m in miembros if m["es_alumna"])
+        resumen["clases_hoy"] = len(sb.table("clase").select("id").eq("fecha", clases.ahora().date().isoformat())
+                                    .eq("estado", "programada").execute().data)
+        resumen["facturas_pendientes"] = len(sb.table("resumen_mensual").select("id").eq("estado_factura", "confirmada")
+                                             .eq("estado_pago", "pendiente").execute().data)
+    except Exception:
+        logging.exception("No se pudo armar el resumen de la administradora")
+    return resumen
+
+
+@app.get("/administracion")
+def administracion(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_admin)):
+    return _render(request, "administracion.html", usuario, resumen=_resumen_admin(usuario), secciones=SECCIONES_ADMIN,
+                   aviso=aviso, aviso_ok=bool(ok))

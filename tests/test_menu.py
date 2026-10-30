@@ -16,10 +16,12 @@ from app.auth import Usuario
 PROFESORA = Usuario(id="p", mail="profe@prueba.invalid", nombre="Profe", apellido="Prueba", rol="profesora", token="t")
 ALUMNA = Usuario(id="a", mail="alumna@prueba.invalid", nombre="Ana", apellido="Prueba", rol="alumna", token="t")
 
+# PROFESORA (rol «profesora» sin membresías) es administradora y profesora: panel de administración.
 SECCIONES_PROFESORA = [
+    ("/administracion", "Inicio"),
     ("/profesora/horarios", "Horarios"), ("/profesora/tipos-clase", "Tipos de clase"),
     ("/profesora/clases", "Asistencias"), ("/profesora/planificacion", "Planificación"),
-    ("/profesora/alumnas", "Alumnas"), ("/profesora/resumenes", "Facturación"),
+    ("/profesora/alumnas", "Personas"), ("/profesora/resumenes", "Facturación"),
     ("/profesora/estadisticas", "Estadísticas"),
 ]
 SECCIONES_ALUMNA = [
@@ -50,7 +52,7 @@ def activos(html):
 
 
 class MenuPrincipal(unittest.TestCase):
-    def test_profesora_tiene_sus_siete_secciones_en_orden(self):
+    def test_administradora_tiene_sus_ocho_secciones_en_orden(self):
         self.assertEqual(enlaces(bloque(menu_de(PROFESORA, "/profesora/horarios"), "menu-links")), SECCIONES_PROFESORA)
 
     def test_alumna_tiene_sus_cuatro_secciones_en_orden(self):
@@ -127,7 +129,7 @@ class HeaderCelular(unittest.TestCase):
         self.assertIn('id="menu-principal"', html)
 
     def test_marca_lleva_al_inicio_de_cada_rol(self):
-        self.assertIn('<a class="menu-marca" href="/profesora/horarios">Just Show Up</a>',
+        self.assertIn('<a class="menu-marca" href="/administracion">Just Show Up</a>',
                       menu_de(PROFESORA, "/profesora/alumnas"))
         self.assertIn('<a class="menu-marca" href="/">Just Show Up</a>', menu_de(ALUMNA, "/mis-facturas"))
 

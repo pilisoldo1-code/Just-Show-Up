@@ -1,29 +1,31 @@
 {% set ruta = request.url.path %}
+{% set en_alumna = ruta == "/" or ruta.startswith("/dia/") or ruta.startswith("/mis-") or ruta.startswith("/mi-historial") or ruta.startswith("/clases/") %}
+{% set inicio = usuario.inicio %}
+{% set extra = none %}
 {% if usuario.es_superadmin %}
-{% set inicio = "/admin/empresas" %}
 {% set secciones = [("/admin/empresas", "Empresas", ruta.startswith("/admin/empresas"))] %}
 {% elif usuario.sin_empresa %}
-{% set inicio = "/empresa/elegir" %}
 {% set secciones = [] %}
-{% elif usuario.es_profesora %}
-{% set inicio = "/profesora/horarios" %}
+{% elif usuario.es_profesora and not (en_alumna and usuario.es_alumna) %}
 {% set secciones = [
+    ("/administracion", "Inicio", ruta.startswith("/administracion")) if usuario.es_admin else None,
     ("/profesora/horarios", "Horarios", ruta.startswith("/profesora/horarios")),
     ("/profesora/tipos-clase", "Tipos de clase", ruta.startswith("/profesora/tipos-clase")) if usuario.es_admin else None,
     ("/profesora/clases", "Asistencias", ruta.startswith("/profesora/clases")),
     ("/profesora/planificacion", "Planificación", ruta.startswith("/profesora/planificacion")),
-    ("/profesora/alumnas", "Alumnas", ruta.startswith("/profesora/alumnas")),
+    ("/profesora/alumnas", "Personas" if usuario.es_admin else "Alumnas", ruta.startswith("/profesora/alumnas")),
     ("/profesora/resumenes", "Facturación", ruta.startswith("/profesora/resumenes")) if usuario.es_admin else None,
     ("/profesora/estadisticas", "Estadísticas", ruta.startswith("/profesora/estadisticas")),
 ] | reject("none") | list %}
+{% if usuario.es_alumna %}{% set extra = ("/", "Mis clases") %}{% endif %}
 {% else %}
-{% set inicio = "/" %}
 {% set secciones = [
     ("/", "Clases", ruta == "/" or ruta.startswith("/dia/")),
     ("/mis-inscripciones", "Mis inscripciones", ruta.startswith("/mis-inscripciones")),
     ("/mi-historial", "Mi historial", ruta.startswith("/mi-historial")),
     ("/mis-facturas", "Mis facturas", ruta.startswith("/mis-facturas")),
 ] %}
+{% if usuario.es_profesora %}{% set extra = (inicio, "Panel de administración" if usuario.es_admin else "Panel de profesora") %}{% endif %}
 {% endif %}
 <header class="menu">
     <button type="button" class="menu-boton" aria-expanded="false" aria-controls="menu-principal" aria-label="Abrir menú">
@@ -36,6 +38,7 @@
         {% for href, texto, activa in secciones %}
         <a href="{{ href }}" class="{{ 'activo' if activa else '' }}"{% if activa %} aria-current="page"{% endif %}>{{ texto }}</a>
         {% endfor %}
+        {% if extra %}<a href="{{ extra[0] }}" class="menu-otro-rol">{{ extra[1] }} →</a>{% endif %}
     </nav>
 
     <div class="menu-cuenta">
@@ -48,7 +51,6 @@
             <div class="cuenta-opciones">
                 {% if usuario.empresa_nombre %}<span class="cuenta-empresa">{{ usuario.empresa_nombre }}</span>{% endif %}
                 <a href="/perfil">Mi perfil</a>
-                {% if usuario.empresas|length > 1 %}<a href="/empresa/elegir">Cambiar de empresa</a>{% endif %}
                 <form action="/logout" method="post">
                     <button type="submit">Cerrar sesión</button>
                 </form>

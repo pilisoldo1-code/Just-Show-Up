@@ -10,27 +10,41 @@
     <main class="auth-main">
         <div class="auth-card">
             <h1>Just Show Up</h1>
-            <p class="subtitle">Iniciá sesión para reservar tus clases.</p>
+            {% if superadmin %}
+            <p class="subtitle">Acceso de la administración general.</p>
+            {% else %}
+            <p class="subtitle">Iniciá sesión en tu lugar para reservar y ver tus clases.</p>
+            {% endif %}
 
             {% if aviso %}
             <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
             {% endif %}
 
-            <form action="/login" method="post" class="horario-form auth-form">
+            <form action="{{ '/admin/login' if superadmin else '/login' }}" method="post" class="horario-form auth-form">
+                {% if not superadmin %}
                 <label>
-                    Mail
-                    <input type="email" name="mail" value="{{ mail }}" autocomplete="username" required autofocus />
+                    Nombre del lugar
+                    <input type="text" name="lugar" value="{{ lugar }}" maxlength="80" autocomplete="organization"
+                           autocapitalize="words" placeholder="Por ejemplo: Just Show Up" required autofocus />
+                </label>
+                {% endif %}
+                <label>
+                    Correo electrónico
+                    <input type="email" name="mail" value="{{ mail }}" autocomplete="username" required
+                           {{ 'autofocus' if superadmin }} />
                 </label>
                 <label>
                     Contraseña
                     <input type="password" name="contrasena" autocomplete="current-password" required />
                 </label>
-                <button type="submit" class="btn btn-block">Iniciar sesión</button>
+                <button type="submit" class="btn btn-block">Ingresar</button>
             </form>
 
             <p class="auth-link"><a href="/olvide-contrasena">Olvidé mi contraseña</a></p>
-
-            <p class="nota auth-nota">¿No tenés cuenta? Pedile a tu profesora que te dé de alta.</p>
+            {% if not superadmin %}
+            <p class="nota auth-nota">El nombre del lugar es el del estudio donde tomás tus clases; no importan las mayúsculas
+                ni las tildes. ¿No tenés cuenta? Pedile a tu lugar que te dé de alta.</p>
+            {% endif %}
         </div>
     </main>
 </body>

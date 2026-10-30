@@ -762,6 +762,13 @@ Para cada módulo, en este orden:
   `personas.datos_personales(sb, ids)` / `personas.completar(sb, filas)`, que usan la función de la base y, si todavía
   no existe, leen la tabla (por eso el código funciona antes y después del merge). Los nombres de las profesoras para
   las alumnas salen de `personas.nombres_profesoras(sb)`.
+- **Inicio de sesión multiempresa**: `/login` pide lugar + mail + contraseña; `entrar_a_empresa()` valida todo y
+  la empresa de la sesión queda en la cookie `sb_empresa` (la base la revalida en cada pedido con `elegir_empresa`).
+  Sin esa cookie no hay empresa: se pide iniciar sesión de nuevo. Nunca mostrar listas de empresas ni mensajes que
+  distingan «lugar inexistente» de «credenciales incorrectas» o «no pertenece». Superadministradora: `/admin/login`.
+- **No cambiar `profiles.rol` de cuentas creadas con rol de empresa**: el trigger de compatibilidad
+  `_membresia_desde_rol` (parte 1) copiaba ese cambio a la membresía y una profesora pasaba a administradora (30/10).
+  Ahora la app no lo hace y el trigger ignora las cuentas con `rol_empresa` en los metadatos.
 - **Roles en el servidor**: `usuario.es_profesora` = docente de la empresa activa (administradora o profesora);
   `usuario.es_admin` = administradora. Lo de plata, altas, cédula y tipos de clase va con `Depends(requiere_admin)`.
   Un `Usuario` armado a mano sin `con_membresias` toma `rol` de profiles («profesora» = administradora + profesora): así

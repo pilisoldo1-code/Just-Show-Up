@@ -18,7 +18,8 @@
             <button type="button" class="btn" onclick="document.getElementById('empresa-nueva').showModal()">+ Nueva empresa</button>
         </div>
         <p class="subtitle">Cada empresa tiene sus propias profesoras, alumnas, clases y facturas. Desde acá solo ves
-            cuántas personas tiene y quién la administra; los datos de cada empresa los maneja su administradora.</p>
+            cuántas personas tiene y quién la administra; los datos de cada empresa los maneja su administradora.
+            Las empresas no se borran: se desactivan y sus datos se conservan.</p>
 
         <div class="tabla-scroll">
         <table class="horario-table">
@@ -90,8 +91,17 @@
             <form action="/admin/empresas" method="post" class="horario-form">
                 <h2>Nueva empresa</h2>
                 <label>Nombre <input type="text" name="nombre" minlength="2" maxlength="80" required /></label>
-                <label>Código (2 a 6 letras, ej. PIL) <input type="text" name="codigo" pattern="[A-Za-z]{2,6}" required /></label>
-                <p class="nota">Las facturas de la empresa se numeran CÓDIGO-AÑO-MES-NÚMERO, con su propio contador.</p>
+                <p class="nota">Es lo que escriben las personas para iniciar sesión: no puede coincidir con otro lugar
+                    (sin contar mayúsculas, tildes, espacios ni signos).</p>
+                <label>Código interno (2 a 6 letras, ej. PIL) <input type="text" name="codigo" pattern="[A-Za-z]{2,6}" required /></label>
+                <p class="nota">Solo se usa en la numeración de las facturas (CÓDIGO-AÑO-MES-NÚMERO, con contador propio).</p>
+                <h3>Administradora inicial</h3>
+                <label>Nombre <input type="text" name="admin_nombre" maxlength="60" required /></label>
+                <label>Apellido <input type="text" name="admin_apellido" maxlength="60" required /></label>
+                <label>Mail <input type="email" name="admin_mail" required /></label>
+                <label class="opcion-check"><input type="checkbox" name="tambien_profesora" value="1" /> También da clases</label>
+                <p class="nota">Si el mail ya tiene cuenta, se la suma como administradora con su misma contraseña; si no, se crea
+                    la cuenta y te mostramos la contraseña temporal una sola vez.</p>
                 <div class="modal-botones">
                     <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
                     <button type="submit" class="btn">Crear</button>

@@ -20,14 +20,48 @@ del 30/10 (resumen en `CONTINUIDAD_PROYECTO.md`). Este documento es la referenci
 - `mp_configuracion` sigue siendo una sola (modo prueba); `empresa.mp_habilitado` decide qué empresa
   puede usarla (solo la Empresa 1).
 
+## Inicio de sesión (decisión del 30/10, noche)
+
+- La pantalla pide **Nombre del lugar, Correo electrónico y Contraseña** y un botón «Ingresar». No hay
+  lista de empresas en ningún lado (ni en el login ni en el menú) ni selector «Cambiar de empresa»: para
+  usar otro lugar, se cierra sesión y se entra con el otro nombre (mismas credenciales).
+- **Nombre del lugar**: se compara por una clave (`_clave_lugar`): minúsculas, sin tildes, sin espacios ni
+  signos («Just Show Up» = «just  show-up» = «JÚST SHOW UP»). La clave es **única** entre empresas (índice
+  único): no puede existir un lugar que se escriba igual. El código (`JSU`, `PIL`) queda interno (facturas).
+- `entrar_a_empresa(lugar)` (con la sesión recién abierta) valida en un paso: lugar existente y activo +
+  membresía activa con algún rol. Ante cualquier falla devuelve lo mismo y el servidor muestra un único
+  mensaje («No pudimos iniciar sesión con esos datos…»), revoca la sesión recién abierta y no deja cookies.
+  No se distingue lugar inexistente, desactivado, credenciales incorrectas ni falta de pertenencia.
+- **Superadministradora**: acceso propio en `/admin/login` (mail y contraseña, sin lugar). Cualquier otra
+  cuenta recibe el error genérico y su sesión se revoca. La superadministradora no puede entrar a un lugar.
+
 ## Empresa activa
 
-La base guarda la empresa elegida en `profiles.empresa_activa`. `public.empresa_activa()` la devuelve
+La base guarda la empresa en uso en `profiles.empresa_activa`. `public.empresa_activa()` la devuelve
 solo si la persona tiene membresía activa en esa empresa y la empresa está activa; si no, `null` y no se
-ve nada. Todas las políticas filtran `id_empresa = public.empresa_activa()`. Elegir empresa es una
-función (`elegir_empresa`) que valida la membresía; el servidor también la valida en cada pedido.
+ve nada. Todas las políticas filtran `id_empresa = public.empresa_activa()`.
 
-Consecuencia aceptada: el cambio de empresa se aplica a todas las sesiones de la persona.
+La empresa de **cada sesión** es la elegida al iniciar sesión y viaja en la cookie `sb_empresa`
+(httpOnly). En cada pedido el servidor lee solo esa membresía; si la cuenta usó otro lugar en otro
+dispositivo, vuelve a elegir la de esta sesión con `elegir_empresa` (que valida la membresía). Cambiar la
+cookie a mano no da acceso a nada: la base solo acepta empresas donde la persona tiene membresía activa.
+Sin cookie (sesiones anteriores al cambio) se pide iniciar sesión otra vez. Límite conocido: si la misma
+cuenta usa dos lugares a la vez en dos dispositivos, un pedido podría ver el otro lugar si llega
+exactamente mientras el otro dispositivo cambia la empresa; ambos lugares son de la misma persona, nunca
+de otra.
+
+## Redirección por rol
+
+| Roles en el lugar | Entra a | Además |
+|---|---|---|
+| Administradora (con o sin profesora o alumna) | `/administracion` (panel con resumen y accesos) | Todo su lugar; si también es alumna, «Mis clases →» |
+| Profesora | `/profesora/horarios` (solo sus horarios, clases, planificación, asistencias y estadísticas) | Si también es alumna, «Mis clases →» |
+| Alumna | `/` (clases, inscripciones, historial, facturas) | — |
+| Superadministradora | `/admin/empresas` | — |
+
+Desde las pantallas de alumna, quien también es docente ve «Panel de profesora →» o «Panel de
+administración →». No se elige el rol a mano. Cada ruta exige su rol en el servidor y la base lo vuelve a
+comprobar.
 
 ## Roles
 
@@ -70,6 +104,7 @@ desde el contador global actual: la factura `JSU-2026-09-0001` no cambia y la pr
 | 1 | Tablas `empresa` y `membresia`, columnas nuevas, Empresa 1 con todos los datos, membresías desde `profiles.rol`, profesora asignada, triggers que completan la empresa | Sí: no cambia permisos |
 | 2 | Funciones de ayuda, políticas por empresa, protección general, índices únicos por empresa, cierre de `anon` | Sí: todas las cuentas tienen la Empresa 1 activa |
 | 3 | Funciones por rol y por empresa, numeración por empresa, profesora en las líneas, Mercado Pago solo en la Empresa 1, funciones de superadministradora y de membresías | Sí: mismas firmas (se agregan parámetros con valor por defecto) |
+| 3b | Acceso por nombre del lugar: clave normalizada y única del nombre, `entrar_a_empresa()`, crear/editar empresa rechazan nombres repetidos | Sí: solo agrega funciones e índice |
 | 4 | Datos personales protegidos: cédula, fecha de nacimiento y carné solo con `datos_personales()` (la persona o la administradora de su empresa); `profesoras_empresa()` para que las alumnas vean el nombre de las profesoras | No: se aplica justo después del merge (el código nuevo funciona antes y después) |
 
 Cada una con respaldo previo, prueba en Postgres local que reconstruye producción, vuelta atrás probada
