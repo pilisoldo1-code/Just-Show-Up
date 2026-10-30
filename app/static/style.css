@@ -1793,16 +1793,39 @@ main.ancho {
     outline-offset: 2px;
 }
 
+/* «Cómo funciona»: el desplegable es una caja; abierto, el borde rodea título y explicación. */
 .desplegable-chico {
-    margin-top: 10px;
-    border-top: none;
-    padding-top: 0;
+    margin-top: 12px;
+    padding: 4px 14px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+}
+
+.desplegable-chico[open] {
+    padding-bottom: 14px;
+    border-color: rgba(110, 231, 183, 0.45);
+    background: rgba(110, 231, 183, 0.04);
+}
+
+.desplegable-chico:focus-within {
+    border-color: var(--accent);
 }
 
 .desplegable-chico summary {
     font-weight: 500;
     font-size: 0.9rem;
     color: var(--accent);
+}
+
+.desplegable-chico summary:focus-visible {
+    outline: none;
+}
+
+.desplegable-chico > :not(summary) {
+    margin: 10px 0 0;
+    padding-top: 10px;
+    border-top: 1px solid rgba(110, 231, 183, 0.2);
+    line-height: 1.5;
 }
 
 .contador {
