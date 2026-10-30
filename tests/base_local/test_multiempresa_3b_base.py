@@ -167,40 +167,10 @@ ok("la superadministradora sigue viendo solo el resumen (sin datos operativos)",
 
 
 # ---------- código real de la sesión (app.auth) contra la base ----------
-class ClienteSesion(ClienteFalso):
-    """Lo que app.auth usa de supabase-py: auth.get_user y postgrest.auth, sobre la base local."""
-
-    def __init__(self, uid):
-        super().__init__(uri, uid)
-        self.auth = mock.MagicMock()
-        self.auth.get_user.return_value.user.id = uid
-        self.postgrest = mock.MagicMock()
-
-
-def sesion(uid_, empresa_id):
-    with mock.patch.object(auth, "cliente_nuevo", return_value=ClienteSesion(uid_)):
-        return auth.usuario_de_acceso("token", empresa_id)
-
-
 with mock.patch.object(auth, "cliente_con_token", side_effect=lambda t: C(t)):
     ok("app.auth.entrar_a_empresa: id de la empresa o None",
        auth.entrar_a_empresa(DEMO, "Pilates centro") == E2 and auth.entrar_a_empresa(SOFIA, "Pilates Centro") is None)
-u = sesion(DEMO, E1)
-ok("sesión de la Empresa 1 aunque la cuenta usó la Empresa 2 en otro lado: vuelve a la 1",
-   (u.empresa_id, u.empresa_nombre, u.es_alumna) == (E1, "Just Show Up", True)
-   and q(su, "select empresa_activa from profiles where id = %s", (DEMO,), True)["empresa_activa"] == E1)
-ok("la sesión no conoce las otras empresas de la cuenta", not hasattr(u, "empresas"))
-u = sesion(SOFIA, E2)
-ok("cookie con una empresa ajena: sin empresa ni roles", u.sin_empresa and not (u.es_alumna or u.es_docente or u.es_admin))
-u = sesion(ADMIN2, E2)
-ok("administradora y profesora: va al panel de administración", u.es_admin and u.es_docente and u.inicio == "/administracion")
-u = sesion(PROF2, E2)
-ok("profesora: va a su panel, sin administración", u.es_docente and not u.es_admin and u.inicio == "/profesora/horarios")
-q(su, "update membresia set es_alumna = true where id_usuario = %s and id_empresa = %s", (PROF2, E2))
-u = sesion(PROF2, E2)
-ok("profesora y alumna en la misma empresa: panel de profesora y también alumna", u.inicio == "/profesora/horarios" and u.es_alumna)
-u = sesion(SUPER, None)
-ok("superadministradora: va a Empresas", u.es_superadmin and u.inicio == "/admin/empresas")
+# la carga de la sesión en el servidor (app.auth.usuario_de_acceso) usa la parte 3c: se prueba allí
 
 # ---------- vuelta atrás ----------
 q(su, "insert into supabase_migrations.schema_migrations values ('20261031999995', 'multiempresa_3b_acceso')")

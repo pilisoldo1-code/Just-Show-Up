@@ -131,6 +131,24 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
 - **Pruebas**: app 237; base local multiempresa 1 39/39, 2 52/52, 3 57/57, **3b 48/48**, 4 37/37, Empresa 2 19/19,
   facturación 180/180, Mercado Pago 73/73, restricción 29/29, planificación 33/33, vencimiento 48/48. Revisión visual
   del login, el panel de administración y los menús (celular y escritorio) con datos simulados.
-- **Decisión pendiente (cédula)**: propuesta de cédula por empresa, esperando la aprobación de Julieta antes de
-  cambiar la estructura.
+
+
+### Vie 30/10 (noche, tercera parte) — decisiones de Julieta: cédula por empresa y sesiones por dispositivo
+- **Empresa por sesión** (migración **3c**, antes del merge): la base guarda el lugar de cada sesión por el
+  `session_id` firmado del token (`sesion_empresa`). Una persona puede estar en Just Show Up en la computadora y en
+  Pilates Centro en el celular sin que una sesión cambie la otra. Sin cookie de empresa; cerrar sesión olvida el lugar
+  solo de ese dispositivo.
+- **Cédula por empresa** (en la migración 4): `membresia.cedula`, única solo dentro de la empresa; las cédulas
+  actuales pasan a la Empresa 1. El alta y «Cargar cédula» ya no comparan con otras empresas (ningún aviso revela que
+  alguien está en otro lugar). La factura copia la cédula de la empresa que factura.
+- **Auditoría de altas de cuentas** (`tests/base_local/test_altas_cuentas_base.py`, 48 casos): rutas reales de la
+  app, `crear_cuenta`, scripts (superadministradora, profesora, Empresa 2) y triggers reales; intentos de ganar
+  permisos (cambiar rol, superadmin, membresías, metadatos propios). Se encontró otro camino teórico (si alguien
+  borrara su marca en los metadatos y algo cambiara `profiles.rol`) y se cerró: la parte 4 elimina la
+  compatibilidad con `profiles.rol`; el script de la profesora crea la membresía directo.
+- **Respaldo del repositorio**: GitHub sigue inaccesible desde esta red (todas sus direcciones, también SSH). Se
+  guardó un `git bundle` verificado en `~/Documents/Just Show Up - respaldos/repositorio/` (solo código, sin `.env`).
+- **Pruebas**: app 237; base local: multiempresa 1 39/39, 2 52/52, 3 57/57, 3b 41/41, **3c 27/27**, **4 51/51**,
+  Empresa 2 19/19, **altas 48/48**, facturación 180/180, Mercado Pago 73/73, restricción 29/29, planificación 33/33,
+  vencimiento 48/48.
 

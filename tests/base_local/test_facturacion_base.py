@@ -232,10 +232,11 @@ ok("la base rechaza una cédula inválida aunque se escriba directo", error_de(s
 ok("alumna no puede cargar cédulas", rpc(a, "actualizar_cedula", p_id_alumna=A1, p_cedula="12345672") == "no_autorizada")
 ok("profesora carga una cédula con puntos y guion (se guarda solo con dígitos)",
    rpc(p, "actualizar_cedula", p_id_alumna=A2, p_cedula="1.234.567-2") == "ok"
-   and q(su, "select cedula from profiles where id = %s", (A2,), True)["cedula"] == "12345672")
+   and q(su, "select cedula from membresia where id_usuario = %s", (A2,), True)["cedula"] == "12345672")  # cédula por empresa
 ok("cédula inválida: cedula_invalida", rpc(p, "actualizar_cedula", p_id_alumna=A1, p_cedula="1.234.567-9") == "cedula_invalida")
 ok("cédula repetida entre alumnas: cedula_repetida", rpc(p, "actualizar_cedula", p_id_alumna=A1, p_cedula="12345672") == "cedula_repetida")
-ok("no se le carga cédula a quien no es alumna", rpc(p, "actualizar_cedula", p_id_alumna=prof, p_cedula="98765430") == "no_existe")
+ok("no se le carga cédula a quien no es de la empresa",
+   rpc(p, "actualizar_cedula", p_id_alumna=str(uuid.uuid4()), p_cedula="98765430") == "no_existe")
 ok("la alumna no puede cambiar su cédula directo",
    error_de(conectar(uri, A2, "authenticated"), f"update profiles set cedula = '12345672' where id = '{A2}'") == "42501")
 # desde multiempresa (parte 4) los datos personales se leen con datos_personales(), no directo de profiles
@@ -519,7 +520,7 @@ ok("la alumna ve la anulada (ya estaba publicada) pero no el borrador nuevo", vi
 mis = facturas.mis_facturas(a1, A1)
 ok("app: Mis facturas muestra la anulada sin el motivo", mis[0]["estado_factura"] == "anulada" and "se cobró una clase de más" not in str(mis[0]))
 ok("cargar la cédula de A1 después (9.876.543-8)", rpc(p, "actualizar_cedula", p_id_alumna=A1, p_cedula="9.876.543-8") == "ok")
-ced_a1 = q(su, "select cedula from profiles where id = %s", (A1,), True)["cedula"]
+ced_a1 = q(su, "select cedula from membresia where id_usuario = %s", (A1,), True)["cedula"]
 lc = q(su, "select id from resumen_mensual_detalle where id_resumen_mensual = %s and id_clase = %s", (N, c3), True)["id"]
 r = rpc(p, "ajustar_linea", p_id_linea=lc, p_tipo="bonificada", p_importe=None, p_motivo="corrección", p_version=n["version"])
 r = rpc(p, "confirmar_factura", p_id=N, p_version=r["version"])

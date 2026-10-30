@@ -1,4 +1,4 @@
-"""Crea la cuenta de la profesora (administradora) con rol 'profesora'.
+"""Crea la cuenta de la profesora: administradora y profesora de Just Show Up (Empresa 1).
 
 Se corre una sola vez al entregar el sistema. No hay registro público de profesoras.
 
@@ -40,12 +40,18 @@ def main() -> None:
     if getpass.getpass("Repetí la contraseña: ") != contrasena:
         raise SystemExit("Las contraseñas no coinciden.")
 
+    # Multiempresa: la cuenta queda como administradora y profesora de la Empresa 1 (Just Show Up) por su
+    # membresía; los roles nunca salen de profiles.rol.
+    empresa = auth.cliente_admin().table("empresa").select("id").eq("codigo", "JSU").execute().data
+    if not empresa:
+        raise SystemExit("No existe la empresa Just Show Up (JSU).")
     try:
-        auth.crear_cuenta(mail, nombre, apellido, rol="profesora", contrasena=contrasena)
+        auth.crear_cuenta(mail, nombre, apellido, rol="profesora", contrasena=contrasena,
+                          id_empresa=empresa[0]["id"], rol_empresa="admin_profesora")
     except auth.ErrorAuth as e:
         raise SystemExit(str(e))
 
-    print(f"\nListo: {nombre} {apellido} ({mail}) ya puede iniciar sesión como profesora.")
+    print(f"\nListo: {nombre} {apellido} ({mail}) ya puede iniciar sesión en «Just Show Up» como administradora y profesora.")
 
 
 if __name__ == "__main__":

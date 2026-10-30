@@ -97,12 +97,42 @@ P2 = C(PROF2)
 ok("antes de la parte 4: la profesora no administradora todavía puede leer la cédula (lo que se corrige)",
    leer(P2, "id, cedula", [ALU2]) == [{"id": ALU2, "cedula": "12345672"}])
 
+E1 = q(su, "select id from empresa where codigo = 'JSU'", uno=True)["id"]
+cedulas_antes = {r["id"]: r["cedula"] for r in q(su, "select id::text, cedula from profiles where cedula is not null")}
 with su.cursor() as cur:
     cur.execute(open(MIG4).read())
-ok("la parte 4 se aplica sobre la copia de producción (con las partes 1 a 3)", True)
+ok("la parte 4 se aplica sobre la copia de producción (con las partes 1 a 3c)", True)
+copiadas = {r["id"]: r["cedula"] for r in q(su, "select id_usuario::text id, cedula from membresia where cedula is not null and id_empresa = %s", (E1,))}
+ok("las cédulas actuales pasan a la Empresa 1 (solo las de personas de la Empresa 1)",
+   copiadas == {k: v for k, v in cedulas_antes.items() if k != ALU2} and SOFIA in copiadas, (copiadas, cedulas_antes))
+ok("ninguna cédula se copia a la Empresa 2", q(su, "select count(*) n from membresia where id_empresa = %s and cedula is not null", (E2,), True)["n"] == 0)
+A2 = C(ADMIN2)
+ok("administradora de la Empresa 2: carga la cédula de su alumna", rpc(A2, "actualizar_cedula", p_id_alumna=ALU2, p_cedula="1.234.567-2") == "ok")
+ok("la cédula de SOFIA (Empresa 1) se puede usar en la Empresa 2 sin aviso: no revela que existe en otro lugar",
+   rpc(A2, "cedula_disponible", p_cedula="11111111") is True
+   and rpc(A2, "actualizar_cedula", p_id_alumna=DEMO, p_cedula="11111111") == "ok")
+ok("repetida dentro de la misma empresa sí se rechaza",
+   rpc(A2, "cedula_disponible", p_cedula="11111111") is False
+   and rpc(A2, "actualizar_cedula", p_id_alumna=ALU2, p_cedula="11111111") == "cedula_repetida")
+cedula_demo = "11111111"
+ok("una persona puede tener la cédula registrada distinta en cada empresa (sin duplicar la cuenta)",
+   q(su, "select count(distinct id_usuario) n from membresia where id_usuario = %s", (DEMO,), True)["n"] == 1)
+ok("la administradora de la Empresa 1 no puede cargar cédulas a personas de la Empresa 2",
+   rpc(C(ADMIN1), "actualizar_cedula", p_id_alumna=ALU2, p_cedula="12345672") == "no_existe")
+ok("una profesora no administradora no carga cédulas ni consulta disponibilidad",
+   rpc(C(PROF2), "actualizar_cedula", p_id_alumna=ALU2, p_cedula="") == "no_autorizada"
+   and rpc(C(PROF2), "cedula_disponible", p_cedula="12345672") is False)
+for nombre, i in (("profesora", PROF2), ("administradora", ADMIN2), ("alumna", ALU2)):
+    try:
+        C(i).table("membresia").select("id_usuario, cedula").execute()
+        ok(f"{nombre}: no lee la cédula de membresia directo", False)
+    except psycopg2.Error as e:
+        ok(f"{nombre}: no lee la cédula de membresia directo", e.pgcode == "42501")
+ok("las docentes siguen leyendo las membresías de su empresa (sin cédula)",
+   len(C(PROF2).table("membresia").select("id_usuario, es_alumna").execute().data) >= 3)
 
 # ---------- lectura directa ----------
-P2, A2, AL2, A1, DE = C(PROF2), C(ADMIN2), C(ALU2), C(ADMIN1), C(DEMO)
+P2, AL2, A1, DE = C(PROF2), C(ALU2), C(ADMIN1), C(DEMO)
 for nombre, cli in (("profesora", P2), ("administradora", A2), ("alumna", AL2)):
     for col in personas.PRIVADOS:
         ok(f"{nombre}: no lee {col} directo de profiles", leer(cli, f"id, {col}", [ALU2]) == {"error": "42501"})
@@ -124,10 +154,19 @@ ok("profesora: ve los suyos", list(dp(P2, [PROF2, ALU2])) == [PROF2])
 ok("alumna: solo los suyos", list(dp(AL2, [ALU2, DEMO, PROF2])) == [ALU2] and dp(AL2, [ALU2])[ALU2]["fecha_nacimiento"] is not None)
 ok("anon no ejecuta datos_personales", rpc(ClienteFalso(uri, None, rol="anon"), "datos_personales", p_ids=[ALU2]) == {"error": "42501"})
 q(su, "update membresia set activa = false where id_usuario = %s and id_empresa = %s", (DEMO, E2))
-ok("administradora: conserva la cédula de una alumna que dejó la empresa (facturas viejas)", DEMO in dp(A2, [DEMO]))
+ok("administradora: conserva la cédula de una alumna que dejó la empresa (facturas viejas)",
+   dp(A2, [DEMO]).get(DEMO, {}).get("cedula") == "11111111")
 q(su, "update membresia set activa = true where id_usuario = %s and id_empresa = %s", (DEMO, E2))
 rpc(DE, "elegir_empresa", p_id_empresa=E2)
-ok("la alumna en dos empresas sigue viendo los suyos con cualquier empresa activa", list(dp(C(DEMO), [DEMO])) == [DEMO])
+ok("la alumna en dos empresas ve la cédula registrada en la empresa de su sesión",
+   dp(C(DEMO), [DEMO])[DEMO]["cedula"] == "11111111" and dp(C(DEMO), [DEMO])[DEMO]["cedula"] is not None)
+
+# ---------- empresa solo por sesión (sin respaldo por perfil) ----------
+NUEVO = ClienteFalso(uri, SOFIA, sesion=uuid.uuid4())
+ok("después de la parte 4, una sesión sin lugar elegido no ve nada",
+   NUEVO.table("clase").select("id").execute().data == [] and rpc(NUEVO, "empresa_activa") is None)
+ok("al entrar con el nombre del lugar, ve su empresa", rpc(NUEVO, "entrar_a_empresa", p_lugar="Just Show Up")["resultado"] == "ok"
+   and {c["id_empresa"] for c in NUEVO.table("clase").select("id_empresa").execute().data} == {E1})
 
 # ---------- nombres de profesoras ----------
 nom = lambda cli: rpc(cli, "profesoras_empresa")

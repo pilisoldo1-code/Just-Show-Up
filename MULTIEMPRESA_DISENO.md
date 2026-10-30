@@ -41,14 +41,14 @@ La base guarda la empresa en uso en `profiles.empresa_activa`. `public.empresa_a
 solo si la persona tiene membresía activa en esa empresa y la empresa está activa; si no, `null` y no se
 ve nada. Todas las políticas filtran `id_empresa = public.empresa_activa()`.
 
-La empresa de **cada sesión** es la elegida al iniciar sesión y viaja en la cookie `sb_empresa`
-(httpOnly). En cada pedido el servidor lee solo esa membresía; si la cuenta usó otro lugar en otro
-dispositivo, vuelve a elegir la de esta sesión con `elegir_empresa` (que valida la membresía). Cambiar la
-cookie a mano no da acceso a nada: la base solo acepta empresas donde la persona tiene membresía activa.
-Sin cookie (sesiones anteriores al cambio) se pide iniciar sesión otra vez. Límite conocido: si la misma
-cuenta usa dos lugares a la vez en dos dispositivos, un pedido podría ver el otro lugar si llega
-exactamente mientras el otro dispositivo cambia la empresa; ambos lugares son de la misma persona, nunca
-de otra.
+**La empresa es de cada sesión (parte 3c, decisión del 30/10).** Cada token de Supabase trae `session_id`
+(firmado, no se puede falsificar; es la fila de `auth.sessions` de ese dispositivo). `sesion_empresa`
+guarda el lugar que eligió cada sesión al iniciar sesión, y `empresa_activa()` lee **esa** fila: una persona
+puede estar en Just Show Up en la computadora y en Pilates Centro en el celular sin que una sesión cambie la
+otra. Nadie lee ni escribe `sesion_empresa` directo; una sesión no puede pisar la de otra persona. Al cerrar
+sesión se borra la fila, y al entrar se limpian las de sesiones que ya no existen. El servidor pregunta
+`empresa_de_sesion()`; sin lugar, pide iniciar sesión de nuevo. Hasta la parte 4, una sesión sin fila (código
+anterior) usa `profiles.empresa_activa` como respaldo; la parte 4 lo quita.
 
 ## Redirección por rol
 
@@ -105,7 +105,8 @@ desde el contador global actual: la factura `JSU-2026-09-0001` no cambia y la pr
 | 2 | Funciones de ayuda, políticas por empresa, protección general, índices únicos por empresa, cierre de `anon` | Sí: todas las cuentas tienen la Empresa 1 activa |
 | 3 | Funciones por rol y por empresa, numeración por empresa, profesora en las líneas, Mercado Pago solo en la Empresa 1, funciones de superadministradora y de membresías | Sí: mismas firmas (se agregan parámetros con valor por defecto) |
 | 3b | Acceso por nombre del lugar: clave normalizada y única del nombre, `entrar_a_empresa()`, crear/editar empresa rechazan nombres repetidos | Sí: solo agrega funciones e índice |
-| 4 | Datos personales protegidos: cédula, fecha de nacimiento y carné solo con `datos_personales()` (la persona o la administradora de su empresa); `profesoras_empresa()` para que las alumnas vean el nombre de las profesoras | No: se aplica justo después del merge (el código nuevo funciona antes y después) |
+| 3c | Empresa por sesión: `sesion_empresa`, `empresa_de_sesion()`, `salir_de_empresa()`; `entrar_a_empresa` ya no toca el perfil | Sí: las sesiones del código anterior usan el perfil como respaldo |
+| 4 | Datos personales protegidos (fecha de nacimiento y carné solo con `datos_personales()`); **cédula por empresa** (`membresia.cedula`, única solo dentro de la empresa; las actuales pasan a la Empresa 1); `profesoras_empresa()`; la empresa sale **solo** de la sesión; se elimina la compatibilidad con `profiles.rol` | No: se aplica justo después del merge (el código nuevo funciona antes y después) |
 
 Cada una con respaldo previo, prueba en Postgres local que reconstruye producción, vuelta atrás probada
 y comparación de estructura y datos antes y después.
@@ -117,3 +118,20 @@ y comparación de estructura y datos antes y después.
   profesora y alumna (incluida una alumna en las dos), intentando leer y modificar todo lo de la otra
   empresa por tablas, funciones y triggers.
 - En theta, solo pruebas de lectura con las cuentas de prueba.
+
+## Cédula por empresa (decisión del 30/10)
+
+Una sola cuenta por persona, pero la cédula se registra en cada empresa (`membresia.cedula`). Cada
+administradora carga y ve solo la de su empresa; «cédula repetida» se controla solo dentro de la empresa, así
+ningún aviso revela que la persona está en otro lugar. La factura copia la cédula registrada en la empresa
+que factura. Nadie lee `membresia.cedula` directo (permiso por columna); se lee con `datos_personales()`.
+
+## Altas de cuentas: de dónde salen los permisos
+
+Los roles salen **solo** de `membresia`, que solo escriben: el alta de la cuenta (metadatos que pone el
+servidor; el registro público está apagado), `asignar_membresia` (administradora, en su empresa) y
+`asignar_administradora` (superadministradora). `es_superadmin` solo se cambia con la clave de administrador
+(script). Ninguna sesión puede escribir `membresia`, `profiles.rol`, `profiles.es_superadmin` ni
+`sesion_empresa`, y desde la parte 4 cambiar `profiles.rol` no tiene ningún efecto. Auditoría:
+`tests/base_local/test_altas_cuentas_base.py`.
+

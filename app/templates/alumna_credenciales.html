@@ -28,6 +28,7 @@
             puede cambiarla desde "Cambiar contraseña" apenas entre.
         </div>
 
+        {% if nota %}<div class="aviso aviso-error">{{ nota }}</div>{% endif %}
         {% set v = volver or ("/profesora/alumnas", "Volver a alumnas") %}
         <a class="btn" href="{{ v[0] }}">{{ v[1] }}</a>
     </main>

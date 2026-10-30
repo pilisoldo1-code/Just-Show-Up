@@ -763,12 +763,15 @@ Para cada módulo, en este orden:
   no existe, leen la tabla (por eso el código funciona antes y después del merge). Los nombres de las profesoras para
   las alumnas salen de `personas.nombres_profesoras(sb)`.
 - **Inicio de sesión multiempresa**: `/login` pide lugar + mail + contraseña; `entrar_a_empresa()` valida todo y
-  la empresa de la sesión queda en la cookie `sb_empresa` (la base la revalida en cada pedido con `elegir_empresa`).
-  Sin esa cookie no hay empresa: se pide iniciar sesión de nuevo. Nunca mostrar listas de empresas ni mensajes que
+  guarda el lugar para ESA sesión (`sesion_empresa`, por el `session_id` del token: cada dispositivo tiene el suyo).
+  El servidor lo lee con `empresa_de_sesion()`; sin lugar, se pide iniciar sesión de nuevo. En las pruebas locales,
+  `ClienteFalso(uri, uid)` comparte una sesión fija por persona; `ClienteFalso(uri, uid, sesion=uuid)` es otro
+  dispositivo. La cédula es de cada empresa (`membresia.cedula`): no escribir cédulas en `profiles`. Nunca mostrar listas de empresas ni mensajes que
   distingan «lugar inexistente» de «credenciales incorrectas» o «no pertenece». Superadministradora: `/admin/login`.
-- **No cambiar `profiles.rol` de cuentas creadas con rol de empresa**: el trigger de compatibilidad
-  `_membresia_desde_rol` (parte 1) copiaba ese cambio a la membresía y una profesora pasaba a administradora (30/10).
-  Ahora la app no lo hace y el trigger ignora las cuentas con `rol_empresa` en los metadatos.
+- **Los roles salen solo de `membresia`**: el trigger de compatibilidad `_membresia_desde_rol` (parte 1) copiaba
+  `profiles.rol` a la membresía y una profesora creada desde la app pasaba a administradora (30/10). Se corrigió en
+  la app y el trigger se elimina en la parte 4. Las personas pueden editar sus propios `user_metadata` en Supabase
+  Auth: nunca decidir permisos con ellos después del alta. Auditoría: `tests/base_local/test_altas_cuentas_base.py`.
 - **Roles en el servidor**: `usuario.es_profesora` = docente de la empresa activa (administradora o profesora);
   `usuario.es_admin` = administradora. Lo de plata, altas, cédula y tipos de clase va con `Depends(requiere_admin)`.
   Un `Usuario` armado a mano sin `con_membresias` toma `rol` de profiles («profesora» = administradora + profesora): así

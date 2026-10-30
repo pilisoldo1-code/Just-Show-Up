@@ -17,9 +17,6 @@ from app import validaciones
 
 COOKIE_ACCESO = "sb_acceso"
 COOKIE_REFRESCO = "sb_refresco"
-# Empresa elegida al iniciar sesión (por el nombre del lugar). Es de cada sesión: la base la vuelve a validar
-# (membresía activa en una empresa activa) en cada pedido, así que cambiarla a mano no da acceso a nada ajeno.
-COOKIE_EMPRESA = "sb_empresa"
 DURACION_COOKIE = 60 * 60 * 24 * 30
 LARGO_MINIMO_CONTRASENA = 8
 ALFABETO_TEMPORAL = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
@@ -176,7 +173,17 @@ def entrar_a_empresa(acceso: str, lugar: str) -> Optional[int]:
     return r.get("id") if r.get("resultado") == "ok" else None
 
 
-def usuario_de_acceso(acceso: str, empresa_id: Optional[int] = None) -> Optional[Usuario]:
+def salir_de_empresa(acceso: Optional[str]) -> None:
+    """Olvida el lugar de esta sesión (al cerrar sesión)."""
+    if not acceso:
+        return
+    try:
+        cliente_con_token(acceso).rpc("salir_de_empresa", {}).execute()
+    except Exception:
+        logging.warning("No se pudo olvidar el lugar de la sesión (se cierra igual).")
+
+
+def usuario_de_acceso(acceso: str) -> Optional[Usuario]:
     cliente = cliente_nuevo()
     try:
         respuesta = cliente.auth.get_user(acceso)
@@ -198,20 +205,17 @@ def usuario_de_acceso(acceso: str, empresa_id: Optional[int] = None) -> Optional
     )
     if usuario.es_superadmin:
         return usuario
-    if empresa_id is None:
-        return usuario  # sin empresa elegida en esta sesión: tiene que volver a iniciar sesión con el lugar
-    # La empresa de esta sesión es la que se eligió al iniciar sesión (cookie). Solo se lee esa: la sesión
-    # nunca conoce las otras empresas de la cuenta.
+    # La empresa es la que eligió ESTA sesión al iniciar sesión (la base la guarda por session_id del token
+    # y valida membresía y empresa activas): otra sesión de la misma cuenta en otro dispositivo no la cambia.
+    empresa_id = cliente.rpc("empresa_de_sesion", {}).execute().data
+    if not empresa_id:
+        return usuario  # sin lugar en esta sesión: tiene que volver a iniciar sesión con el nombre del lugar
     membresia = (cliente.table("membresia").select("es_admin, es_profesora, es_alumna")
                  .eq("id_usuario", usuario.id).eq("id_empresa", empresa_id).eq("activa", True).execute().data)
     empresa = (cliente.table("empresa").select("id, nombre, codigo, activa").eq("id", empresa_id).execute().data
                if membresia else [])
     if not empresa or not empresa[0]["activa"]:
         return usuario
-    if p.get("empresa_activa") != empresa_id:
-        # la cuenta usó otra empresa en otro dispositivo: se vuelve a elegir esta (la base valida la membresía)
-        if cliente.rpc("elegir_empresa", {"p_id_empresa": empresa_id}).execute().data != "ok":
-            return usuario
     m, e = membresia[0], empresa[0]
     usuario.empresa_id, usuario.empresa_nombre, usuario.empresa_codigo = e["id"], e["nombre"], e["codigo"]
     usuario.es_admin = bool(m["es_admin"])
@@ -225,17 +229,15 @@ def _validar(request: Request) -> Optional[Usuario]:
     refresco = request.cookies.get(COOKIE_REFRESCO)
     if not acceso and not refresco:
         return None
-    empresa = request.cookies.get(COOKIE_EMPRESA, "")
-    empresa_id = int(empresa) if empresa.isdigit() else None
     try:
         if acceso:
-            usuario = usuario_de_acceso(acceso, empresa_id)
+            usuario = usuario_de_acceso(acceso)
             if usuario:
                 return usuario
         if refresco:
             sesion = cliente_nuevo().auth.refresh_session(refresco).session
             if sesion:
-                usuario = usuario_de_acceso(sesion.access_token, empresa_id)
+                usuario = usuario_de_acceso(sesion.access_token)
                 if usuario:
                     request.state.tokens_nuevos = (sesion.access_token, sesion.refresh_token)
                     return usuario
@@ -339,12 +341,8 @@ def _es_https(request: Request) -> bool:
     return request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
 
 
-def poner_cookies(response: Response, request: Request, acceso: str, refresco: str,
-                  empresa_id: Optional[int] = None) -> None:
-    cookies = [(COOKIE_ACCESO, acceso), (COOKIE_REFRESCO, refresco)]
-    if empresa_id is not None:
-        cookies.append((COOKIE_EMPRESA, str(empresa_id)))
-    for nombre, valor in cookies:
+def poner_cookies(response: Response, request: Request, acceso: str, refresco: str) -> None:
+    for nombre, valor in ((COOKIE_ACCESO, acceso), (COOKIE_REFRESCO, refresco)):
         response.set_cookie(
             nombre, valor, max_age=DURACION_COOKIE, httponly=True,
             samesite="lax", secure=_es_https(request), path="/",
@@ -352,7 +350,7 @@ def poner_cookies(response: Response, request: Request, acceso: str, refresco: s
 
 
 def borrar_cookies(response: Response) -> None:
-    for nombre in (COOKIE_ACCESO, COOKIE_REFRESCO, COOKIE_EMPRESA):
+    for nombre in (COOKIE_ACCESO, COOKIE_REFRESCO):
         response.delete_cookie(nombre, path="/")
 
 

@@ -13,12 +13,13 @@ prueba y solo en la Empresa 1.
 | Migración 2: permisos por empresa, cierre de `anon` | `…000200_multiempresa_2_permisos.sql` | Antes del merge |
 | Migración 3: funciones por empresa y rol | `…000300_multiempresa_3_funciones.sql` | Antes del merge |
 | Migración 3b: acceso por nombre del lugar | `…000350_multiempresa_3b_acceso.sql` | Antes del merge |
+| Migración 3c: empresa por sesión (dispositivo) | `…000360_multiempresa_3c_sesiones.sql` | Antes del merge |
 | Código (PR de la rama `multiempresa`) | — | Merge a `main` → theta |
-| Migración 4: datos personales protegidos | `…000400_multiempresa_4_datos_personales.sql` | Enseguida después del merge |
+| Migración 4: datos personales protegidos, cédula por empresa, empresa solo por sesión | `…000400_multiempresa_4_datos_personales.sql` | Enseguida después del merge |
 | Cuenta de superadministradora | `scripts/crear_superadmin.py` | Después de la migración 4 |
 | Empresa 2 de demostración | `scripts/empresa_demo.py crear` (con nombres definitivos) | Al final |
 
-Las migraciones 1, 2, 3 y 3b son compatibles con el código que hoy está en theta (probado con la copia de
+Las migraciones 1, 2, 3, 3b y 3c son compatibles con el código que hoy está en theta (probado con la copia de
 producción). La migración 4 necesita el código nuevo (el nuevo funciona antes y después de aplicarla).
 
 **Efectos visibles esperados**
@@ -36,7 +37,7 @@ producción). La migración 4 necesita el código nuevo (el nuevo funciona antes
 3. Correr de nuevo, sobre ese respaldo, todas las pruebas locales (`tests/base_local/…`, incluidas
    multiempresa 1, 2, 3, 3b, 4 y Empresa 2): tienen que dar todo OK antes de seguir.
 
-## Paso 1 — Migraciones 1, 2, 3 y 3b [autorización]
+## Paso 1 — Migraciones 1, 2, 3, 3b y 3c [autorización]
 
 1. Aplicarlas en ese orden con `apply_migration` (una por vez, comprobando cada una).
 2. Verificación de solo lectura: estructura igual a la de la base local; mismos datos que el respaldo
@@ -53,8 +54,9 @@ producción). La migración 4 necesita el código nuevo (el nuevo funciona antes
 
 ## Paso 3 — Migración 4 [autorización]
 
-Aplicarla enseguida. Verificar: una sesión de alumna ya no puede leer la cédula directo; Mi perfil y las
-facturas siguen mostrando la cédula a quien corresponde.
+Aplicarla enseguida. Verificar: una sesión de alumna ya no puede leer la cédula directo; las cédulas actuales
+quedaron en la Empresa 1; Mi perfil y las facturas siguen mostrando la cédula a quien corresponde; sin lugar
+elegido una sesión no ve nada.
 
 ## Paso 4 — Superadministradora y Empresa 2 [autorización]
 
@@ -72,6 +74,7 @@ facturas siguen mostrando la cédula a quien corresponde.
 | Empresa 2 | `python scripts/empresa_demo.py borrar` (deja todo como antes, probado) |
 | Migración 4 | `supabase/pendientes/vuelta_atras_multiempresa_4.sql` |
 | Código | Revert del merge en GitHub (theta vuelve al código anterior) |
+| Migración 3c | `supabase/pendientes/vuelta_atras_multiempresa_3c.sql` |
 | Migración 3b | `supabase/pendientes/vuelta_atras_multiempresa_3b.sql` |
 | Migración 3 | `supabase/pendientes/vuelta_atras_multiempresa_3.sql` (se niega si hay más de una empresa) |
 | Migración 2 | `supabase/pendientes/vuelta_atras_multiempresa_2.sql` |
@@ -95,7 +98,8 @@ Antes de deshacer el código hay que deshacer la migración 4 (el código viejo 
 - Panel de la superadministradora: crear (con administradora inicial), editar, desactivar y reactivar
   empresas; ve cantidades y administradoras, ningún dato operativo.
 - Mercado Pago sigue solo en modo de prueba, solo Empresa 1 y solo `alumna@prueba.invalid`.
-- Migraciones 1, 2, 3, 3b (antes del merge) y 4 (después), con sus vueltas atrás. Procedimiento en
+- Empresa por sesión (cada dispositivo en su lugar) y cédula por empresa.
+- Migraciones 1, 2, 3, 3b, 3c (antes del merge) y 4 (después), con sus vueltas atrás. Procedimiento en
   `MULTIEMPRESA_DESPLIEGUE.md`.
 - Pruebas: ver `AVANCE_CRONOGRAMA.md`.
 

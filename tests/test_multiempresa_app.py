@@ -113,7 +113,7 @@ class Permisos(Base):
             for url in ("/", "/mis-facturas", "/profesora/horarios", "/administracion"):
                 r = self.get(url)
                 self.assertTrue(r.headers["location"].startswith("/login?"), url)
-                self.assertIn("sb_empresa=", r.headers.get("set-cookie", ""), url)  # se borran las cookies
+                self.assertIn("sb_acceso=", r.headers.get("set-cookie", ""), url)  # se borran las cookies
         self.assertTrue(cs.called)
         self.assertEqual(self.get("/empresa/elegir").status_code, 404)  # ya no existe el selector
 
@@ -379,9 +379,10 @@ class Login(Base):
             self.assertEqual(r.headers["location"], destino)
         ini.assert_called_once_with("ana@prueba.invalid", "clave123")
         ent.assert_called_once_with("A", "just SHOW up")  # espacios de más fuera; el resto lo normaliza la base
-        uda.assert_called_once_with("A", 1)
+        uda.assert_called_once_with("A")  # el lugar lo guarda la base para esta sesión (session_id del token)
         cookies = r.headers.get_list("set-cookie")
-        self.assertTrue(any(c.startswith("sb_empresa=1;") and "HttpOnly" in c for c in cookies))
+        self.assertTrue(any(c.startswith("sb_acceso=") and "HttpOnly" in c for c in cookies))
+        self.assertFalse(any(c.startswith("sb_empresa=") for c in cookies))
         cs.assert_not_called()
 
     def test_mismo_mensaje_para_cualquier_falla(self):
@@ -450,9 +451,9 @@ class LoginSuperadmin(Base):
 
 
 class SesionPorEmpresa(unittest.TestCase):
-    """auth.usuario_de_acceso: la empresa sale de la cookie de la sesión y la base la valida."""
+    """auth.usuario_de_acceso: el lugar es el que la base guardó para ESTA sesión (empresa_de_sesion)."""
 
-    def cliente(self, perfil, membresia, empresa, elegir="ok"):
+    def cliente(self, perfil, membresia, empresa, de_sesion):
         cli = mock.MagicMock()
         cli.auth.get_user.return_value.user.id = "u"
         tablas = {"profiles": [perfil], "membresia": membresia, "empresa": empresa}
@@ -463,35 +464,39 @@ class SesionPorEmpresa(unittest.TestCase):
             consulta.execute.return_value.data = tablas[nombre]
             return t
         cli.table.side_effect = tabla
-        cli.rpc.return_value.execute.return_value.data = elegir
+        cli.rpc.return_value.execute.return_value.data = de_sesion
         return cli
 
     PERFIL = {"nombre": "Ana", "apellido": "P", "mail": "a@b.uy", "rol": "alumna", "es_superadmin": False, "empresa_activa": 2}
 
-    def cargar(self, cli, empresa_id):
+    def cargar(self, cli):
         with mock.patch.object(auth, "cliente_nuevo", return_value=cli):
-            return auth.usuario_de_acceso("tok", empresa_id)
+            return auth.usuario_de_acceso("tok")
 
-    def test_sin_cookie_queda_sin_empresa(self):
-        u = self.cargar(self.cliente(self.PERFIL, [], []), None)
+    def test_sesion_sin_lugar_queda_sin_empresa(self):
+        u = self.cargar(self.cliente(self.PERFIL, [], [], None))
         self.assertTrue(u.sin_empresa)
 
-    def test_cookie_de_otra_sesion_se_reelige(self):
+    def test_usa_el_lugar_de_la_sesion_no_el_del_perfil(self):
         cli = self.cliente(self.PERFIL, [{"es_admin": False, "es_profesora": False, "es_alumna": True}],
-                           [{"id": 1, "nombre": "Just Show Up", "codigo": "JSU", "activa": True}])
-        u = self.cargar(cli, 1)
-        cli.rpc.assert_called_once_with("elegir_empresa", {"p_id_empresa": 1})
+                           [{"id": 1, "nombre": "Just Show Up", "codigo": "JSU", "activa": True}], 1)
+        u = self.cargar(cli)
+        cli.rpc.assert_called_once_with("empresa_de_sesion", {})  # nunca elige empresa: solo lee la de la sesión
         self.assertEqual((u.empresa_id, u.empresa_nombre, u.es_alumna), (1, "Just Show Up", True))
-
-    def test_cookie_de_empresa_ajena_no_da_nada(self):
-        u = self.cargar(self.cliente(self.PERFIL, [], []), 9)
-        self.assertTrue(u.sin_empresa)
-        self.assertFalse(u.es_alumna or u.es_docente or u.es_admin)
 
     def test_empresa_desactivada_no_da_nada(self):
         u = self.cargar(self.cliente(self.PERFIL, [{"es_admin": True, "es_profesora": True, "es_alumna": False}],
-                                     [{"id": 1, "nombre": "X", "codigo": "JSU", "activa": False}]), 1)
+                                     [{"id": 1, "nombre": "X", "codigo": "JSU", "activa": False}], 1))
         self.assertTrue(u.sin_empresa)
+        self.assertFalse(u.es_alumna or u.es_docente or u.es_admin)
+
+    def test_al_cerrar_sesion_se_olvida_el_lugar(self):
+        c = TestClient(main.app)
+        with mock.patch.object(auth, "salir_de_empresa") as sal, mock.patch.object(auth, "cerrar_sesion") as cs:
+            c.cookies.set("sb_acceso", "TOK")
+            c.post("/logout", follow_redirects=False)
+        sal.assert_called_once_with("TOK")
+        cs.assert_called_once_with("TOK")
 
 
 class ProfesoraSoloLoSuyo(Base):

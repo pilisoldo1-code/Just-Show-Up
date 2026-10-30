@@ -154,9 +154,9 @@ def login(request: Request, lugar: str = Form(""), mail: str = Form(""), contras
         if tokens:
             auth.cerrar_sesion(tokens[0])  # credenciales correctas pero no es de ese lugar: la sesión no queda
         return _render(request, "login.html", status_code=401, aviso_ok=False, aviso=auth.MSG_INGRESO, **datos)
-    usuario = auth.usuario_de_acceso(tokens[0], empresa_id)
+    usuario = auth.usuario_de_acceso(tokens[0])
     respuesta = RedirectResponse(url=_destino(usuario) if usuario else "/", status_code=303)
-    auth.poner_cookies(respuesta, request, tokens[0], tokens[1], empresa_id)
+    auth.poner_cookies(respuesta, request, tokens[0], tokens[1])
     return respuesta
 
 
@@ -196,6 +196,7 @@ def admin_login(request: Request, mail: str = Form(""), contrasena: str = Form("
 
 @app.post("/logout")
 def logout(request: Request):
+    auth.salir_de_empresa(request.cookies.get(auth.COOKIE_ACCESO))
     auth.cerrar_sesion(request.cookies.get(auth.COOKIE_ACCESO))
     respuesta = RedirectResponse(
         url="/login?" + urlencode({"ok": 1, "aviso": "Cerraste sesión."}), status_code=303
@@ -1037,6 +1038,8 @@ def alumna_crear(
              "p_es_alumna": rol == "alumna"}
     datos, errores = validaciones.validar_alumna(ingresados, clases.ahora().date())
     existente = None
+    if not errores and datos["cedula"] and _cedula_en_uso(usuario, datos["cedula"]):
+        errores = [MSG_CEDULA_REPETIDA]
     if not errores:
         try:
             existente = _cuenta_existente(datos["mail"])
@@ -1054,21 +1057,23 @@ def alumna_crear(
                 logging.exception("No se pudo agregar la cuenta existente")
                 r = None
             if r == "ok":
+                nota = _guardar_cedula(usuario, existente["id"], datos["cedula"])
                 return RedirectResponse(url="/profesora/alumnas?" + urlencode({
-                    "ok": 1, "aviso": f"{existente['nombre']} {existente['apellido']} ya tenía cuenta en Just Show Up: "
-                                      f"se agregó a {usuario.empresa_nombre or 'tu empresa'} con su misma contraseña."}),
+                    "ok": int(not nota), "aviso": f"{existente['nombre']} {existente['apellido']} ya tenía cuenta en Just Show Up: "
+                                      f"se agregó a {usuario.empresa_nombre or 'tu empresa'} con su misma contraseña." + (f" {nota}" if nota else "")}),
                     status_code=303)
             errores = ["No se pudo agregar a esa persona. Probá de nuevo."]
-    if not errores and datos["cedula"] and _cedula_en_uso(usuario, datos["cedula"]):
-        errores = ["Ya existe una alumna con esa cédula."]
+    nota = ""
     if not errores:
         try:
-            _, contrasena = auth.crear_cuenta(
+            # la cédula no va al perfil (que es de toda la cuenta): se guarda en la empresa de esta administradora
+            nuevo_id, contrasena = auth.crear_cuenta(
                 datos["mail"], datos["nombre"], datos["apellido"],
                 rol="alumna" if rol == "alumna" else "profesora",
-                extras={k: datos[k] for k in ("telefono", "fecha_nacimiento", "fecha_vencimiento_carne_salud", "cedula")},
+                extras={k: datos[k] for k in ("telefono", "fecha_nacimiento", "fecha_vencimiento_carne_salud")},
                 id_empresa=usuario.empresa_id, rol_empresa=rol,
             )
+            nota = _guardar_cedula(usuario, nuevo_id, datos["cedula"])
         except ErrorAuth as e:
             errores = [str(e)]
         except Exception:
@@ -1081,13 +1086,36 @@ def alumna_crear(
     return _render(
         request, "alumna_credenciales.html", usuario,
         titulo=f"{ROLES_PERSONA[rol]}: cuenta creada", nombre=f"{datos['nombre']} {datos['apellido']}",
-        mail=datos["mail"], contrasena=contrasena,
+        mail=datos["mail"], contrasena=contrasena, nota=nota,
     )
 
 
+MSG_CEDULA_REPETIDA = "Ya hay otra persona de tu empresa con esa cédula."
+
+
 def _cedula_en_uso(usuario: Usuario, cedula: str) -> bool:
-    # con la clave del servidor: la cédula es única en todas las empresas
-    return bool(auth.cliente_admin().table("profiles").select("id").eq("cedula", cedula).execute().data)
+    """¿La tiene otra persona de ESTA empresa? (multiempresa: la cédula es de cada empresa; nunca se compara
+    con otras empresas, así el aviso no revela que alguien está en otro lugar)."""
+    try:
+        return _sb(usuario).rpc("cedula_disponible", {"p_cedula": cedula}).execute().data is False
+    except Exception:
+        logging.info("cedula_disponible no disponible todavía (antes de la parte 4)")
+        return False
+
+
+def _guardar_cedula(usuario: Usuario, id_persona: str, cedula: str) -> str:
+    """Guarda la cédula en la empresa activa. Devuelve un aviso si no se pudo (la cuenta ya quedó creada)."""
+    if not cedula:
+        return ""
+    try:
+        r = _sb(usuario).rpc("actualizar_cedula", {"p_id_alumna": id_persona, "p_cedula": cedula}).execute().data
+    except Exception:
+        logging.exception("No se pudo guardar la cédula")
+        r = None
+    if r == "ok":
+        return ""
+    return ("La cédula no se guardó (" + (MSG_CEDULA_REPETIDA if r == "cedula_repetida" else "probá de nuevo") +
+            "): cargala desde la lista de personas.")
 
 
 @app.post("/profesora/alumnas/{alumna_id}/cedula")
@@ -1109,7 +1137,7 @@ def alumna_cedula(alumna_id: str, cedula: str = Form(""), usuario: Usuario = Dep
         return volver(False, "No se pudo guardar la cédula. Probá de nuevo.")
     mensajes = {
         "ok": "Cédula guardada." if digitos else "Cédula quitada.",
-        "cedula_repetida": "Ya existe una alumna con esa cédula.",
+        "cedula_repetida": MSG_CEDULA_REPETIDA,
         "cedula_invalida": "La cédula no es válida: revisá el número y el dígito verificador.",
         "no_existe": "No encontramos a esa alumna.",
         "no_autorizada": "Solo la profesora puede cargar cédulas.",
