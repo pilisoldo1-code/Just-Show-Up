@@ -6,7 +6,7 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
 | Fecha | Plan | Estado |
 |---|---|---|
 | Vie 30/10 | Multiempresa 1: diseño técnico; empresas, membresías, empresa activa, `id_empresa` en todas las tablas, datos actuales a la Empresa 1 | **Hecho** |
-| Sáb 31/10 | Multiempresa 2: políticas por empresa, protección general, cierre de `anon`, contador por empresa | |
+| Sáb 31/10 | Multiempresa 2: políticas por empresa, protección general, cierre de `anon`, contador por empresa | **Adelantado el 30/10, en curso** |
 | Dom 1/11 | Multiempresa 3: funciones por rol y por empresa, factura con profesora, Mercado Pago solo Empresa 1 | |
 | Lun 2/11 | Multiempresa 4 (servidor): empresa activa, selector, rutas por rol. En paralelo: Estadísticas y prototipo de Videos | |
 | Mar 3/11 | Multiempresa 5 (pantallas): altas, profesora asignada, alumnas sin cédula para profesoras | |
@@ -41,3 +41,14 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
   planificación 33/33, vencimiento 48/48, app 183.
 - Hallazgo corregido: completar columnas con UPDATE disparaba `_horario_desde_tipo`; se cargan con valor por defecto.
 - Sin bloqueos. Mañana: parte 2 (permisos por empresa, protección general, cierre de `anon`).
+
+### Vie 30/10 (tarde) — adelanto de la parte 2
+- Migración 2 escrita (`20261031000200_multiempresa_2_permisos.sql`): funciones de ayuda (`empresa_activa`, `es_admin`,
+  `es_docente`, `es_superadmin`...), `es_profesora()` = docente de la empresa activa, políticas por empresa y rol en todas
+  las tablas, protección general `_proteger_empresa`, claves compuestas (fila hija = empresa de la madre), únicos por
+  empresa, contador de facturas por empresa (Empresa 1 continúa el global), cierre de `anon`.
+- Compatibilidad con el código actual: planificación 33/33 y facturación 180/180 pasan con la migración 2.
+- Pendiente para completar la parte 2: prueba de aislamiento con dos empresas (`test_multiempresa_2_base.py`), vuelta
+  atrás (`vuelta_atras_multiempresa_2.sql`) y correr todas las suites.
+- Ojo para la parte 3: `generar_clases` recorre los horarios de TODAS las empresas; con dos empresas, la protección general
+  rechazaría las clases de la otra. Hay que limitarla a la empresa activa antes de crear la Empresa 2.
