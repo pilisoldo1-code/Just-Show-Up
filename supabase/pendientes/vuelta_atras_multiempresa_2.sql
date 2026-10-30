@@ -159,26 +159,17 @@ create unique index resumen_mensual_una_vigente on public.resumen_mensual (id_al
     where estado_factura <> 'anulada';
 
 -- claves compuestas
-alter table public.mp_intento drop constraint mp_intento_factura_misma_empresa;
-alter table public.pago_anulacion drop constraint pago_anulacion_pago_misma_empresa;
-alter table public.pago drop constraint pago_factura_misma_empresa;
-alter table public.factura_historial drop constraint historial_factura_misma_empresa;
-alter table public.resumen_mensual_detalle drop constraint detalle_reserva_misma_empresa;
-alter table public.resumen_mensual_detalle drop constraint detalle_factura_misma_empresa;
-alter table public.resumen_mensual drop constraint resumen_mensual_reemplaza_misma_empresa;
-alter table public.bloqueo drop constraint bloqueo_horario_misma_empresa;
-alter table public.asistencia drop constraint asistencia_reserva_misma_empresa;
-alter table public.listadeespera drop constraint listadeespera_clase_misma_empresa;
-alter table public.reserva drop constraint reserva_clase_misma_empresa;
-alter table public.clase drop constraint clase_tipo_misma_empresa;
-alter table public.clase drop constraint clase_horario_misma_empresa;
-alter table public.horario drop constraint horario_tipo_misma_empresa;
-alter table public.pago drop constraint pago_id_empresa_unico;
-alter table public.resumen_mensual drop constraint resumen_mensual_id_empresa_unico;
-alter table public.reserva drop constraint reserva_id_empresa_unico;
-alter table public.clase drop constraint clase_id_empresa_unico;
-alter table public.horario drop constraint horario_id_empresa_unico;
-alter table public.tipo_clase drop constraint tipo_clase_id_empresa_unico;
+do $$
+declare
+    t text;
+begin
+    foreach t in array array['horario', 'clase', 'reserva', 'listadeespera', 'asistencia', 'bloqueo', 'resumen_mensual',
+                             'resumen_mensual_detalle', 'factura_historial', 'pago', 'mp_intento', 'pago_anulacion'] loop
+        execute format('drop trigger validar_empresa_madre on public.%I', t);
+    end loop;
+end;
+$$;
+drop function public._validar_empresa_madre();
 
 drop function public._proteger_empresa();
 drop function public._siguiente_numero_factura(bigint);

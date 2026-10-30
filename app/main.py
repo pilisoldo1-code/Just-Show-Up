@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import uuid
 from datetime import date, timedelta
@@ -39,6 +40,19 @@ async def _redirigir(request: Request, exc: Redirigir):
     if exc.borrar_cookies:
         auth.borrar_cookies(respuesta)
     return respuesta
+
+
+# Las vistas previas de Vercel (ramas y PRs) usarían la base de PRODUCCIÓN con código todavía no aplicado:
+# no atienden a nadie ni se conectan a la base. vercel.json además apaga esos despliegues.
+ES_VISTA_PREVIA = os.environ.get("VERCEL_ENV") == "preview"
+
+
+@app.middleware("http")
+async def _sin_vista_previa(request: Request, call_next):
+    if ES_VISTA_PREVIA and request.url.path != "/api/health":
+        return Response("Vista previa deshabilitada: esta versión no se conecta a la base de datos.",
+                        status_code=503, media_type="text/plain; charset=utf-8")
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -1052,6 +1066,11 @@ def alumna_crear(
             errores = ["Ese mail pertenece a la administración general de Just Show Up."]
         else:
             try:
+                # si ya es de esta empresa, el rol nuevo se SUMA a los que tiene (no los reemplaza)
+                actual = (_sb(usuario).table("membresia").select("es_admin, es_profesora, es_alumna")
+                          .eq("id_usuario", existente["id"]).eq("id_empresa", usuario.empresa_id).execute().data)
+                if actual:
+                    flags = {k: v or bool(actual[0][k[2:]]) for k, v in flags.items()}
                 r = _sb(usuario).rpc("asignar_membresia", {"p_id_usuario": existente["id"], **flags}).execute().data
             except Exception:
                 logging.exception("No se pudo agregar la cuenta existente")

@@ -118,41 +118,64 @@ as $$
 $$;
 
 -- ---------- integridad: la fila hija es de la misma empresa que la madre ----------
-alter table public.tipo_clase add constraint tipo_clase_id_empresa_unico unique (id, id_empresa);
-alter table public.horario add constraint horario_id_empresa_unico unique (id, id_empresa);
-alter table public.clase add constraint clase_id_empresa_unico unique (id, id_empresa);
-alter table public.reserva add constraint reserva_id_empresa_unico unique (id, id_empresa);
-alter table public.resumen_mensual add constraint resumen_mensual_id_empresa_unico unique (id, id_empresa);
-alter table public.pago add constraint pago_id_empresa_unico unique (id, id_empresa);
+-- Con un trigger y no con claves foráneas compuestas: una segunda clave entre las mismas tablas hace que la
+-- API (PostgREST) vea dos relaciones y las consultas con tablas anidadas fallen (PGRST201), lo que rompería el
+-- código que hoy está en theta. Además, la empresa de una fila no se puede cambiar nunca.
+create or replace function public._validar_empresa_madre()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_madres bigint[];
+begin
+    if tg_op = 'UPDATE' and new.id_empresa is distinct from old.id_empresa then
+        raise exception 'La empresa de una fila no se puede cambiar (%).', tg_table_name using errcode = '23503';
+    end if;
+    -- un IF por tabla: una sola expresión CASE se analiza entera y falla con columnas de otras tablas
+    if tg_table_name = 'horario' then
+        v_madres := array[(select id_empresa from public.tipo_clase where id = new.id_tipo_clase)];
+    elsif tg_table_name = 'clase' then
+        v_madres := array[(select id_empresa from public.horario where id = new.id_horario),
+                          (select id_empresa from public.tipo_clase where id = new.id_tipo_clase)];
+    elsif tg_table_name in ('reserva', 'listadeespera') then
+        v_madres := array[(select id_empresa from public.clase where id = new.id_clase)];
+    elsif tg_table_name = 'asistencia' then
+        v_madres := array[(select id_empresa from public.reserva where id = new.id_reserva)];
+    elsif tg_table_name = 'bloqueo' then
+        v_madres := array[(select id_empresa from public.horario where id = new.id_horario)];
+    elsif tg_table_name = 'resumen_mensual' then
+        v_madres := array[(select id_empresa from public.resumen_mensual where id = new.reemplaza_a)];
+    elsif tg_table_name = 'resumen_mensual_detalle' then
+        v_madres := array[(select id_empresa from public.resumen_mensual where id = new.id_resumen_mensual),
+                          (select id_empresa from public.reserva where id = new.id_reserva)];
+    elsif tg_table_name in ('factura_historial', 'pago', 'mp_intento') then
+        v_madres := array[(select id_empresa from public.resumen_mensual where id = new.id_resumen_mensual)];
+    elsif tg_table_name = 'pago_anulacion' then
+        v_madres := array[(select id_empresa from public.pago where id = new.id_pago)];
+    end if;
+    -- madre nula = no hay fila madre (columna opcional o la clave foránea común ya lo rechaza)
+    if exists (select 1 from unnest(v_madres) m where m is not null and m <> new.id_empresa) then
+        raise exception 'La fila de % no es de la misma empresa que su fila madre.', tg_table_name using errcode = '23503';
+    end if;
+    return new;
+end;
+$$;
 
-alter table public.horario add constraint horario_tipo_misma_empresa
-    foreign key (id_tipo_clase, id_empresa) references public.tipo_clase (id, id_empresa);
-alter table public.clase add constraint clase_horario_misma_empresa
-    foreign key (id_horario, id_empresa) references public.horario (id, id_empresa);
-alter table public.clase add constraint clase_tipo_misma_empresa
-    foreign key (id_tipo_clase, id_empresa) references public.tipo_clase (id, id_empresa);
-alter table public.reserva add constraint reserva_clase_misma_empresa
-    foreign key (id_clase, id_empresa) references public.clase (id, id_empresa);
-alter table public.listadeespera add constraint listadeespera_clase_misma_empresa
-    foreign key (id_clase, id_empresa) references public.clase (id, id_empresa);
-alter table public.asistencia add constraint asistencia_reserva_misma_empresa
-    foreign key (id_reserva, id_empresa) references public.reserva (id, id_empresa);
-alter table public.bloqueo add constraint bloqueo_horario_misma_empresa
-    foreign key (id_horario, id_empresa) references public.horario (id, id_empresa);
-alter table public.resumen_mensual add constraint resumen_mensual_reemplaza_misma_empresa
-    foreign key (reemplaza_a, id_empresa) references public.resumen_mensual (id, id_empresa);
-alter table public.resumen_mensual_detalle add constraint detalle_factura_misma_empresa
-    foreign key (id_resumen_mensual, id_empresa) references public.resumen_mensual (id, id_empresa);
-alter table public.resumen_mensual_detalle add constraint detalle_reserva_misma_empresa
-    foreign key (id_reserva, id_empresa) references public.reserva (id, id_empresa);
-alter table public.factura_historial add constraint historial_factura_misma_empresa
-    foreign key (id_resumen_mensual, id_empresa) references public.resumen_mensual (id, id_empresa);
-alter table public.pago add constraint pago_factura_misma_empresa
-    foreign key (id_resumen_mensual, id_empresa) references public.resumen_mensual (id, id_empresa);
-alter table public.pago_anulacion add constraint pago_anulacion_pago_misma_empresa
-    foreign key (id_pago, id_empresa) references public.pago (id, id_empresa);
-alter table public.mp_intento add constraint mp_intento_factura_misma_empresa
-    foreign key (id_resumen_mensual, id_empresa) references public.resumen_mensual (id, id_empresa);
+do $$
+declare
+    t text;
+begin
+    foreach t in array array['horario', 'clase', 'reserva', 'listadeespera', 'asistencia', 'bloqueo', 'resumen_mensual',
+                             'resumen_mensual_detalle', 'factura_historial', 'pago', 'mp_intento', 'pago_anulacion'] loop
+        -- después de completar la empresa (orden alfabético de los triggers) y antes de zz_proteger_empresa
+        execute format('create trigger validar_empresa_madre before insert or update on public.%I
+                        for each row execute function public._validar_empresa_madre()', t);
+    end loop;
+end;
+$$;
+revoke execute on function public._validar_empresa_madre() from public, anon, authenticated;
 
 -- ---------- únicos por empresa ----------
 drop index public.tipo_clase_nombre_unico;

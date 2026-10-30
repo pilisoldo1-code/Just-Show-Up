@@ -248,9 +248,22 @@ class AltaPersonas(Base):
             self.post("/profesora/alumnas", {**self.ALTA, "rol": "superadmin"})
         self.assertEqual(cc.call_args.kwargs["rol_empresa"], "alumna")
 
+    def actual(self, filas):
+        self.sb.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = filas
+
+    def test_si_ya_es_de_la_empresa_el_rol_se_suma(self):
+        self.como(ADMIN)
+        self.rpc("ok")
+        self.actual([{"es_admin": False, "es_profesora": True, "es_alumna": False}])
+        with mock.patch.object(main, "_cuenta_existente", return_value={"id": "x", "nombre": "Pia", "apellido": "Dos"}):
+            self.post("/profesora/alumnas", {**self.ALTA, "rol": "alumna"})
+        self.sb.rpc.assert_called_once_with("asignar_membresia", {"p_id_usuario": "x", "p_es_admin": False,
+                                                                 "p_es_profesora": True, "p_es_alumna": True})
+
     def test_mail_existente_se_agrega_a_la_empresa(self):
         self.como(ADMIN)
         self.rpc("ok")
+        self.actual([])
         with mock.patch.object(main, "_cuenta_existente", return_value={"id": "x", "nombre": "Eva", "apellido": "Uno"}), \
                 mock.patch.object(main.auth, "crear_cuenta") as cc:
             r = self.post("/profesora/alumnas", {**self.ALTA, "rol": "alumna"})

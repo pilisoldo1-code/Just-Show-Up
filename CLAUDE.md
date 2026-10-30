@@ -762,6 +762,18 @@ Para cada módulo, en este orden:
   `personas.datos_personales(sb, ids)` / `personas.completar(sb, filas)`, que usan la función de la base y, si todavía
   no existe, leen la tabla (por eso el código funciona antes y después del merge). Los nombres de las profesoras para
   las alumnas salen de `personas.nombres_profesoras(sb)`.
+- **Nunca dos claves foráneas entre las mismas tablas** (30/10): la API de Supabase (PostgREST) ve dos relaciones y
+  las consultas anidadas (`reserva(..., asistencia(...))`) fallan con PGRST201 — rompía theta. La integridad de
+  empresa entre fila hija y madre la valida el trigger `_validar_empresa_madre`. El Postgres local de
+  `tests/base_local/` no tiene PostgREST: esto solo se detecta con el Supabase local.
+- **PL/pgSQL en triggers compartidos por varias tablas**: usar `if tg_table_name = ...` por tabla, no una sola
+  expresión `case` (se analiza entera y falla con columnas que la tabla no tiene).
+- **Supabase local real (gratis)**: Colima + Lima + cliente de Docker instalados sin permisos de administradora en
+  `~/.local/bin` y `~/.local/opt/lima` (no hay Homebrew). Para usarlo:
+  `export PATH="$HOME/.local/bin:$HOME/.local/opt/lima/bin:$PATH" DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"`,
+  `colima start` y `supabase start` **dentro de la copia aislada** `~/.local/share/jsu-supabase-local` (copiar ahí
+  `supabase/migrations`; nunca `supabase link` ni conectarlo a producción). Pruebas en `tests/supabase_local/`
+  (se niegan a correr si la URL no es localhost). Apagar con `supabase stop` y `colima stop`.
 - **Inicio de sesión multiempresa**: `/login` pide lugar + mail + contraseña; `entrar_a_empresa()` valida todo y
   guarda el lugar para ESA sesión (`sesion_empresa`, por el `session_id` del token: cada dispositivo tiene el suyo).
   El servidor lo lee con `empresa_de_sesion()`; sin lugar, se pide iniciar sesión de nuevo. En las pruebas locales,

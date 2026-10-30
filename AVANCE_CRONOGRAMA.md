@@ -152,3 +152,18 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
   Empresa 2 19/19, **altas 48/48**, facturación 180/180, Mercado Pago 73/73, restricción 29/29, planificación 33/33,
   vencimiento 48/48.
 
+### Vie 30/10 (noche, cuarta parte) — pruebas con Supabase local real
+- Instalados Colima, Lima y el cliente de Docker (gratis, código abierto, sin permisos de administradora) y un
+  Supabase local en una copia aislada. Las 22 migraciones del repo se aplican sin errores en un Supabase real.
+- **Errores encontrados por las pruebas reales y corregidos**: (1) **grave**: las claves foráneas compuestas de la
+  migración 2 duplicaban relaciones y las consultas anidadas de la API fallaban (PGRST201): theta se habría roto al
+  aplicar la migración 2 → reemplazadas por el trigger `_validar_empresa_madre` (misma validación, la empresa de una
+  fila ya no se puede cambiar); (2) al sumar como alumna a una profesora de la misma empresa se le quitaba el rol de
+  profesora → los roles ahora se suman; (3) error en el trigger nuevo (CASE en PL/pgSQL) → IF por tabla.
+- Pruebas reales (`tests/supabase_local/`): theta actual con migraciones 1–3c **32/32**; código nuevo con 1–3c
+  **33/33** y con todas **33/33**; altas, inicio de sesión, roles, dos dispositivos, cédula e intentos de elevar
+  permisos con el servicio de cuentas real **70/70**. Base local: todas las suites OK; app 241.
+- Vistas previas de Vercel aisladas: `vercel.json` (solo `main` despliega) + la app no atiende en `preview`.
+- `MULTIEMPRESA_DESPLIEGUE.md` revisado (ensayo, respaldo, verificaciones de solo lectura, compatibilidad,
+  cuándo no desplegar, vuelta atrás con advertencias, vistas previas viejas).
+
