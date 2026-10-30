@@ -211,8 +211,9 @@ create trigger completar_profesora before insert on public.clase
     for each row execute function public._completar_profesora();
 
 -- ---------- membresía de las cuentas nuevas ----------
--- El código nuevo indica la empresa en los metadatos (id_empresa); el código actual no la indica y
--- la cuenta queda en la Empresa 1 (compatibilidad hasta que se integre el código multiempresa).
+-- El código nuevo indica la empresa y el rol en los metadatos (id_empresa y rol_empresa: alumna,
+-- profesora, admin o admin_profesora); el código actual no los indica y la cuenta queda en la Empresa 1
+-- con el rol de profiles.rol (compatibilidad hasta que se integre el código multiempresa).
 create or replace function public._membresia_inicial()
 returns trigger
 language plpgsql
@@ -230,9 +231,16 @@ begin
     if v_empresa is null then
         return new;
     end if;
-    insert into public.membresia (id_usuario, id_empresa, es_admin, es_profesora, es_alumna)
-    values (new.id, v_empresa, new.rol = 'profesora', new.rol = 'profesora', new.rol = 'alumna')
-    on conflict (id_usuario, id_empresa) do nothing;
+    if v_meta ? 'rol_empresa' then
+        insert into public.membresia (id_usuario, id_empresa, es_admin, es_profesora, es_alumna)
+        values (new.id, v_empresa, v_meta ->> 'rol_empresa' in ('admin', 'admin_profesora'),
+                v_meta ->> 'rol_empresa' in ('profesora', 'admin_profesora'), v_meta ->> 'rol_empresa' = 'alumna')
+        on conflict (id_usuario, id_empresa) do nothing;
+    else
+        insert into public.membresia (id_usuario, id_empresa, es_admin, es_profesora, es_alumna)
+        values (new.id, v_empresa, new.rol = 'profesora', new.rol = 'profesora', new.rol = 'alumna')
+        on conflict (id_usuario, id_empresa) do nothing;
+    end if;
     update public.profiles set empresa_activa = v_empresa where id = new.id and empresa_activa is null;
     return new;
 end;

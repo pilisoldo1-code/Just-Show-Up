@@ -7,7 +7,7 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
 |---|---|---|
 | Vie 30/10 | Multiempresa 1: diseño técnico; empresas, membresías, empresa activa, `id_empresa` en todas las tablas, datos actuales a la Empresa 1 | **Hecho** |
 | Sáb 31/10 | Multiempresa 2: políticas por empresa, protección general, cierre de `anon`, contador por empresa | **Hecho (adelantado el 30/10)** |
-| Dom 1/11 | Multiempresa 3: funciones por rol y por empresa, factura con profesora, Mercado Pago solo Empresa 1 | |
+| Dom 1/11 | Multiempresa 3: funciones por rol y por empresa, factura con profesora, Mercado Pago solo Empresa 1 | **Hecho (adelantado el 30/10)** |
 | Lun 2/11 | Multiempresa 4 (servidor): empresa activa, selector, rutas por rol. En paralelo: Estadísticas y prototipo de Videos | |
 | Mar 3/11 | Multiempresa 5 (pantallas): altas, profesora asignada, alumnas sin cédula para profesoras | |
 | Mié 4/11 | Multiempresa 6: panel de superadministradora, script de la Empresa 2, todas las pruebas | |
@@ -60,3 +60,25 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
 - Siguiente (domingo 1/11, se puede adelantar): parte 3, funciones por rol y por empresa.
 - Ojo para la parte 3: `generar_clases` recorre los horarios de TODAS las empresas; con dos empresas, la protección general
   rechazaría las clases de la otra. Hay que limitarla a la empresa activa antes de crear la Empresa 2.
+
+### Vie 30/10 (noche) — adelanto de la parte 3
+- Migración 3 (`20261031000300_multiempresa_3_funciones.sql`), generada por `scripts/multiempresa_3/generar.py` desde
+  `scripts/multiempresa_3/manual.sql` + 12 funciones que pasan a ser solo de la administradora (facturación, pagos,
+  cédula, tipos de clase). Vuelta atrás generada con las definiciones originales exactas (32 restauradas, 9 borradas).
+- Contenido: generar clases, licencias, cobro, borradores, confirmar el mes, cupos y listas de espera solo de la empresa
+  activa; asistencia y cancelaciones solo de la profesora de la clase o la administradora; licencia general de una
+  profesora = solo sus clases (`bloqueo.id_profesora`); profesora en cada línea de factura (trigger); Mercado Pago
+  además exige `empresa.mp_habilitado` (solo Empresa 1) y un pago aprobado de una empresa sin MP queda «a revisar»;
+  funciones nuevas `elegir_empresa`, `asignar_membresia`, `cambiar_estado_membresia`, `crear_empresa`, `editar_empresa`,
+  `cambiar_estado_empresa`, `resumen_empresas`, `asignar_administradora`.
+- `tests/base_local/test_multiempresa_3_base.py "<respaldo>"`: **57/57** (copia de producción + Empresa 2 creada con las
+  funciones de la superadministradora; operación de punta a punta de las dos empresas; factura PIL-2026-10-0001 y
+  JSU-2026-10-0001 independientes; alumna compartida con una factura por empresa; Mercado Pago solo Empresa 1; permisos
+  de cada rol; vuelta atrás exacta).
+- Errores encontrados y corregidos por las pruebas: (1) las cuentas de administradora/profesora nacían también como
+  alumna → los metadatos ahora llevan `rol_empresa`; (2) una profesora podía quitar una licencia general de la
+  administradora (comparación con nulo) → corregido.
+- Todas las suites: multiempresa 1 39/39, 2 52/52, 3 57/57, facturación 180/180, Mercado Pago 73/73, restricción 29/29,
+  planificación 33/33, vencimiento 48/48, app 183. Las pruebas históricas aplican solo las migraciones anteriores a la
+  que prueban.
+- Siguiente: parte 4, servidor (empresa activa, selector, rutas por rol).

@@ -80,6 +80,14 @@ class _Rpc:
     def execute(self):
         args = ", ".join(f"{k} => %s" for k in self.params)
         with self.cli.conn.cursor() as cur:
+            cur.execute("select bool_or(proretset) from pg_proc where pronamespace = 'public'::regnamespace and proname = %s",
+                        (self.nombre,))
+            devuelve_filas = cur.fetchone()[0]
+        if devuelve_filas:  # como PostgREST: una lista de filas
+            with self.cli.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(f"select * from public.{self.nombre}({args})", list(self.params.values()))
+                return _Res([_json(dict(r)) for r in cur.fetchall()])
+        with self.cli.conn.cursor() as cur:
             cur.execute(f"select public.{self.nombre}({args})", list(self.params.values()))
             return _Res(_json(cur.fetchone()[0]))
 
