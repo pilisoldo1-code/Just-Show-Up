@@ -52,10 +52,13 @@ srv, uri, directorio = localdb.iniciar()
 su = conectar(uri)
 NUEVA = [a for a in localdb.migraciones() if a.endswith("_mercado_pago_prueba.sql")]
 assert len(NUEVA) == 1, NUEVA
+# Esta prueba cubre la migración original de Mercado Pago (cualquier alumna ficticia puede pagar).
+# La restricción posterior a una sola alumna se prueba en test_mp_solo_alumna_demo_base.py.
+POSTERIORES = [a for a in localdb.migraciones() if a.endswith("_mercado_pago_solo_alumna_demo.sql")]
 with su.cursor() as cur:
     cur.execute(localdb.SHIM)
     for a in localdb.migraciones():
-        if a not in NUEVA:
+        if a not in NUEVA and a not in POSTERIORES:
             cur.execute(open(a).read())
 q(su, localdb.RELOJ)
 

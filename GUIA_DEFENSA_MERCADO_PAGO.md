@@ -87,9 +87,9 @@ segundos en verse en el sitio.
 
 ## 6. Qué controla Just Show Up (y qué no)
 
-- El botón y el inicio del pago solo funcionan para alumnas con mail ficticio (`@demo.invalid`,
-  `@prueba.invalid`), con su propia factura confirmada, publicada y pendiente; lo valida la
-  pantalla, el servidor **y** la base de datos.
+- El botón y el inicio del pago solo funcionan para **`alumna@prueba.invalid`**, con su propia
+  factura confirmada, publicada y pendiente; las alumnas demo (`@demo.invalid`), las demás cuentas
+  de prueba y las alumnas reales no pueden. Lo valida la pantalla, el servidor **y** la base de datos.
 - El servidor solo usa la credencial si Mercado Pago confirma que es de una **vendedora de prueba**
   de Uruguay (si no, Mercado Pago queda apagado solo), y solo registra pagos cobrados por esa
   vendedora y pagados por una cuenta de prueba (`TESTUSER…`), por el importe exacto de la factura.

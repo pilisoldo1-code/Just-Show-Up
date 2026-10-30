@@ -207,7 +207,7 @@ marca aprobado sin verificarlo con Mercado Pago. **Cada etapa necesita su autori
   permite sumar integrantes. Se comprobó (28/10) que theta tiene su `SUPABASE_SERVICE_KEY`
   (el logout anula la sesión; control sin logout: la sesión sigue válida).
 - Interruptor `mp_configuracion.habilitado` (arranca **apagado**). Solo alumnas `@demo.invalid` y
-  `@prueba.invalid`. Botón blanco con el logo oficial (reglas de marca: no sobre celeste/azul).
+  `@prueba.invalid` (desde la restricción del ítem 7, solo `alumna@prueba.invalid`). Botón blanco con el logo oficial (reglas de marca: no sobre celeste/azul).
 - Sin costos: Mercado Pago de prueba, Supabase Free (Vault incluido) y Vercel Hobby son gratis.
 
 **Etapa 1 — prueba técnica (hecha, 28/10, sin tocar base ni código)**
@@ -271,9 +271,22 @@ marca aprobado sin verificarlo con Mercado Pago. **Cada etapa necesita su autori
    el botón; la profesora la ve sin botón. **Mercado Pago queda encendido hasta la defensa.**
    Guía: `GUIA_DEFENSA_MERCADO_PAGO.md`. **Nunca «Anular y reemitir» la factura de demostración**
    (con el contador en 1 chocaría el número): solo anular el pago.
-7. Pendiente de decisión de Julieta: restringir el botón solo a `alumna@prueba.invalid` (hoy cualquier
-   `@demo.invalid`/`@prueba.invalid` con factura pendiente; desde el 1/11 las alumnas demo tendrán
-   facturas de octubre). Requiere cambiar la función de la base y el código: consultar antes.
+7. **Restricción a una sola alumna** (autorizada a preparar el 29/10; rama `mercado-pago-solo-alumna-demo`):
+   solo `alumna@prueba.invalid` puede iniciar un pago (las 8 alumnas demo, las demás `@prueba.invalid` y
+   las reales no). Servidor (`mercadopago.ALUMNA_HABILITADA`) y base (migración
+   `20261029180000_mercado_pago_solo_alumna_demo.sql`, solo cambia la condición del mail de
+   `crear_intento_mp`). Respaldo de la función de producción en
+   `~/Documents/Just Show Up - respaldos/2026-10-29 antes de restringir Mercado Pago/`; vuelta atrás
+   `supabase/pendientes/vuelta_atras_solo_alumna_demo.sql` (probada: byte a byte igual a producción).
+   Pruebas: 29/29 nueva, 73/73, 180/180, 33/33 locales y 170 unitarias. **Migración APLICADA en Supabase
+   el 29/10** como `20261029152415 mercado_pago_solo_alumna_demo` (autorizada por Julieta), después de
+   verificar respaldo, función idéntica a la respaldada y datos reales idénticos. Después: función distinta
+   solo en la línea del mail, mismos permisos; simulando cada una de las 16 cuentas en un bloque que se
+   deshace, solo `alumna@prueba.invalid` obtiene `ok` (8 demo, 3 de prueba y 3 reales:
+   `alumna_no_habilitada`; profesora: `no_autorizada`); en theta (todavía con el código anterior)
+   `sofia@demo.invalid` forzando el pago queda rechazada por la base; la alumna autorizada ve la factura
+   y el botón; 0 intentos, 0 pagos, contador y datos reales idénticos; credencial de prueba intacta.
+   **Código del servidor: PR abierto, sin integrar (lo revisa e integra Julieta).**
 
 **Datos para pagar en las pruebas:** compradora de prueba (usuario y contraseña en la nota de
 Julieta) en ventana de incógnito; tarjeta Mastercard 5031 7557 3453 0604, venc. 11/30, CVV 123,

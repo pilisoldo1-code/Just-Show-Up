@@ -22,7 +22,9 @@ from app import auth
 from app.clases import TZ, ahora
 
 API = "https://api.mercadopago.com"
-DOMINIOS_ALUMNAS = ("@demo.invalid", "@prueba.invalid")
+# Única alumna que puede pagar con Mercado Pago: la ficticia de la demostración (la base aplica la
+# misma regla en crear_intento_mp). Las alumnas demo y las reales nunca ven el botón.
+ALUMNA_HABILITADA = "alumna@prueba.invalid"
 SITIO_CHECKOUT = "https://www.mercadopago.com.uy/"
 RUTA_VUELTA = "/mis-facturas/mercado-pago/vuelta"
 RUTA_AVISOS = "/webhooks/mercado-pago"
@@ -112,7 +114,7 @@ def _activo() -> tuple[str, str]:
 
 
 def alumna_permitida(mail: str) -> bool:
-    return (mail or "").lower().endswith(DOMINIOS_ALUMNAS)
+    return (mail or "").lower() == ALUMNA_HABILITADA
 
 
 def disponible_para(mail: str) -> bool:

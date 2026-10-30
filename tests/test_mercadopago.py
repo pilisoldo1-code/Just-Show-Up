@@ -16,6 +16,7 @@ TOKEN = "APP_USR-123456-token-de-prueba-que-nunca-debe-aparecer"
 VENDEDORA = "1111111111"
 COMPRADORA = "2222222222"
 LOGO_SHA256 = "91eebaceaf93eedd"
+ALUMNA = Usuario(id="a", mail="alumna@prueba.invalid", nombre="Alumna", apellido="Prueba", rol="alumna", token="t")
 SOFIA = Usuario(id="s", mail="sofia@demo.invalid", nombre="Sofía", apellido="Demo", rol="alumna", token="t")
 REAL = Usuario(id="r", mail="persona@example.com", nombre="Real", apellido="Persona", rol="alumna", token="t")
 
@@ -131,31 +132,37 @@ class Base(unittest.TestCase):
 
 
 class Disponibilidad(Base):
-    def test_disponible_para_alumna_ficticia(self):
-        self.assertTrue(mercadopago.disponible_para("sofia@demo.invalid"))
-        self.assertTrue(mercadopago.disponible_para("ana@prueba.invalid"))
+    def test_disponible_solo_para_la_alumna_de_la_demostracion(self):
+        self.assertTrue(mercadopago.disponible_para("alumna@prueba.invalid"))
+        self.assertTrue(mercadopago.disponible_para("Alumna@Prueba.Invalid"))
+
+    def test_nunca_para_alumnas_demo_ni_otras_de_prueba(self):
+        for mail in ("sofia@demo.invalid", "valentina@demo.invalid", "ana@prueba.invalid",
+                     "profesora@prueba.invalid", "otra.alumna@prueba.invalid", "alumna@prueba.invalid.com",
+                     "xalumna@prueba.invalid", " alumna@prueba.invalid", "", None):
+            self.assertFalse(mercadopago.disponible_para(mail), mail)
 
     def test_nunca_para_alumnas_con_mail_real(self):
         self.assertFalse(mercadopago.disponible_para("persona@example.com"))
-        self.assertFalse(mercadopago.disponible_para("sofia@demo.invalid.com"))
+        self.assertFalse(mercadopago.disponible_para("alumna@prueba.invalid.com"))
 
     def test_apagado(self):
         self.preparar(admin=AdminFalso(habilitado=False))
-        self.assertFalse(mercadopago.disponible_para("sofia@demo.invalid"))
+        self.assertFalse(mercadopago.disponible_para("alumna@prueba.invalid"))
 
     def test_sin_token(self):
         self.preparar(admin=AdminFalso(token=None))
-        self.assertFalse(mercadopago.disponible_para("sofia@demo.invalid"))
+        self.assertFalse(mercadopago.disponible_para("alumna@prueba.invalid"))
 
     def test_credencial_que_no_es_de_prueba_lo_apaga(self):
         self.preparar(mp=MercadoPagoFalso(vendedora_de_prueba=False))
-        self.assertFalse(mercadopago.disponible_para("sofia@demo.invalid"))
+        self.assertFalse(mercadopago.disponible_para("alumna@prueba.invalid"))
 
     def test_si_la_base_falla_queda_apagado(self):
         admin = AdminFalso()
         admin.rpc = mock.Mock(side_effect=RuntimeError("sin conexión"))
         self.preparar(admin=admin)
-        self.assertFalse(mercadopago.disponible_para("sofia@demo.invalid"))
+        self.assertFalse(mercadopago.disponible_para("alumna@prueba.invalid"))
 
     def test_sitio_publico_solo_sitios_conocidos(self):
         self.assertEqual(mercadopago.sitio_publico("just-show-up-theta.vercel.app"), "https://just-show-up-theta.vercel.app")
@@ -166,7 +173,7 @@ class Disponibilidad(Base):
 class IniciarPago(Base):
     def test_crea_la_preferencia_con_el_importe_de_la_base(self):
         alumna = AlumnaFalsa()
-        ok, link = mercadopago.iniciar_pago(alumna, SOFIA.mail, 1, "https://just-show-up-theta.vercel.app")
+        ok, link = mercadopago.iniciar_pago(alumna, ALUMNA.mail, 1, "https://just-show-up-theta.vercel.app")
         self.assertTrue(ok)
         self.assertEqual(link, self.mp.link)
         self.assertEqual(alumna.rpcs, [("crear_intento_mp", {"p_id_resumen": 1})])
@@ -184,13 +191,13 @@ class IniciarPago(Base):
         self.assertEqual(self.admin.llamadas("mp_guardar_preferencia"), [{"p_id_intento": 9, "p_preference_id": "pref-1"}])
 
     def test_en_la_compu_sin_vuelta_automatica(self):
-        mercadopago.iniciar_pago(AlumnaFalsa(), SOFIA.mail, 1, None)
+        mercadopago.iniciar_pago(AlumnaFalsa(), ALUMNA.mail, 1, None)
         pref = self.mp.preferencias[0]
         self.assertNotIn("back_urls", pref)
         self.assertNotIn("notification_url", pref)
 
     def test_factura_ya_pagada_no_llama_a_mercado_pago(self):
-        ok, texto = mercadopago.iniciar_pago(AlumnaFalsa({"resultado": "ya_pagada"}), SOFIA.mail, 1, None)
+        ok, texto = mercadopago.iniciar_pago(AlumnaFalsa({"resultado": "ya_pagada"}), ALUMNA.mail, 1, None)
         self.assertFalse(ok)
         self.assertEqual(texto, "Esa factura ya figura como pagada.")
         self.assertEqual(self.mp.preferencias, [])
@@ -204,17 +211,17 @@ class IniciarPago(Base):
     def test_apagado_no_crea_intento(self):
         self.preparar(admin=AdminFalso(habilitado=False))
         alumna = AlumnaFalsa()
-        ok, _ = mercadopago.iniciar_pago(alumna, SOFIA.mail, 1, None)
+        ok, _ = mercadopago.iniciar_pago(alumna, ALUMNA.mail, 1, None)
         self.assertFalse(ok)
         self.assertEqual(alumna.rpcs, [])
 
     def test_link_que_no_es_de_mercado_pago_no_se_usa(self):
         self.mp.link = "https://otro-sitio.com/pagar"
-        ok, _ = mercadopago.iniciar_pago(AlumnaFalsa(), SOFIA.mail, 1, None)
+        ok, _ = mercadopago.iniciar_pago(AlumnaFalsa(), ALUMNA.mail, 1, None)
         self.assertFalse(ok)
 
     def test_el_token_va_solo_en_el_encabezado(self):
-        mercadopago.iniciar_pago(AlumnaFalsa(), SOFIA.mail, 1, None)
+        mercadopago.iniciar_pago(AlumnaFalsa(), ALUMNA.mail, 1, None)
         metodo, url, encabezados = [x for x in self.mp.llamadas if x[0] == "POST"][0]
         self.assertNotIn(TOKEN, url)
         self.assertEqual(encabezados["Authorization"], f"Bearer {TOKEN}")
@@ -356,7 +363,7 @@ class TokenNuncaVisible(Base):
         self.mp.pago(9002, collector="123")
         with self.assertLogs(level=logging.DEBUG) as capturado:
             logging.getLogger().debug("inicio")
-            mercadopago.iniciar_pago(AlumnaFalsa(), SOFIA.mail, 1, None)
+            mercadopago.iniciar_pago(AlumnaFalsa(), ALUMNA.mail, 1, None)
             mercadopago.verificar_pago("9001", "aviso")
             mercadopago.verificar_pago("9002", "aviso")
             mercadopago.verificar_pago("9999", "aviso")
@@ -384,14 +391,14 @@ class Rutas(Base):
         self.addCleanup(p.stop)
 
     def test_boton_para_alumna_ficticia_con_factura_pendiente(self):
-        self.como(SOFIA)
+        self.como(ALUMNA)
         html = self.client.get("/mis-facturas").text
         self.assertIn('action="/mis-facturas/1/mercado-pago"', html)
         self.assertIn("dinero ficticio", html)
         self.assertNotIn(TOKEN, html)
 
     def test_boton_con_el_logo_oficial(self):
-        self.como(SOFIA)
+        self.como(ALUMNA)
         html = self.client.get("/mis-facturas").text
         self.assertRegex(html, r'Pagar con Mercado Pago</span>\s*<img class="btn-mp-logo" src="/static/img/mercado-pago-logo.svg"')
         self.assertIn("Pagar con Mercado Pago", html)
@@ -407,7 +414,7 @@ class Rutas(Base):
 
     def test_sin_boton_si_esta_apagado(self):
         self.preparar(admin=AdminFalso(habilitado=False))
-        self.como(SOFIA)
+        self.como(ALUMNA)
         self.assertNotIn("mercado-pago", self.client.get("/mis-facturas").text)
 
     def test_sin_boton_para_alumna_con_mail_real(self):
@@ -416,14 +423,32 @@ class Rutas(Base):
 
     def test_sin_boton_si_ya_esta_pagada(self):
         self.factura.update(estado_pago="pagado", estado_pago_txt="Pagada")
-        self.como(SOFIA)
+        self.como(ALUMNA)
         self.assertNotIn('action="/mis-facturas/1/mercado-pago"', self.client.get("/mis-facturas").text)
 
     def test_pagar_redirige_a_mercado_pago(self):
-        self.como(SOFIA)
+        self.como(ALUMNA)
         r = self.client.post("/mis-facturas/1/mercado-pago", follow_redirects=False)
         self.assertEqual(r.status_code, 303)
         self.assertEqual(r.headers["location"], self.mp.link)
+
+    def test_sin_boton_para_alumna_demo(self):
+        self.como(SOFIA)
+        self.assertNotIn("mercado-pago", self.client.get("/mis-facturas").text)
+
+    def test_alumna_demo_no_puede_forzar_el_pago(self):
+        self.como(SOFIA)
+        r = self.client.post("/mis-facturas/1/mercado-pago", follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertTrue(r.headers["location"].startswith("/mis-facturas"))
+        self.assertEqual(self.mp.preferencias, [])
+
+    def test_alumna_demo_ni_siquiera_crea_intento(self):
+        alumna = AlumnaFalsa()
+        ok, texto = mercadopago.iniciar_pago(alumna, SOFIA.mail, 1, None)
+        self.assertFalse(ok)
+        self.assertEqual(texto, "El pago con Mercado Pago no está disponible para tu cuenta.")
+        self.assertEqual(alumna.rpcs, [])
 
     def test_pagar_sin_sesion_va_al_login(self):
         self.como(None)
@@ -432,13 +457,13 @@ class Rutas(Base):
 
     def test_vuelta_muestra_el_resultado(self):
         self.mp.pago(9101)
-        self.como(SOFIA)
+        self.como(ALUMNA)
         r = self.client.get("/mis-facturas/mercado-pago/vuelta?payment_id=9101&status=approved", follow_redirects=False)
         self.assertEqual(r.status_code, 303)
         self.assertIn("ok=1", r.headers["location"])
 
     def test_vuelta_no_le_cree_al_status_de_la_url(self):
-        self.como(SOFIA)
+        self.como(ALUMNA)
         r = self.client.get("/mis-facturas/mercado-pago/vuelta?payment_id=9102&status=approved", follow_redirects=False)
         self.assertIn("ok=0", r.headers["location"])
         self.assertEqual(self.admin.llamadas("registrar_pago_mercado_pago"), [])
