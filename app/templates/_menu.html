@@ -1,15 +1,21 @@
 {% set ruta = request.url.path %}
-{% if usuario.es_profesora %}
+{% if usuario.es_superadmin %}
+{% set inicio = "/admin/empresas" %}
+{% set secciones = [("/admin/empresas", "Empresas", ruta.startswith("/admin/empresas"))] %}
+{% elif usuario.sin_empresa %}
+{% set inicio = "/empresa/elegir" %}
+{% set secciones = [] %}
+{% elif usuario.es_profesora %}
 {% set inicio = "/profesora/horarios" %}
 {% set secciones = [
     ("/profesora/horarios", "Horarios", ruta.startswith("/profesora/horarios")),
-    ("/profesora/tipos-clase", "Tipos de clase", ruta.startswith("/profesora/tipos-clase")),
+    ("/profesora/tipos-clase", "Tipos de clase", ruta.startswith("/profesora/tipos-clase")) if usuario.es_admin else None,
     ("/profesora/clases", "Asistencias", ruta.startswith("/profesora/clases")),
     ("/profesora/planificacion", "Planificación", ruta.startswith("/profesora/planificacion")),
     ("/profesora/alumnas", "Alumnas", ruta.startswith("/profesora/alumnas")),
-    ("/profesora/resumenes", "Facturación", ruta.startswith("/profesora/resumenes")),
+    ("/profesora/resumenes", "Facturación", ruta.startswith("/profesora/resumenes")) if usuario.es_admin else None,
     ("/profesora/estadisticas", "Estadísticas", ruta.startswith("/profesora/estadisticas")),
-] %}
+] | reject("none") | list %}
 {% else %}
 {% set inicio = "/" %}
 {% set secciones = [
@@ -40,7 +46,9 @@
                 <span class="cuenta-flecha" aria-hidden="true">▾</span>
             </summary>
             <div class="cuenta-opciones">
+                {% if usuario.empresa_nombre %}<span class="cuenta-empresa">{{ usuario.empresa_nombre }}</span>{% endif %}
                 <a href="/perfil">Mi perfil</a>
+                {% if usuario.empresas|length > 1 %}<a href="/empresa/elegir">Cambiar de empresa</a>{% endif %}
                 <form action="/logout" method="post">
                     <button type="submit">Cerrar sesión</button>
                 </form>

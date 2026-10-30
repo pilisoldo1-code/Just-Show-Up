@@ -500,6 +500,12 @@ class Cedula(Base):
 
     ALTA = {"nombre": "Ana", "apellido": "Uno", "mail": "ana@prueba.invalid", "cedula": "1.234.567-2"}
 
+    def setUp(self):
+        super().setUp()
+        p = mock.patch.object(main, "_cuenta_existente", return_value=None)  # mail nuevo
+        p.start()
+        self.addCleanup(p.stop)
+
     def test_alta_con_cedula(self):
         self.como(PROFESORA)
         with mock.patch.object(main, "_cedula_en_uso", return_value=False), \

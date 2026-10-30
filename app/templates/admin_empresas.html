@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Empresas</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    {% include "_menu.html" %}
+    <main class="ancho">
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        <div class="header-row">
+            <h1>Empresas</h1>
+            <button type="button" class="btn" onclick="document.getElementById('empresa-nueva').showModal()">+ Nueva empresa</button>
+        </div>
+        <p class="subtitle">Cada empresa tiene sus propias profesoras, alumnas, clases y facturas. Desde acá solo ves
+            cuántas personas tiene y quién la administra; los datos de cada empresa los maneja su administradora.</p>
+
+        <div class="tabla-scroll">
+        <table class="horario-table">
+            <thead>
+                <tr>
+                    <th>Empresa</th>
+                    <th>Código</th>
+                    <th>Estado</th>
+                    <th>Profesoras</th>
+                    <th>Alumnas</th>
+                    <th>Administradora</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in empresas %}
+                <tr>
+                    <td>{{ e.nombre }}</td>
+                    <td>{{ e.codigo }}</td>
+                    <td><span class="badge {{ 'badge-on' if e.activa else 'badge-off' }}">{{ 'Activa' if e.activa else 'Desactivada' }}</span></td>
+                    <td>{{ e.profesoras }}</td>
+                    <td>{{ e.alumnas }}</td>
+                    <td>{{ e.administradoras or 'Sin asignar' }}</td>
+                    <td class="acciones">
+                        <button type="button" class="link-btn" onclick="document.getElementById('editar-{{ e.id }}').showModal()">Editar</button>
+                        <dialog id="editar-{{ e.id }}" class="modal">
+                            <form action="/admin/empresas/{{ e.id }}/editar" method="post" class="horario-form">
+                                <h2>Editar {{ e.nombre }}</h2>
+                                <label>Nombre <input type="text" name="nombre" value="{{ e.nombre }}" minlength="2" maxlength="80" required /></label>
+                                <label>Código (2 a 6 letras) <input type="text" name="codigo" value="{{ e.codigo }}" pattern="[A-Za-z]{2,6}" required /></label>
+                                <p class="nota">El código va al principio del número de cada factura y no se puede cambiar después de la primera.</p>
+                                <div class="modal-botones">
+                                    <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                                    <button type="submit" class="btn">Guardar</button>
+                                </div>
+                            </form>
+                        </dialog>
+                        <button type="button" class="link-btn" onclick="document.getElementById('admin-{{ e.id }}').showModal()">Asignar administradora</button>
+                        <dialog id="admin-{{ e.id }}" class="modal">
+                            <form action="/admin/empresas/{{ e.id }}/administradora" method="post" class="horario-form">
+                                <h2>Administradora de {{ e.nombre }}</h2>
+                                <label>Nombre <input type="text" name="nombre" maxlength="60" required /></label>
+                                <label>Apellido <input type="text" name="apellido" maxlength="60" required /></label>
+                                <label>Mail <input type="email" name="mail" required /></label>
+                                <label class="opcion-check"><input type="checkbox" name="tambien_profesora" value="1" /> También da clases</label>
+                                <p class="nota">Si el mail ya tiene cuenta, se la suma como administradora con su misma contraseña.
+                                    Si no, se crea la cuenta y te mostramos la contraseña temporal una sola vez.</p>
+                                <div class="modal-botones">
+                                    <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                                    <button type="submit" class="btn">Asignar</button>
+                                </div>
+                            </form>
+                        </dialog>
+                        <form action="/admin/empresas/{{ e.id }}/estado" method="post"
+                              onsubmit="return confirm('{{ ('¿Reactivar ' ~ e.nombre ~ '?') if not e.activa else ('¿Desactivar ' ~ e.nombre ~ '? Sus usuarias no podrán entrar a ella; los datos se conservan.') }}')">
+                            <input type="hidden" name="activa" value="{{ 0 if e.activa else 1 }}" />
+                            <button type="submit" class="link-btn">{{ 'Desactivar' if e.activa else 'Reactivar' }}</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="empty">Todavía no hay empresas.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+
+        <dialog id="empresa-nueva" class="modal">
+            <form action="/admin/empresas" method="post" class="horario-form">
+                <h2>Nueva empresa</h2>
+                <label>Nombre <input type="text" name="nombre" minlength="2" maxlength="80" required /></label>
+                <label>Código (2 a 6 letras, ej. PIL) <input type="text" name="codigo" pattern="[A-Za-z]{2,6}" required /></label>
+                <p class="nota">Las facturas de la empresa se numeran CÓDIGO-AÑO-MES-NÚMERO, con su propio contador.</p>
+                <div class="modal-botones">
+                    <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                    <button type="submit" class="btn">Crear</button>
+                </div>
+            </form>
+        </dialog>
+    </main>
+</body>
+</html>

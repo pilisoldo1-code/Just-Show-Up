@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Just Show Up - Nueva alumna</title>
+    <title>Just Show Up - Nueva persona</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
     {% include "_menu.html" %}
     <main>
-        <h1>Nueva alumna</h1>
+        <h1>Nueva persona</h1>
         <p class="subtitle"><a href="/profesora/alumnas">← Volver a alumnas</a></p>
 
         {% if errores %}
@@ -22,6 +22,18 @@
         {% endif %}
 
         <form action="/profesora/alumnas" method="post" class="horario-form">
+            {% if roles %}
+            <label>
+                Rol *
+                <select name="rol">
+                    {% for valor, texto in roles.items() %}
+                    <option value="{{ valor }}" {{ 'selected' if datos.rol == valor }}>{{ texto }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <p class="nota">Si el mail ya tiene cuenta en Just Show Up (por ejemplo, alumna de otra empresa), se la suma a
+                {{ usuario.empresa_nombre or 'tu empresa' }} con su misma contraseña y sin cambiar sus datos.</p>
+            {% endif %}
             <label>
                 Nombre *
                 <input type="text" name="nombre" value="{{ datos.get('nombre', '') }}" maxlength="60" required />
@@ -55,7 +67,7 @@
                 <input type="date" name="fecha_vencimiento_carne_salud" value="{{ datos.get('fecha_vencimiento_carne_salud', '') }}" min="{{ manana_iso }}" />
             </label>
             <p class="nota">Al crearla se genera una contraseña temporal que te mostramos una sola vez.</p>
-            <button type="submit" class="btn">Crear alumna</button>
+            <button type="submit" class="btn">Crear cuenta</button>
         </form>
     </main>
 </body>

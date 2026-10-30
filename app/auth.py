@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -46,16 +46,40 @@ class Redirigir(Exception):
 
 @dataclass
 class Usuario:
+    """Persona con sesión. Los roles son los de su empresa activa (multiempresa); la base vuelve a
+    comprobar todo. `rol` es el de profiles (compatibilidad): sin datos de membresía, «profesora» se
+    toma como administradora y profesora, y «alumna» como alumna (así se arman en las pruebas)."""
     id: str
     mail: str
     nombre: str
     apellido: str
     rol: str
     token: str = ""
+    es_admin: bool = False
+    es_docente: bool = False
+    es_alumna: bool = False
+    es_superadmin: bool = False
+    empresa_id: Optional[int] = None
+    empresa_nombre: str = ""
+    empresa_codigo: str = ""
+    empresas: list = field(default_factory=list)  # [{"id", "nombre", "codigo"}] donde tiene membresía activa
+    con_membresias: bool = False
+
+    def __post_init__(self):
+        if not self.con_membresias and not self.es_superadmin:
+            if self.rol == "profesora":
+                self.es_admin = self.es_docente = True
+            elif self.rol == "alumna":
+                self.es_alumna = True
 
     @property
     def es_profesora(self) -> bool:
-        return self.rol == "profesora"
+        """Docente (administradora o profesora) de la empresa activa: entra a la parte de profesora."""
+        return self.es_docente
+
+    @property
+    def sin_empresa(self) -> bool:
+        return self.con_membresias and not self.es_superadmin and self.empresa_id is None
 
 
 # ---------- clientes de Supabase ----------
@@ -138,16 +162,39 @@ def usuario_de_acceso(acceso: str) -> Optional[Usuario]:
         return None
     cliente.postgrest.auth(acceso)
     filas = (
-        cliente.table("profiles").select("nombre, apellido, mail, rol")
+        cliente.table("profiles").select("nombre, apellido, mail, rol, es_superadmin, empresa_activa")
         .eq("id", respuesta.user.id).execute().data
     )
     if not filas:
         return None
     p = filas[0]
-    return Usuario(
-        id=respuesta.user.id, mail=p["mail"], nombre=p["nombre"],
-        apellido=p["apellido"], rol=p["rol"], token=acceso,
+    usuario = Usuario(
+        id=respuesta.user.id, mail=p["mail"], nombre=p["nombre"], apellido=p["apellido"], rol=p["rol"],
+        token=acceso, es_superadmin=bool(p.get("es_superadmin")), con_membresias=True,
     )
+    if usuario.es_superadmin:
+        return usuario
+    membresias = (cliente.table("membresia").select("id_empresa, es_admin, es_profesora, es_alumna")
+                  .eq("id_usuario", usuario.id).eq("activa", True).execute().data)
+    empresas = {e["id"]: e for e in (cliente.table("empresa").select("id, nombre, codigo, activa")
+                                     .in_("id", [m["id_empresa"] for m in membresias]).execute().data
+                                     if membresias else [])}
+    validas = [m for m in membresias if empresas.get(m["id_empresa"], {}).get("activa")]
+    usuario.empresas = sorted(({"id": m["id_empresa"], "nombre": empresas[m["id_empresa"]]["nombre"],
+                                "codigo": empresas[m["id_empresa"]]["codigo"]} for m in validas),
+                              key=lambda e: e["nombre"].lower())
+    activa = next((m for m in validas if m["id_empresa"] == p.get("empresa_activa")), None)
+    if activa is None and len(validas) == 1:
+        # una sola empresa: entra directo (la base registra la elección y la valida)
+        if cliente.rpc("elegir_empresa", {"p_id_empresa": validas[0]["id_empresa"]}).execute().data == "ok":
+            activa = validas[0]
+    if activa is not None:
+        e = empresas[activa["id_empresa"]]
+        usuario.empresa_id, usuario.empresa_nombre, usuario.empresa_codigo = e["id"], e["nombre"], e["codigo"]
+        usuario.es_admin = bool(activa["es_admin"])
+        usuario.es_docente = bool(activa["es_admin"] or activa["es_profesora"])
+        usuario.es_alumna = bool(activa["es_alumna"])
+    return usuario
 
 
 def _validar(request: Request) -> Optional[Usuario]:
@@ -208,22 +255,58 @@ def _exigir_sesion(request: Request) -> Usuario:
 
 # ---------- dependencias de FastAPI ----------
 
+def destino(usuario: Usuario) -> str:
+    """Pantalla de inicio según el rol en la empresa activa."""
+    if usuario.es_superadmin:
+        return "/admin/empresas"
+    if usuario.sin_empresa:
+        return "/empresa/elegir"
+    return "/profesora/horarios" if usuario.es_profesora else "/"
+
+
+def _con_empresa(request: Request) -> Usuario:
+    usuario = _exigir_sesion(request)
+    if usuario.es_superadmin or usuario.sin_empresa:
+        raise Redirigir(destino(usuario))
+    return usuario
+
+
 def requiere_login(request: Request) -> Usuario:
     return _exigir_sesion(request)
 
 
 def requiere_alumna(request: Request) -> Usuario:
-    usuario = _exigir_sesion(request)
+    usuario = _con_empresa(request)
     if usuario.es_profesora:
         raise Redirigir("/profesora/horarios")
+    if not usuario.es_alumna:
+        raise Redirigir("/empresa/elegir")
     return usuario
 
 
 def requiere_profesora(request: Request) -> Usuario:
-    usuario = _exigir_sesion(request)
+    """Administradora o profesora de la empresa activa."""
+    usuario = _con_empresa(request)
     if not usuario.es_profesora:
         logging.warning("Acceso denegado a %s para %s", request.url.path, usuario.id)
         raise Redirigir("/?" + urlencode({"ok": 0, "aviso": "No tenés permiso para entrar a esa sección."}))
+    return usuario
+
+
+def requiere_admin(request: Request) -> Usuario:
+    """Solo la administradora de la empresa activa (facturación, pagos, altas, tipos de clase)."""
+    usuario = requiere_profesora(request)
+    if not usuario.es_admin:
+        logging.warning("Acceso de administradora denegado a %s para %s", request.url.path, usuario.id)
+        raise Redirigir("/profesora/horarios?" + urlencode({"ok": 0, "aviso": "Esa sección es solo para la administradora."}))
+    return usuario
+
+
+def requiere_superadmin(request: Request) -> Usuario:
+    usuario = _exigir_sesion(request)
+    if not usuario.es_superadmin:
+        logging.warning("Acceso de superadministradora denegado a %s para %s", request.url.path, usuario.id)
+        raise Redirigir(destino(usuario))
     return usuario
 
 
@@ -263,17 +346,22 @@ def generar_contrasena_temporal(largo: int = 10) -> str:
 
 def crear_cuenta(
     mail: str, nombre: str, apellido: str, rol: str = "alumna", extras: Optional[dict] = None,
-    contrasena: Optional[str] = None,
+    contrasena: Optional[str] = None, id_empresa: Optional[int] = None, rol_empresa: Optional[str] = None,
 ) -> tuple[str, str]:
+    """Crea la cuenta (ya confirmada). Con id_empresa y rol_empresa la base crea la membresía en esa
+    empresa (alumna, profesora, admin o admin_profesora); sin_empresa=True es para la superadministradora."""
     contrasena = contrasena or generar_contrasena_temporal()
     admin = cliente_admin()
+    meta = {"nombre": nombre, "apellido": apellido}
+    if id_empresa is not None:
+        meta.update({"id_empresa": id_empresa, "rol_empresa": rol_empresa or "alumna"})
     try:
         creada = admin.auth.admin.create_user(
             {
                 "email": mail,
                 "password": contrasena,
                 "email_confirm": True,
-                "user_metadata": {"nombre": nombre, "apellido": apellido},
+                "user_metadata": meta,
             }
         )
     except (AuthError, httpx.HTTPError) as e:
