@@ -394,8 +394,8 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     vigente, primero anular el pago). La anulada queda en el historial y se crea un borrador
     con las mismas clases, ajustes y motivos, que se confirma con otro número. La alumna ve
     la anulada solo si ya estaba publicada, marcada "reemplazada por…".
-  - **Vencimiento (rama `vencimiento-facturas`, migración `20261030120000_vencimiento_facturas.sql`, 30/10;
-    probada en Postgres local, NO aplicada en Supabase hasta que Julieta lo autorice)**: la base guarda
+  - **Vencimiento (PR #26, migración `20261030120000_vencimiento_facturas.sql`, APLICADA en Supabase el 30/10
+    como `20261030153545 vencimiento_facturas`, con respaldo previo y estructura verificada)**: la base guarda
     `vence_el` al confirmar (`_confirmar` → `_vencimiento`). Primera factura que ve la alumna: día 10 del mes
     siguiente inclusive, o 10 días desde la confirmación si se confirma después del 10. «Anular y reemitir»
     exige `p_tipo` (`correccion` | `administrativa`, por defecto administrativa para el código viejo): una
@@ -868,6 +868,13 @@ Para cada módulo, en este orden:
   comprobar desbordes de verdad usar el navegador integrado con el tamaño "mobile". Para ver pantallas de
   la profesora sin Supabase: levantar la app con `auth._usuario_cacheado`, `main._sb` y
   `facturas.factura` reemplazados por datos simulados (como en `tests/test_facturas.py`).
+- **Nunca probar en producción funciones que confirman facturas, ni siquiera dentro de un bloque que se
+  deshace** (30/10): `_confirmar` llama a `nextval('factura_numero_seq')` y **los contadores de Postgres no se
+  deshacen** con el rollback. Pasó al verificar la migración de vencimiento: la confirmación falló (repetía
+  `JSU-2026-09-0001` con el contador en 1), todo se deshizo menos el contador, que quedó en `1 / true` (la
+  próxima factura real habría sido la 0002). Se restauró con `setval('public.factura_numero_seq', 1, false)`
+  con autorización. Regla: en producción solo lecturas y funciones que no escriben (`_vencimiento`); todo lo
+  que confirma, anula o reemite se prueba en el Postgres local (`tests/base_local/`).
 - **Logo de Mercado Pago**: el oficial está en `app/static/img/mercado-pago-logo.svg` (zip
   "Logos Mercado Pago 2025", uso digital RGB, color horizontal), **sin editar** (la guía lo
   prohíbe; una prueba compara su huella). Reglas de la marca: no ponerlo sobre celeste/azul de

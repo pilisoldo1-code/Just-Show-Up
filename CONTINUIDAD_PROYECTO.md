@@ -208,8 +208,11 @@ Detalle completo en `CLAUDE.md` (sección "Facturación mensual y pagos") y en l
    sujeto a validación (§8).
 
 **Orden aprobado por Julieta el 30/10 (las etapas siguientes, de a una y con su autorización):**
-1. **Vencimiento de facturas** — desarrollado en la rama `vencimiento-facturas` (PR abierto). Migración probada
-   en Postgres local con la vuelta atrás; **no aplicada en Supabase**. Respaldo previo (solo lectura):
+1. **Vencimiento de facturas** — PR #26. Migración **aplicada en Supabase el 30/10** (`20261030153545
+   vencimiento_facturas`): estructura idéntica a la calculada en local, datos idénticos al respaldo, theta y Mercado
+   Pago de prueba funcionando con el código anterior. Incidente: una verificación que confirmaba una factura dentro
+   de un bloque que se deshace dejó el contador de facturas en `1 / true`; se restauró a `1 / false` con autorización
+   (la próxima factura de octubre es `JSU-2026-10-0001`, datos sin cambios). Ver Gotchas de `CLAUDE.md`. Respaldo previo (solo lectura):
    `~/Documents/Just Show Up - respaldos/2026-10-30 antes de vencimiento de facturas/`. Regla en `CLAUDE.md`
    (módulo 6). Al aplicarla, la factura de demostración (confirmada el 29/10, después del 10/10) vence el
    **08/11/2026** y desde el 09/11 se ve «Vencida — deuda pendiente», pero se sigue pudiendo pagar.
