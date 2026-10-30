@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 
 from supabase import Client
 
+from app import clases
 from app.clases import TZ, nombre_dia
 from app.validaciones import formatear_cedula
 
@@ -25,6 +26,11 @@ ESTADOS_INTENTO_MP = {"creado": "Iniciado (sin resultado)", "aprobado": "Aprobad
                       "a_revisar": "A revisar"}
 ESTADOS_FACTURA = {"borrador": "Borrador", "confirmada": "Confirmada", "anulada": "Anulada"}
 ESTADOS_PAGO = {"pendiente": "Pendiente de pago", "pagado": "Pagada", "sin_cargo": "Sin cargo"}
+# Se muestra cuando una factura confirmada y pendiente pasó su vencimiento. En la base sigue
+# "pendiente": se puede pagar igual (manual o Mercado Pago de prueba).
+VENCIDA_TXT = "Vencida — deuda pendiente"
+TIPOS_REEMISION = {"correccion": "Corrección de un error de facturación", "administrativa": "Reemisión administrativa"}
+MAX_PLAZOS_CORRECCION = 2
 MOTIVO_MIN, MOTIVO_MAX = 3, 300
 
 
@@ -173,7 +179,8 @@ def provisorio(sb: Client, mes: int, anio: int, ahora: datetime, alumna_id: str 
 
 _CAMPOS_FACTURA = ("id, id_alumna, mes, anio, estado_factura, estado_pago, cantidad_clases, subtotal_original, "
                    "total_lineas, descuento_tipo, descuento_valor, descuento_monto, total, version, numero, "
-                   "confirmada_en, anulada_en, reemplaza_a, alumna_nombre, alumna_apellido, alumna_cedula")
+                   "confirmada_en, anulada_en, reemplaza_a, alumna_nombre, alumna_apellido, alumna_cedula, "
+                   "vence_el, tipo_reemision, plazos_correccion")
 
 
 def _identificacion(f: dict, perfiles: dict) -> dict:
@@ -187,13 +194,33 @@ def _identificacion(f: dict, perfiles: dict) -> dict:
             "identificacion_fija": fija}
 
 
+def _a_fecha(valor) -> date | None:
+    if not valor:
+        return None
+    return valor if isinstance(valor, date) else date.fromisoformat(str(valor)[:10])
+
+
+def vencimiento(f: dict, hoy: date | None = None) -> dict:
+    """Vencimiento para mostrar. El día lo calcula y guarda la base al confirmar (vence_el)."""
+    vence = _a_fecha(f.get("vence_el"))
+    hoy = hoy or clases.ahora().date()
+    vencida = bool(vence) and f.get("estado_factura") == "confirmada" and f.get("estado_pago") == "pendiente" and hoy > vence
+    if vencida:
+        clase = "badge-rojo"
+    else:
+        clase = {"pagado": "badge-on", "sin_cargo": "badge-off"}.get(f.get("estado_pago"), "badge-espera")
+    return {"vence_txt": _fecha_txt(vence) if vence else "", "vencida": vencida, "estado_pago_clase": clase,
+            "estado_pago_txt": VENCIDA_TXT if vencida else ESTADOS_PAGO[f["estado_pago"]]}
+
+
 def _factura(f: dict, perfiles: dict) -> dict:
     return {
         **f,
         **_identificacion(f, perfiles),
         "mes_txt": mes_txt(f["mes"], f["anio"]),
         "estado_factura_txt": ESTADOS_FACTURA[f["estado_factura"]],
-        "estado_pago_txt": ESTADOS_PAGO[f["estado_pago"]],
+        **vencimiento(f),
+        "tipo_reemision_txt": TIPOS_REEMISION.get(f.get("tipo_reemision") or "", ""),
         "subtotal_original": plata(f["subtotal_original"]),
         "total_lineas": plata(f["total_lineas"]),
         "descuento_monto": plata(f["descuento_monto"]),
@@ -253,10 +280,29 @@ def _historial_txt(h: dict) -> str:
             return f"{plata(x['valor']).normalize():f}%" if x["tipo"] == "porcentaje" else f"${plata(x['valor'])}"
         return f"{txt(d.get('antes'))} → {txt(d.get('despues'))}"
     if h["accion"] == "confirmada":
-        return f"Total ${plata(d.get('total', 0))}"
+        texto = f"Total ${plata(d.get('total', 0))}"
+        if d.get("vence_el"):
+            texto += f" · vence el {_fecha_txt(_a_fecha(d['vence_el']))}"
+            regla = _REGLAS_VENCIMIENTO.get(d.get("regla_vencimiento"), "")
+            if d.get("regla_vencimiento") == "correccion_nuevo_plazo":
+                regla = regla.format(d.get("plazos_correccion", 1), MAX_PLAZOS_CORRECCION)
+            if regla:
+                texto += f" ({regla})"
+        return texto
     if h["accion"] in ("anulada", "reemision"):
-        return d.get("texto", "")
+        tipo = TIPOS_REEMISION.get(d.get("tipo") or "", "")
+        return d.get("texto", "") + (f" · {tipo.lower()}" if tipo else "")
     return ""
+
+
+_REGLAS_VENCIMIENTO = {
+    "emision": "día 10 del mes siguiente",
+    "emision_tardia": "confirmada después del día 10: 10 días para pagar",
+    "correccion_nuevo_plazo": "corrección: nuevo plazo de 10 días, {} de {}",
+    "correccion_sin_cambios": "corrección sin cambios en clases, ajustes ni importe: mantiene el vencimiento",
+    "correccion_limite": "ya se usaron los 2 nuevos plazos por corrección: mantiene el vencimiento",
+    "administrativa": "reemisión administrativa: mantiene el vencimiento",
+}
 
 
 def factura(sb: Client, factura_id: int) -> dict | None:
@@ -364,6 +410,7 @@ _MENSAJES = {
     "ya_anulado": "Ese pago ya estaba anulado.",
     "tiene_pago": "La factura tiene un pago registrado: primero anulá el pago.",
     "no_confirmada_anular": "Solo se pueden anular facturas confirmadas.",
+    "tipo_invalido": "Elegí si la reemisión corrige un error de facturación o es administrativa.",
 }
 
 
@@ -419,8 +466,10 @@ def registrar_pago(sb: Client, factura_id: int, monto: Decimal, medio: str, fech
     return _resultado(r, "Pago registrado.")
 
 
-def anular_factura(sb: Client, factura_id: int, motivo: str) -> tuple[bool, str, int | None]:
-    r = _codigo(sb, "anular_factura", {"p_id": factura_id, "p_motivo": motivo})
+def anular_factura(sb: Client, factura_id: int, motivo: str, tipo: str) -> tuple[bool, str, int | None]:
+    if tipo not in TIPOS_REEMISION:
+        return False, mensaje("tipo_invalido"), None
+    r = _codigo(sb, "anular_factura", {"p_id": factura_id, "p_motivo": motivo, "p_tipo": tipo})
     if r.get("resultado") == "ok":
         return True, ("Factura anulada. Se creó un borrador que la reemplaza, con las mismas clases y ajustes: "
                       "corregilo y confirmalo."), r["id_nueva"]

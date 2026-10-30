@@ -82,12 +82,15 @@ def generar(f: dict, ahora: datetime, marca: str | None = None) -> bytes:
         estado = f"Pagada el {f['pago']['fecha']} ({f['pago']['medio']})"
     elif f.get("estado_pago") == "sin_cargo":
         estado = "Sin cargo"
+    elif f.get("vencida"):
+        estado = "Vencida — deuda pendiente"
     else:
         estado = "Pendiente de pago"
     pdf.set_y(52 if marca else 44)
     datos = [("Alumna", f.get("alumna", "")), ("Cédula", f.get("cedula_txt") or "no registrada"),
              ("Período", f.get("mes_txt", "")), ("Confirmada el", f.get("confirmada_txt") or "-"),
              ("Clases", str(f.get("cantidad_clases", 0))),
+             ("Vencimiento", f.get("vence_txt") or "-"),
              (f"Estado de pago al {ahora.day:02d}/{ahora.month:02d}/{ahora.year}", estado)]
     pdf.set_font("Helvetica", "", 9)
     for i, (etiqueta, valor) in enumerate(datos):

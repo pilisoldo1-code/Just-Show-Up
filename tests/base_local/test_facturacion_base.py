@@ -58,7 +58,8 @@ su = conectar(uri)
 NUEVAS = [a for a in localdb.migraciones() if a.endswith(("_profiles_cedula.sql", "_resumen_mensual_pagos.sql"))]
 assert len(NUEVAS) == 2, NUEVAS
 # Las que dependen de facturación (Mercado Pago) van después de ella.
-DEPENDIENTES = [a for a in localdb.migraciones() if a.endswith(("_mercado_pago_prueba.sql", "_mercado_pago_solo_alumna_demo.sql"))]
+DEPENDIENTES = [a for a in localdb.migraciones() if a.endswith(("_mercado_pago_prueba.sql", "_mercado_pago_solo_alumna_demo.sql",
+                                                                  "_vencimiento_facturas.sql"))]
 with su.cursor() as cur:
     cur.execute(localdb.SHIM)
     for a in localdb.migraciones():

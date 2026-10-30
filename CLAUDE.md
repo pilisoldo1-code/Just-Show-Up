@@ -394,6 +394,20 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     vigente, primero anular el pago). La anulada queda en el historial y se crea un borrador
     con las mismas clases, ajustes y motivos, que se confirma con otro número. La alumna ve
     la anulada solo si ya estaba publicada, marcada "reemplazada por…".
+  - **Vencimiento (rama `vencimiento-facturas`, migración `20261030120000_vencimiento_facturas.sql`, 30/10;
+    probada en Postgres local, NO aplicada en Supabase hasta que Julieta lo autorice)**: la base guarda
+    `vence_el` al confirmar (`_confirmar` → `_vencimiento`). Primera factura que ve la alumna: día 10 del mes
+    siguiente inclusive, o 10 días desde la confirmación si se confirma después del 10. «Anular y reemitir»
+    exige `p_tipo` (`correccion` | `administrativa`, por defecto administrativa para el código viejo): una
+    corrección con cambio real en clases/ajustes/descuento/importe da 10 días desde la confirmación de la
+    corregida (nunca antes del vencimiento anterior), hasta **2 nuevos plazos por cadena** (`plazos_correccion`);
+    la tercera se puede confirmar pero conserva el plazo. Administrativa o corrección sin cambios: conserva el
+    vencimiento. Si la anterior se anuló antes de publicarse, la reemitida cuenta como primera emisión.
+    «Vencida — deuda pendiente» (`facturas.vencimiento`) es solo visual: en la base sigue `pendiente` y se
+    paga igual (manual o Mercado Pago de prueba). El historial guarda tipo, motivo, quién, `vence_el` y la
+    regla aplicada. Pruebas: `tests/base_local/test_vencimiento_base.py "<respaldo>"` (48: estructura igual a
+    producción, datos intactos, reglas, permisos, compatibilidad y vuelta atrás exacta). Vuelta atrás:
+    `supabase/pendientes/vuelta_atras_vencimiento_facturas.sql`.
   - **Pagos simulados**: solo facturas confirmadas, total exacto, fecha no futura, uno vigente
     (índice único + bloqueo), anulación con motivo/responsable/fecha en `pago_anulacion`.
     Factura en $0 = "sin cargo".

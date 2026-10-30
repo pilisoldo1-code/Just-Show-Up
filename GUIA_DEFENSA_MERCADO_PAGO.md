@@ -17,7 +17,9 @@ Julieta y en `.env.cuentas-prueba` (fuera de git).
 
 1. Entrar al sitio e iniciar sesión como `alumna@prueba.invalid`.
 2. Ir a **Mis facturas**.
-3. Buscar la factura **septiembre 2026 · JSU-2026-09-0001 · $800**, en estado *Pendiente de pago*.
+3. Buscar la factura **septiembre 2026 · JSU-2026-09-0001 · $800**, en estado *Pendiente de pago* o, desde
+   el 09/11, *Vencida — deuda pendiente* (cuando esté aplicado el vencimiento de facturas: venció el 08/11).
+   Vencida se puede pagar igual: sirve para mostrar las dos cosas.
 4. Presionar **«Pagar con Mercado Pago»** (botón blanco con el logo). Se abre el checkout de
    Mercado Pago con el título «Factura JSU-2026-09-0001 – Just Show Up (PRUEBA, dinero ficticio)».
    El link vence a los 30 minutos: si se demora, volver a Mis facturas y presionar el botón otra vez.

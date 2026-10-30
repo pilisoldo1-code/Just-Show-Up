@@ -29,7 +29,7 @@
                     {% if f.estado_factura == 'anulada' %}
                     <span class="badge badge-off">Anulada</span>
                     {% else %}
-                    <span class="badge {{ 'badge-on' if f.estado_pago != 'pendiente' else 'badge-espera' }}">{{ f.estado_pago_txt }}</span>
+                    <span class="badge {{ f.estado_pago_clase }}">{{ f.estado_pago_txt }}</span>
                     {% endif %}
                 </div>
             </div>
@@ -41,7 +41,10 @@
             {% set editable = false %}
             {% set interno = false %}
             {% include "_factura_lineas.html" %}
-            {% if f.pago %}<p class="nota">Pagada el {{ f.pago.fecha }} · {{ f.pago.medio }}</p>{% endif %}
+            {% if f.pago %}<p class="nota">Pagada el {{ f.pago.fecha }} · {{ f.pago.medio }}</p>
+            {% elif f.estado_factura == 'confirmada' and f.estado_pago == 'pendiente' and f.vence_txt %}
+            <p class="nota vence-linea{% if f.vencida %} vence-vencida{% endif %}">{% if f.vencida %}Venció el {{ f.vence_txt }}: podés pagarla igual.{% else %}Pagala hasta el {{ f.vence_txt }} inclusive.{% endif %}</p>
+            {% endif %}
             {% if pago_mp and f.estado_factura == 'confirmada' and f.estado_pago == 'pendiente' %}
             <div class="factura-acciones">
                 <form action="/mis-facturas/{{ f.id }}/mercado-pago" method="post"

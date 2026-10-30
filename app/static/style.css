@@ -1962,3 +1962,46 @@ main.ancho {
 .panel-cabecera .badge {
     white-space: nowrap;
 }
+
+/* ---------- vencimiento de facturas ---------- */
+.vence-linea {
+    margin-top: 8px;
+}
+
+.vence-vencida {
+    color: #f87171;
+}
+
+.tipo-reemision {
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    padding: 10px 14px 12px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tipo-reemision legend {
+    padding: 0 6px;
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+.horario-form .opcion-reemision {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 10px;
+    color: var(--text);
+}
+
+.opcion-reemision input {
+    margin-top: 4px;
+    accent-color: var(--accent);
+}
+
+.opcion-reemision > span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}

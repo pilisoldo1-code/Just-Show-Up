@@ -93,7 +93,7 @@
                 </div>
                 <span class="badge {{ 'badge-espera' if f.estado_factura == 'borrador' else ('badge-off' if f.estado_factura == 'anulada' else 'badge-on') }}">{{ f.estado_factura_txt }}</span>
                 {% if f.estado_factura == 'confirmada' %}
-                <span class="badge {{ 'badge-on' if f.estado_pago != 'pendiente' else 'badge-espera' }}">{{ f.estado_pago_txt }}</span>
+                <span class="badge {{ f.estado_pago_clase }}">{{ f.estado_pago_txt }}</span>
                 {% endif %}
                 <a class="btn btn-chico" href="/profesora/resumenes/{{ f.id }}">Ver factura</a>
             </li>
