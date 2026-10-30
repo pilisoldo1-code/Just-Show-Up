@@ -54,7 +54,7 @@ NUEVA = [a for a in localdb.migraciones() if a.endswith("_mercado_pago_prueba.sq
 assert len(NUEVA) == 1, NUEVA
 # Esta prueba cubre la migración original de Mercado Pago (cualquier alumna ficticia puede pagar).
 # La restricción posterior a una sola alumna se prueba en test_mp_solo_alumna_demo_base.py.
-POSTERIORES = [a for a in localdb.migraciones() if a.endswith("_mercado_pago_solo_alumna_demo.sql")]
+POSTERIORES = [a for a in localdb.migraciones() if os.path.basename(a) > os.path.basename(NUEVA[0])]
 with su.cursor() as cur:
     cur.execute(localdb.SHIM)
     for a in localdb.migraciones():

@@ -58,8 +58,9 @@ su = conectar(uri)
 NUEVAS = [a for a in localdb.migraciones() if a.endswith(("_profiles_cedula.sql", "_resumen_mensual_pagos.sql"))]
 assert len(NUEVAS) == 2, NUEVAS
 # Las que dependen de facturación (Mercado Pago) van después de ella.
-DEPENDIENTES = [a for a in localdb.migraciones() if a.endswith(("_mercado_pago_prueba.sql", "_mercado_pago_solo_alumna_demo.sql",
-                                                                  "_vencimiento_facturas.sql"))]
+# Todas las posteriores a facturación (Mercado Pago, vencimiento, multiempresa...) van después de ella.
+_BASE_FACT = os.path.basename([a for a in NUEVAS if a.endswith("_resumen_mensual_pagos.sql")][0])
+DEPENDIENTES = [a for a in localdb.migraciones() if os.path.basename(a) > _BASE_FACT and a not in NUEVAS]
 with su.cursor() as cur:
     cur.execute(localdb.SHIM)
     for a in localdb.migraciones():
@@ -106,13 +107,15 @@ q(su, "insert into asistencia (id_reserva, estado) select id, 'presente' from re
 
 TABLAS = ["horario", "clase", "reserva", "listadeespera", "asistencia", "bloqueo", "tipo_clase"]
 COLS_PERFIL = "id, nombre, apellido, mail, telefono, fecha_nacimiento, fecha_vencimiento_carne_salud, rol"
-antes = {t: huella(su, t) for t in TABLAS}
+COLS = {t: ", ".join(c["column_name"] for c in q(su, """select column_name from information_schema.columns
+          where table_schema = 'public' and table_name = %s order by ordinal_position""", (t,))) for t in TABLAS}
+antes = {t: huella(su, t, COLS[t]) for t in TABLAS}  # columnas anteriores (las posteriores agregan columnas)
 antes["profiles"] = huella(su, "profiles", COLS_PERFIL)
 with su.cursor() as cur:
     for a in NUEVAS + DEPENDIENTES:
         cur.execute(open(a).read())
 ok("las migraciones nuevas (cédula y facturación) se aplican después de todas las demás", True)
-despues = {t: huella(su, t) for t in TABLAS}
+despues = {t: huella(su, t, COLS[t]) for t in TABLAS}
 despues["profiles"] = huella(su, "profiles", COLS_PERFIL)
 ok("las migraciones no modifican ningún dato existente", despues == antes)
 q(su, localdb.RELOJ)

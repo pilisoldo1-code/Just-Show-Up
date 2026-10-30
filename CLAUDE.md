@@ -875,6 +875,13 @@ Para cada módulo, en este orden:
   próxima factura real habría sido la 0002). Se restauró con `setval('public.factura_numero_seq', 1, false)`
   con autorización. Regla: en producción solo lecturas y funciones que no escriben (`_vencimiento`); todo lo
   que confirma, anula o reemite se prueba en el Postgres local (`tests/base_local/`).
+- **Multiempresa (rama `multiempresa`, en desarrollo)**: diseño en `MULTIEMPRESA_DISENO.md`, avance diario en
+  `AVANCE_CRONOGRAMA.md`. Mientras exista **una sola empresa**, las filas creadas sin sesión (scripts con la
+  clave de administrador) van a ella (`_empresa_unica()` como valor por defecto de `id_empresa`); con dos o más,
+  la empresa es obligatoria. Para agregar columnas a tablas con datos, usar `add column ... default` y no un
+  `UPDATE` (dispara triggers como `_horario_desde_tipo`). Las pruebas de una migración vieja aplican solo las
+  migraciones anteriores a ella; las pruebas con copia de producción cargan `datos.json` del respaldo en el
+  Postgres local (nunca se copia al repo).
 - **Logo de Mercado Pago**: el oficial está en `app/static/img/mercado-pago-logo.svg` (zip
   "Logos Mercado Pago 2025", uso digital RGB, color horizontal), **sin editar** (la guía lo
   prohíbe; una prueba compara su huella). Reglas de la marca: no ponerlo sobre celeste/azul de
