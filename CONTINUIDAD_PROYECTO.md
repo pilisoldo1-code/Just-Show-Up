@@ -1,7 +1,8 @@
 # Continuidad del proyecto Just Show Up — traspaso entre sesiones
 
-> Actualizado: **29/10/2026** (computadora de Julieta: Mercado Pago de prueba integrado en theta
-> (PR #21), probado de punta a punta y **factura de demostración lista para la defensa del 17/11**).
+> Actualizado: **30/10/2026** (computadora de Julieta: Mercado Pago de prueba terminado y restringido a
+> la alumna de la demostración (PR #21–#23), rediseño de la pantalla de pagos de la profesora (PR #24),
+> todo desplegado en theta; **listo para la defensa del 17/11**).
 > Leer junto con `CLAUDE.md` (reglas, gotchas, detalle de cada módulo). Este archivo dice
 > **dónde quedamos y qué sigue**; `CLAUDE.md` es la referencia permanente.
 > No contiene contraseñas, tokens ni claves: esas viven solo en `.env` y `.env.cuentas-prueba`
@@ -11,17 +12,23 @@
 
 ## 0. Resumen en 30 segundos
 
-- **En `main` y desplegado en theta (`0810ee0`)**: módulo 6 (facturación + cédula, PR #15),
+- **En `main` y desplegado en theta (`4fa97ba`)**: módulo 6 (facturación + cédula, PR #15),
   cancelación de clases puntuales + menú de la profesora (PR #16–#18), traspaso (PR #19),
-  **header responsive** con menú ☰ y menú de la alumna (PR #20) y **Mercado Pago de prueba (PR #21)**.
+  **header responsive** con menú ☰ y menú de la alumna (PR #20), **Mercado Pago de prueba (PR #21)**,
+  guía de la defensa (PR #22), **Mercado Pago solo para `alumna@prueba.invalid` (PR #23)** y
+  **rediseño de la sección Pago de la profesora (PR #24)**. Todos integrados por Julieta.
 - **Planificación: terminada.** Pruebas finales "opción A" (solo lectura) hechas el 28/10 (§9) y
   revisión visual en theta (escritorio y celular).
 - **Mercado Pago Checkout Pro, SOLO MODO DE PRUEBA** (§7): integrado en theta, **encendido** y
   probado de punta a punta el 29/10 (rechazado, aprobado, sin duplicados, vista de la profesora,
   anulación). **Factura de demostración** JSU-2026-09-0001 ($800 ficticios, `alumna@prueba.invalid`)
   lista para la **defensa del 17/11**: guía en `GUIA_DEFENSA_MERCADO_PAGO.md`.
-- **Siguiente (con autorización):** rediseño visual de la sección «Pago» de la profesora, en un PR
-  aparte. Julieta entra al sitio más de una vez por semana para que Supabase no se pause.
+- **Estado de Mercado Pago (30/10):** encendido, solo modo de prueba (vendedora y compradora de
+  prueba, dinero ficticio), credencial de prueba cifrada en el Vault; solo `alumna@prueba.invalid` puede
+  iniciar un pago (lo controlan el servidor **y** la base); la factura JSU-2026-09-0001 ($800) está
+  publicada y pendiente; 0 pagos registrados; datos reales idénticos al respaldo del 29/10.
+- **Antes de la defensa (§6):** entrar al sitio al menos una vez por semana y el día anterior (Supabase
+  Free se pausa tras ~7 días sin uso) y hacer las comprobaciones de la guía unos días antes.
 - **Theta es la plataforma de la defensa.** Mercado Pago se enciende con un interruptor en la base
   (no hace falta tocar el Vercel de Pilar).
 - Después: Videos On Demand (§8). **Cinco ideas para evaluar, no aprobadas** (§11).
@@ -83,11 +90,11 @@
 
 ## 3. GitHub
 
-- Repo: `pilisoldo1-code/Just-Show-Up`. **`main` = `7183efc`** (merge del PR #20, header
-  responsive). **PR #19** (traspaso del 28/10, rama `docs-traspaso-28-10`) y **PR #20** (rama
-  `header-responsive`) integrados por Julieta el 28/10 y desplegados en theta.
-- **Rama local `mercado-pago-prueba`** (sale de `7183efc`): Mercado Pago de prueba, commit local
-  **sin push** (§7).
+- Repo: `pilisoldo1-code/Just-Show-Up`. **`main` = `4fa97ba`** (merge del PR #24, 30/10). Integrados
+  por Julieta y desplegados en theta: **PR #21** (Mercado Pago de prueba, 29/10), **PR #22** (guía de la
+  defensa y script de la factura de demostración, 29/10), **PR #23** (Mercado Pago solo para
+  `alumna@prueba.invalid`, 30/10) y **PR #24** (rediseño de la sección Pago, 30/10). Antes: **PR #19**
+  (traspaso del 28/10) y **PR #20** (header responsive), integrados el 28/10.
 - **PR #16** "Planificación: cancelar clases puntuales y mejoras del menú de la profesora"
   (rama `mejoras-planificacion-menu`), **PR #17** "Ajuste visual: cupos dinámicos y formulario de
   cancelación puntual" (`ajuste-cupos-tipos-clase`) y **PR #18** "Corregir alineación de los
@@ -173,21 +180,39 @@ Detalle completo en `CLAUDE.md` (sección "Facturación mensual y pagos") y en l
 - Cancelación de clases puntuales y menú nuevo de la profesora: código en `main` y theta (PR
   #16–#18), migración aplicada y verificada, pruebas finales opción A (§9).
 - Header responsive y menú de la alumna (PR #20), en theta.
-- Mercado Pago de prueba: etapas 1 y 2 (§7). Investigación de Videos On Demand (§8).
+- **Mercado Pago de prueba, completo** (§7): integración, prueba de punta a punta en theta, factura de
+  demostración, restricción a una sola alumna y guía de la defensa (`GUIA_DEFENSA_MERCADO_PAGO.md`).
+- **Rediseño de la pantalla de factura de la profesora** (PR #24, solo plantilla y CSS): pago en
+  tarjeta, pagos anulados e intentos de Mercado Pago en desplegables con etiquetas, «Corregir la factura»
+  compacta con «Cómo funciona» e historial en línea de tiempo. Desplegado y verificado en theta.
+- Investigación de Videos On Demand (§8).
 - Rotación de la clave secreta de Supabase (28/10): nueva `just_show_up_nueva_clave` en el `.env`
   local; la anterior (`servidor_app`) eliminada y verificada revocada. theta y amber usan todavía
   las claves viejas `eyJ…` (legacy), sin cambios.
 
-### Pendiente — orden de trabajo (actualizado 28/10/2026)
+### Pendiente antes de la defensa (17/11/2026) — lo único necesario
+- **Julieta entra al sitio al menos una vez por semana y el día anterior** (Supabase Free se pausa tras
+  ~7 días sin uso; si pasa, *Restore* en el panel de Supabase).
+- **Unos días antes**, las comprobaciones de `GUIA_DEFENSA_MERCADO_PAGO.md` §2: la compradora de prueba
+  inicia sesión en Mercado Pago y tiene saldo ficticio; la factura de septiembre sigue *Pendiente de
+  pago* con el botón (si un ensayo la dejó pagada, anular **el pago**, nunca «Anular y reemitir»).
+- Desde el 31/10, abrir Facturación en octubre arma los borradores de las alumnas (es lo previsto). No
+  hace falta confirmarlos para la defensa.
+
+### Orden de trabajo (actualizado 30/10/2026)
 1. ~~Integrar el PR #15~~ — **hecho**.
 2. ~~Planificación: cancelar clases puntuales + menú~~ — **hecho** (§9, §10).
-3. **Mercado Pago Checkout Pro, exclusivamente en modo de prueba** (§7) — etapas 3 a 6 pendientes.
+3. ~~**Mercado Pago Checkout Pro, exclusivamente en modo de prueba**~~ — **hecho** (§7), con el rediseño
+   de la pantalla de pagos.
 4. **Videos On Demand**: Zoom gratuito (clases de ~40 min), carga manual y alojamiento gratuito
    sujeto a validación (§8).
 
-Después (sin fecha): fase 2 de seguridad + rotación de claves, mails con Resend, actualizar amber,
-fase 2 de Tipos de clase (borrar columnas viejas de `horario`), borrar cuentas y datos de prueba
-antes del uso real.
+### Mejoras futuras (sin fecha, no necesarias para la defensa)
+- **Seguridad, etapa 2**: quitar el acceso sin sesión (`anon`) a `horario`, `clase`, `reserva` y
+  `listadeespera` (`supabase/pendientes/auth_etapa2_cerrar_anon.sql`) y desactivar las claves legacy de
+  Supabase. Ojo: amber tiene código viejo y dejaría de funcionar; hay que decidir antes qué pasa con amber.
+- Mails con Resend, actualizar amber, fase 2 de Tipos de clase (borrar columnas viejas de `horario`),
+  borrar cuentas y datos de prueba antes del uso real.
 
 ### Necesita autorización explícita de Julieta (no hacerlo por iniciativa propia)
 - Cualquier **merge**, **push** (un push a `main` despliega theta), **deploy**, **migración** o
@@ -221,7 +246,7 @@ marca aprobado sin verificarlo con Mercado Pago. **Cada etapa necesita su autori
 - **`live_mode` viene `true`** con estas cuentas (ver Gotchas de `CLAUDE.md`); el link correcto es
   `init_point`; comisión simulada ($0,06) a cargo de la vendedora de prueba.
 
-**Etapa 2 — desarrollo (hecha, 29/10, rama `mercado-pago-prueba`, commit local sin push)**
+**Etapa 2 — desarrollo (hecha, 29/10, rama `mercado-pago-prueba`; integrada con el PR #21)**
 - `app/mercadopago.py`, rutas al final de `app/main.py`, botón en `mis_facturas.html`, pago e
   intentos en `profesora_factura.html`, migración `20261029120000_mercado_pago_prueba.sql`
   (**sin aplicar**), logo oficial en `app/static/img/`. Detalle técnico en `CLAUDE.md`.
@@ -286,7 +311,14 @@ marca aprobado sin verificarlo con Mercado Pago. **Cada etapa necesita su autori
    `alumna_no_habilitada`; profesora: `no_autorizada`); en theta (todavía con el código anterior)
    `sofia@demo.invalid` forzando el pago queda rechazada por la base; la alumna autorizada ve la factura
    y el botón; 0 intentos, 0 pagos, contador y datos reales idénticos; credencial de prueba intacta.
-   **Código del servidor: PR abierto, sin integrar (lo revisa e integra Julieta).**
+   **Código del servidor integrado (PR #23, `42aef09`, 30/10)** y verificado en theta: `sofia@demo.invalid`
+   forzando el pago queda rechazada **por el servidor** (los registros de Supabase muestran que no llega
+   a llamar a `crear_intento_mp`); la base mantiene su propio control.
+8. **Rediseño de la pantalla de factura de la profesora** (PR #24, `4fa97ba`, 30/10): solo plantilla y CSS,
+   formularios idénticos a los anteriores; probado con 7 escenarios simulados en computadora y celular
+   y verificado en theta. Ajuste posterior de «Cómo funciona» (caja que contiene título y explicación).
+   Un intento «Sin completar» del 29/10 en la factura de demostración es de Julieta (abrió Mercado Pago
+   sin pagar): queda como historial, no afecta nada.
 
 **Datos para pagar en las pruebas:** compradora de prueba (usuario y contraseña en la nota de
 Julieta) en ventana de incógnito; tarjeta Mastercard 5031 7557 3453 0604, venc. 11/30, CVV 123,
@@ -433,11 +465,11 @@ Cada una necesita su propuesta y autorización antes de programar.
 ## 13. Al retomar (próxima sesión)
 
 1. Leer este archivo y `CLAUDE.md`; verificar con `git` y `gh` que `main` coincide con §3, que
-   existe la rama `mercado-pago-prueba` (commit local; puede no estar en GitHub) y que Supabase
+   no hay PR abiertos pendientes de integrar y que Supabase
    está activo (sin modificar nada).
 2. Avisar si faltan `.env` (con `MP_ACCESS_TOKEN` y `MP_USER_ID`) / `.env.cuentas-prueba` o el
    conector de Supabase en la computadora.
 3. Mercado Pago está **encendido** para la defensa del 17/11 (§7, `GUIA_DEFENSA_MERCADO_PAGO.md`):
    no hacer pagos, no tocar la factura de demostración ni el interruptor sin pedido de Julieta.
-   Siguiente trabajo autorizado en principio: rediseño visual de la sección «Pago» (PR aparte).
+   Lo pendiente antes de la defensa y las mejoras futuras están en §6.
 4. Las ideas de §11 solo se evalúan si Julieta lo pide.

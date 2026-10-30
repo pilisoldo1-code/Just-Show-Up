@@ -23,8 +23,8 @@ Mercado Pago y Videos On Demand y las ideas a evaluar. **Orden de trabajo (actua
    probado de punta a punta en theta el 29/10, **encendido hasta la defensa del 17/11** con la factura
    de demostración JSU-2026-09-0001 ($800 ficticios, `alumna@prueba.invalid`). Guía:
    `GUIA_DEFENSA_MERCADO_PAGO.md`; detalle en `CONTINUIDAD_PROYECTO.md` §7. **Theta es la plataforma de
-   la defensa; la credencial de prueba está en Supabase Vault (no en Vercel).** Sigue (con
-   autorización): rediseño visual de la sección «Pago» de la profesora, en un PR aparte.
+   la defensa; la credencial de prueba está en Supabase Vault (no en Vercel).** Desde el PR #23 solo
+   `alumna@prueba.invalid` puede iniciar un pago; el rediseño de la sección «Pago» (PR #24) está en theta.
 4. Videos On Demand: Zoom gratuito (~40 min, carga manual) + Mux gratuito si pasa la prueba de
    reproducción firmada.
 
