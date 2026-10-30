@@ -1642,3 +1642,300 @@ main.ancho {
         height: 30px;
     }
 }
+
+/* ---------- rediseño: pago, correcciones e historial de la factura (profesora) ---------- */
+.panel-cabecera {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.panel-cabecera h2 {
+    margin: 0;
+}
+
+.badge-rojo {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+}
+
+.pago-resumen,
+.pago-registrar .pago-campos {
+    display: grid;
+    grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+    gap: 16px;
+    align-items: stretch;
+}
+
+.pago-importe {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: rgba(110, 231, 183, 0.06);
+    border: 1px solid rgba(110, 231, 183, 0.25);
+    border-radius: 10px;
+    padding: 14px 16px;
+}
+
+.pago-importe strong {
+    font-size: 1.7rem;
+    line-height: 1.2;
+    color: var(--accent);
+}
+
+.pago-etiqueta,
+.pago-datos dt {
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.pago-datos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin: 0;
+}
+
+.pago-datos > div {
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+.pago-datos dd {
+    margin: 4px 0 0;
+    font-weight: 600;
+}
+
+.pago-operacion {
+    font-variant-numeric: tabular-nums;
+    word-break: break-all;
+}
+
+.pago-registrar {
+    gap: 16px;
+    padding: 0;
+    background: none;
+}
+
+.pago-registrar .pago-campos {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.pago-registrar .pago-importe {
+    align-self: flex-start;
+    min-width: 220px;
+}
+
+.pago-pie {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #2a2e37;
+}
+
+.pago-registrar .pago-pie {
+    margin-top: 0;
+}
+
+.pago-pie .nota-chica {
+    margin: 0;
+    color: var(--muted);
+}
+
+.pago-sin-cargo {
+    margin: 0;
+    color: var(--muted);
+}
+
+.desplegable {
+    margin-top: 16px;
+    border-top: 1px solid #2a2e37;
+    padding-top: 12px;
+}
+
+.desplegable summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 36px;
+    cursor: pointer;
+    font-weight: 600;
+    list-style: none;
+    border-radius: 8px;
+}
+
+.desplegable summary::-webkit-details-marker {
+    display: none;
+}
+
+.desplegable summary::before {
+    content: "▸";
+    color: var(--accent);
+    transition: transform 0.15s;
+}
+
+.desplegable[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.desplegable summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.desplegable-chico {
+    margin-top: 10px;
+    border-top: none;
+    padding-top: 0;
+}
+
+.desplegable-chico summary {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: var(--accent);
+}
+
+.contador {
+    min-width: 22px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #2a2e37;
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.lista-compacta {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+}
+
+.lista-compacta li {
+    padding: 10px 0;
+    border-bottom: 1px solid #22262e;
+}
+
+.lista-compacta li:last-child {
+    border-bottom: none;
+}
+
+.fila-compacta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.fila-principal {
+    font-variant-numeric: tabular-nums;
+}
+
+.fila-detalle {
+    margin: 4px 0 0;
+    font-size: 0.82rem;
+    color: var(--muted);
+}
+
+.desplegable > .nota-chica {
+    color: var(--muted);
+    margin: 8px 0 0;
+}
+
+.aviso-suave {
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(250, 204, 21, 0.08);
+    color: #facc15;
+    font-size: 0.9rem;
+}
+
+.linea-tiempo {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 18px;
+    border-left: 2px solid #2a2e37;
+}
+
+.linea-tiempo li {
+    position: relative;
+    padding: 0 0 16px 4px;
+}
+
+.linea-tiempo li:last-child {
+    padding-bottom: 0;
+}
+
+.linea-tiempo li::before {
+    content: "";
+    position: absolute;
+    left: -26px;
+    top: 5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--card);
+    border: 2px solid var(--accent);
+}
+
+.lt-cabecera {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 12px;
+    flex-wrap: wrap;
+}
+
+.lt-cuando {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.lt-texto,
+.lt-motivo {
+    margin: 4px 0 0;
+    font-size: 0.9rem;
+}
+
+.lt-motivo {
+    color: var(--muted);
+}
+
+@media (max-width: 560px) {
+    .pago-resumen {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pago-registrar .pago-importe {
+        align-self: stretch;
+        min-width: 0;
+    }
+
+    .pago-pie .btn {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .panel-cabecera .btn {
+        min-height: 40px;
+    }
+}
+
+.desplegable .badge,
+.fila-compacta .badge,
+.panel-cabecera .badge {
+    white-space: nowrap;
+}

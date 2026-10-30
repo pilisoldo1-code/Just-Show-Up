@@ -201,6 +201,39 @@ class PantallaFactura(Base):
         for texto in ("Pago #5", "/pagos/5/anular", "Pago #4", "«medio equivocado»"):
             self.assertIn(texto, t)
 
+    def test_pago_vigente_en_tarjeta_y_anulados_desplegables(self):
+        pago = {"id": 5, "monto": D("1395.00"), "medio": "Mercado Pago (prueba)", "fecha": "01/07/2026",
+                "operacion": "123456", "es_mercado_pago": True, "registrado_en": "01/07/2026 10:00", "registrado_por": ""}
+        anulado = {**pago, "id": 4, "medio": "Efectivo", "operacion": None, "es_mercado_pago": False,
+                   "motivo": "medio equivocado", "anulado_en": "01/07/2026 09:00", "anulado_por": "Profe Prueba"}
+        t = self.ver(factura(estado_factura="confirmada", estado_pago="pagado", estado_pago_txt="Pagada", numero="JSU-1",
+                             pago=pago, pagos_anulados=[anulado]))
+        for texto in ("Importe pagado", "N.º de operación", "123456", "verificado con Mercado Pago",
+                      '<details class="desplegable">', "Pagos anulados", ">Anulado<", "Motivo: «medio equivocado»"):
+            self.assertIn(texto, t)
+
+    def test_intentos_con_etiquetas_y_abiertos_solo_si_hay_a_revisar(self):
+        def intento(estado, a_revisar=False):
+            return {"estado": estado, "a_revisar": a_revisar, "monto": D("1395.00"), "operacion": "9",
+                    "detalle": "ya tenía un pago", "en": "01/07/2026 10:00"}
+        base = dict(estado_factura="confirmada", numero="JSU-1")
+        t = self.ver(factura(**base, intentos_mp=[intento("Aprobado"), intento("Rechazado"),
+                                                  intento("Iniciado (sin resultado)")]))
+        self.assertIn('<details class="desplegable">', t.split("Intentos con Mercado Pago")[0][-300:])
+        for texto in ('badge-on">Aprobado', 'badge-rojo">Rechazado', 'badge-off">Sin completar'):
+            self.assertIn(texto, t)
+        self.assertNotIn("ya tenía un pago", t)
+        t = self.ver(factura(**base, intentos_mp=[intento("A revisar", True), intento("Aprobado")]))
+        self.assertIn('<details class="desplegable" open>', t)
+        self.assertIn('badge-espera">A revisar', t)
+        self.assertIn("ya tenía un pago", t)
+
+    def test_corregir_compacto_y_historial_en_linea_de_tiempo(self):
+        t = self.ver(factura(estado_factura="confirmada", numero="JSU-1"))
+        self.assertIn("Cómo funciona", t)
+        self.assertIn('<ol class="linea-tiempo">', t)
+        self.assertIn("Motivo: «llegó tarde»", t)
+
     def test_sin_cargo(self):
         t = self.ver(factura(estado_factura="confirmada", estado_pago="sin_cargo", total=D("0.00")))
         self.assertIn("sin cargo", t)

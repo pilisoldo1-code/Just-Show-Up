@@ -848,6 +848,12 @@ Para cada módulo, en este orden:
   con PostgREST), excluyendo los ids del manifiesto de prueba. Un `md5(string_agg(to_jsonb(...)))`
   hecho en SQL no reproduce las huellas de `huellas_datos_produccion.json` (otro método), así que da
   diferencias falsas.
+- **Capturas de pantalla en celular con Chrome sin ventana** (`--headless=new --screenshot`): no respeta
+  anchos chicos (la página se dibuja más ancha y la captura sale cortada, parece un desborde que no
+  existe). Para 390 px, cargar la página dentro de un `<iframe width="390">` y recortar la imagen; para
+  comprobar desbordes de verdad usar el navegador integrado con el tamaño "mobile". Para ver pantallas de
+  la profesora sin Supabase: levantar la app con `auth._usuario_cacheado`, `main._sb` y
+  `facturas.factura` reemplazados por datos simulados (como en `tests/test_facturas.py`).
 - **Logo de Mercado Pago**: el oficial está en `app/static/img/mercado-pago-logo.svg` (zip
   "Logos Mercado Pago 2025", uso digital RGB, color horizontal), **sin editar** (la guía lo
   prohíbe; una prueba compara su huella). Reglas de la marca: no ponerlo sobre celeste/azul de
