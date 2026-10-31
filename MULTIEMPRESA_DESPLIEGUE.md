@@ -90,11 +90,15 @@ deshace. Al final: `python scripts/verificar_despliegue.py "<respaldo etapa A>"`
 
 ## Paso 2 — Merge del PR #27 [autorización]
 
+**HECHO el 31/10 a las 13:58** (`1a7603d`): theta desplegada y verificada.
+
 1. Merge común de `multiempresa` a `main` → theta despliega solo (Vercel, plan gratuito).
 2. Comprobaciones de solo lectura en theta: «Just Show Up» + cuenta de prueba de alumna y de profesora;
    mensaje genérico con un lugar inventado; la profesora entra al «Panel de administración».
 
 ## Paso 3 — Migración 4 [autorización]
+
+**HECHO el 31/10 a las 14:07**: huellas iguales a las esperadas, datos y seguridad verificados.
 
 Aplicarla enseguida. Verificar (solo lectura): las cédulas actuales quedaron en la Empresa 1; una sesión de
 alumna ya no puede leer cédulas directo; Mi perfil y las facturas muestran la cédula a quien corresponde; una
