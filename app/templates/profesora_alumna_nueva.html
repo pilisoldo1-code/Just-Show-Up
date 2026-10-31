@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Just Show Up - Nueva persona</title>
+    <title>Just Show Up - Nueva {{ textos.singular }}</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
     {% include "_menu.html" %}
     <main>
-        <h1>Nueva persona</h1>
-        <p class="subtitle"><a href="/profesora/alumnas">← Volver a alumnas</a></p>
+        <h1>Nueva {{ textos.singular }}</h1>
+        <p class="subtitle"><a href="/profesora/{{ seccion }}">← Volver a {{ textos.titulo|lower }}</a></p>
 
         {% if errores %}
         <div class="aviso aviso-error">
@@ -22,7 +22,7 @@
         {% endif %}
 
         <form action="/profesora/alumnas" method="post" class="horario-form">
-            {% if roles %}
+            {% if roles|length > 1 %}
             <label>
                 Rol *
                 <select name="rol">
@@ -31,9 +31,12 @@
                     {% endfor %}
                 </select>
             </label>
-            <p class="nota">Si el mail ya tiene cuenta en Just Show Up (por ejemplo, alumna de otra empresa), se la suma a
-                {{ usuario.empresa_nombre or 'tu empresa' }} con su misma contraseña y sin cambiar sus datos.</p>
+            {% else %}
+            <input type="hidden" name="rol" value="{{ (roles or {'alumna': ''}).keys()|first }}" />
             {% endif %}
+            <p class="nota">Si el mail ya tiene cuenta en Just Show Up (por ejemplo, alumna de otra empresa o una profesora de tu
+                empresa), se le suma este rol en {{ usuario.empresa_nombre or 'tu empresa' }} con su misma contraseña y sin
+                perder sus otros roles.</p>
             <label>
                 Nombre *
                 <input type="text" name="nombre" value="{{ datos.get('nombre', '') }}" maxlength="60" required />

@@ -246,8 +246,9 @@ class MenuProfesora(Base):
         self.assertNotIn(">Clases</a>", texto)
         self.assertIn(">Asistencias</a>", texto)
         self.assertIn(">Tipos de clase</a>", texto)
-        orden = ["/profesora/horarios", "/profesora/tipos-clase", "/profesora/clases",
-                 "/profesora/planificacion", "/profesora/alumnas", "/profesora/resumenes", "/profesora/estadisticas"]
+        orden = ["/administracion", "/profesora/horarios", "/profesora/tipos-clase", "/profesora/planificacion",
+                 "/profesora/clases", "/profesora/alumnas", "/profesora/profesoras", "/profesora/resumenes",
+                 "/profesora/estadisticas"]
         posiciones = [texto.index(f'href="{h}"') for h in orden]
         self.assertEqual(posiciones, sorted(posiciones))
 

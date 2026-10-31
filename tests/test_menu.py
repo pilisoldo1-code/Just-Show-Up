@@ -18,11 +18,9 @@ ALUMNA = Usuario(id="a", mail="alumna@prueba.invalid", nombre="Ana", apellido="P
 
 # PROFESORA (rol «profesora» sin membresías) es administradora y profesora: panel de administración.
 SECCIONES_PROFESORA = [
-    ("/administracion", "Inicio"),
-    ("/profesora/horarios", "Horarios"), ("/profesora/tipos-clase", "Tipos de clase"),
-    ("/profesora/clases", "Asistencias"), ("/profesora/planificacion", "Planificación"),
-    ("/profesora/alumnas", "Personas"), ("/profesora/resumenes", "Facturación"),
-    ("/profesora/estadisticas", "Estadísticas"),
+    ("/administracion", "Inicio"), ("/profesora/horarios", "Horarios"), ("/profesora/tipos-clase", "Tipos de clase"),
+    ("/profesora/planificacion", "Planificación"), ("/profesora/clases", "Asistencias"), ("/profesora/alumnas", "Alumnas"),
+    ("/profesora/profesoras", "Profesoras"), ("/profesora/resumenes", "Facturación"), ("/profesora/estadisticas", "Estadísticas"),
 ]
 SECCIONES_ALUMNA = [
     ("/", "Clases"), ("/mis-inscripciones", "Mis inscripciones"),
@@ -52,7 +50,7 @@ def activos(html):
 
 
 class MenuPrincipal(unittest.TestCase):
-    def test_administradora_tiene_sus_ocho_secciones_en_orden(self):
+    def test_administradora_tiene_sus_nueve_secciones_en_orden(self):
         self.assertEqual(enlaces(bloque(menu_de(PROFESORA, "/profesora/horarios"), "menu-links")), SECCIONES_PROFESORA)
 
     def test_alumna_tiene_sus_cuatro_secciones_en_orden(self):

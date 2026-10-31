@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - {{ persona.nombre }} {{ persona.apellido }}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    {% include "_menu.html" %}
+    <main>
+        <p class="subtitle"><a href="/profesora/{{ seccion }}">← Volver a {{ textos.titulo|lower }}</a></p>
+        <h1>{{ persona.nombre }} {{ persona.apellido }}</h1>
+        <p class="subtitle">{{ persona.roles|join(' · ') }} ·
+            <span class="badge {{ 'badge-on' if persona.membresia.activa else 'badge-off' }}">{{ 'Activa' if persona.membresia.activa else 'Inactiva' }}</span></p>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+        {% if errores %}
+        <div class="aviso aviso-error">
+            <strong>{{ 'Corregí estos datos:' if errores|length > 1 else 'Corregí este dato:' }}</strong>
+            <ul class="lista-errores">{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+
+        <section class="bloque-persona">
+            <h2>Datos</h2>
+            <form action="/profesora/{{ seccion }}/{{ persona.id }}/datos" method="post" class="horario-form">
+                <label>Nombre * <input type="text" name="nombre" value="{{ datos.nombre }}" maxlength="60" required /></label>
+                <label>Apellido * <input type="text" name="apellido" value="{{ datos.apellido }}" maxlength="60" required /></label>
+                <label>Mail (es su usuario; no se cambia desde acá)
+                    <input type="email" value="{{ persona.mail }}" disabled /></label>
+                <label>Cédula de identidad
+                    <input type="text" name="cedula" value="{{ datos.cedula_txt if datos.cedula_txt is defined else datos.cedula or '' }}"
+                           inputmode="numeric" maxlength="11" pattern="[0-9.\-\s]{7,11}" placeholder="1.234.567-2" /></label>
+                <label>Teléfono (09xxxxxxx)
+                    <input type="tel" name="telefono" value="{{ datos.telefono or '' }}" inputmode="numeric" maxlength="9"
+                           pattern="09[0-9]{7}" placeholder="099123456" /></label>
+                <label>Fecha de nacimiento
+                    <input type="date" name="fecha_nacimiento" value="{{ datos.fecha_nacimiento or '' }}" max="{{ ayer_iso }}" /></label>
+                <label>Vencimiento del carné de salud
+                    <input type="date" name="fecha_vencimiento_carne_salud" value="{{ datos.fecha_vencimiento_carne_salud or '' }}"
+                           min="{{ manana_iso }}" /></label>
+                <p class="nota">La cédula se guarda solo para {{ usuario.empresa_nombre or 'tu empresa' }}. Nombre, teléfono y fechas
+                    son de la cuenta de la persona.</p>
+                <button type="submit" class="btn">Guardar datos</button>
+            </form>
+        </section>
+
+        <section class="bloque-persona">
+            <h2>Roles en {{ usuario.empresa_nombre or 'tu empresa' }}</h2>
+            <form action="/profesora/{{ seccion }}/{{ persona.id }}/roles" method="post" class="horario-form">
+                <label class="opcion-check"><input type="checkbox" name="es_alumna" value="1" {{ 'checked' if persona.membresia.es_alumna }} /> Alumna</label>
+                <label class="opcion-check"><input type="checkbox" name="es_profesora" value="1" {{ 'checked' if persona.membresia.es_profesora }} /> Profesora</label>
+                <label class="opcion-check"><input type="checkbox" name="es_admin" value="1" {{ 'checked' if persona.membresia.es_admin }}
+                       {{ 'disabled' if persona.yo }} /> Administradora</label>
+                {% if persona.yo %}<input type="hidden" name="es_admin" value="1" />
+                <p class="nota">No podés quitarte a vos misma el rol de administradora.</p>{% endif %}
+                <p class="nota">Una misma cuenta puede tener varios roles. Tiene que tener al menos uno.</p>
+                <button type="submit" class="btn">Guardar roles</button>
+            </form>
+        </section>
+
+        {% if not persona.yo %}
+        <section class="bloque-persona">
+            <h2>Estado</h2>
+            {% if persona.membresia.activa %}
+            <p class="nota">Activa: puede iniciar sesión en {{ usuario.empresa_nombre or 'tu empresa' }}.</p>
+            <form action="/profesora/{{ seccion }}/{{ persona.id }}/estado" method="post"
+                  onsubmit="return confirm('¿Dejar inactiva a {{ persona.nombre }} {{ persona.apellido }}? No va a poder entrar a tu empresa; sus datos e historial se conservan.')">
+                <input type="hidden" name="activa" value="0" />
+                <button type="submit" class="btn btn-secundario">Dejar inactiva</button>
+            </form>
+            {% else %}
+            <p class="nota">Inactiva: no puede iniciar sesión en {{ usuario.empresa_nombre or 'tu empresa' }}. Sus datos e historial se conservan.</p>
+            <form action="/profesora/{{ seccion }}/{{ persona.id }}/estado" method="post">
+                <input type="hidden" name="activa" value="1" />
+                <button type="submit" class="btn">Reactivar</button>
+            </form>
+            {% endif %}
+        </section>
+        {% endif %}
+    </main>
+</body>
+</html>

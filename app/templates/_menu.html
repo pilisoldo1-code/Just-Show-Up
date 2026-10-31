@@ -7,13 +7,15 @@
 {% elif usuario.sin_empresa %}
 {% set secciones = [] %}
 {% elif usuario.es_profesora and not (en_alumna and usuario.es_alumna) %}
+{# Orden fijo en computadora y celular: primero la operación de las clases, después las personas, la facturación y las estadísticas #}
 {% set secciones = [
     ("/administracion", "Inicio", ruta.startswith("/administracion")) if usuario.es_admin else None,
     ("/profesora/horarios", "Horarios", ruta.startswith("/profesora/horarios")),
     ("/profesora/tipos-clase", "Tipos de clase", ruta.startswith("/profesora/tipos-clase")) if usuario.es_admin else None,
-    ("/profesora/clases", "Asistencias", ruta.startswith("/profesora/clases")),
     ("/profesora/planificacion", "Planificación", ruta.startswith("/profesora/planificacion")),
-    ("/profesora/alumnas", "Personas" if usuario.es_admin else "Alumnas", ruta.startswith("/profesora/alumnas")),
+    ("/profesora/clases", "Asistencias", ruta.startswith("/profesora/clases")),
+    ("/profesora/alumnas", "Alumnas", ruta.startswith("/profesora/alumnas")),
+    ("/profesora/profesoras", "Profesoras", ruta.startswith("/profesora/profesoras")) if usuario.es_admin else None,
     ("/profesora/resumenes", "Facturación", ruta.startswith("/profesora/resumenes")) if usuario.es_admin else None,
     ("/profesora/estadisticas", "Estadísticas", ruta.startswith("/profesora/estadisticas")),
 ] | reject("none") | list %}
@@ -97,7 +99,7 @@
             }
         });
         // Si se agranda la ventana con el menú abierto, vuelve al estado normal.
-        var escritorio = window.matchMedia("(min-width: 901px)");
+        var escritorio = window.matchMedia("(min-width: 1100px)");
         var alCambiar = function (e) { if (e.matches) abrirMenu(false); };
         if (escritorio.addEventListener) escritorio.addEventListener("change", alCambiar);
     })();
