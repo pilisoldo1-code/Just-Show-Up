@@ -95,11 +95,13 @@ for url in ["/profesora/horarios", "/profesora/horarios/nuevo", "/profesora/tipo
             f"/profesora/resumenes?mes={hoy.month}&anio={hoy.year}", "/perfil", "/api/horario"] + (["/administracion"] if MODO == "nuevo" else []):
     visitar(P, "profesora", url)
 t = sql("select id from tipo_clase order by id limit 1")[0]["id"]
-# horarios creados desde la app (prueba la escritura con la sesión de la profesora): todos los días a las 22:00
+# horarios creados desde la app (prueba la escritura con la sesión de la profesora): todos los días a las 22:00.
+# Se cuentan los que crea ESTA ejecución (la base puede tener los de una ejecución anterior).
+previos = len(sql("select id from horario where hora_inicio = '22:00'"))
 for dia in ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"):
     r = P.post("/profesora/horarios/nuevo", data={"dia_semana": dia, "hora_inicio": "22:00", "id_tipo_clase": str(t),
                                                    "activo": "true"}, follow_redirects=False)
-ok("profesora: crea horarios desde la app", r.status_code == 303 and len(sql("select id from horario where hora_inicio = '22:00'")) == 7,
+ok("profesora: crea horarios desde la app", r.status_code == 303 and len(sql("select id from horario where hora_inicio = '22:00'")) == previos + 7,
    (r.status_code, r.text[:200]))
 h = sql("select id from horario order by id limit 1")[0]["id"]
 visitar(P, "profesora", f"/profesora/horarios/{h}/editar")
