@@ -2199,3 +2199,89 @@ main.ancho {
         justify-content: center;
     }
 }
+
+/* ---------- horarios en celular ---------- */
+/* Horarios semanales: una sola fila (‹ rango ›); en celular solo flechas y el rango abreviado */
+.semana-nav {
+    flex-wrap: nowrap;
+}
+
+.semana-rango {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+}
+
+.rango-corto {
+    display: none;
+}
+
+.semana-flecha {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .semana-nav {
+        gap: 8px;
+        margin: 8px 0 16px;
+    }
+
+    .semana-texto,
+    .rango-largo {
+        display: none;
+    }
+
+    .rango-corto {
+        display: inline;
+        color: var(--text);
+        font-size: 1.05rem;
+        white-space: nowrap;
+    }
+
+    .semana-flecha {
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.6rem;
+        line-height: 1;
+    }
+}
+
+/* Grilla de la semana en celular: tarjetas más compactas */
+@media (max-width: 440px) {
+    .cards-semana {
+        gap: 12px;
+    }
+
+    .cards-semana .card {
+        padding: 16px;
+    }
+
+    .cards-semana .hora-chip {
+        font-size: 1.3rem;
+        padding: 8px 16px;
+    }
+}
+
+/* Horarios fijos: separación entre el encabezado y la primera tarjeta; en celular el botón va debajo del título */
+.encabezado-seccion {
+    flex-wrap: wrap;
+    row-gap: 12px;
+    margin-bottom: 20px;
+}
+
+.encabezado-seccion h1 {
+    margin: 0;
+}
+
+@media (max-width: 600px) {
+    .encabezado-seccion {
+        flex-direction: column;
+        align-items: flex-start;
+        margin-bottom: 16px;
+    }
+}

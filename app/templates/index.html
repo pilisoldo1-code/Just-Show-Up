@@ -15,21 +15,24 @@
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
-        <div class="semana-nav">
+        <nav class="semana-nav" aria-label="Cambiar de semana">
             {% if hay_semana_anterior %}
-            <a class="btn btn-secundario" href="/?semana={{ semana - 1 }}">‹ Semana anterior</a>
+            <a class="btn btn-secundario semana-flecha" href="/?semana={{ semana - 1 }}" aria-label="Semana anterior">‹<span class="semana-texto"> Semana anterior</span></a>
             {% else %}
-            <span class="btn btn-secundario btn-disabled">‹ Semana anterior</span>
+            <span class="btn btn-secundario btn-disabled semana-flecha" aria-hidden="true">‹<span class="semana-texto"> Semana anterior</span></span>
             {% endif %}
 
-            <span class="semana-rango">{{ rango_semana }}</span>
+            <span class="semana-rango">
+                <span class="rango-largo">{{ rango_semana }}</span>
+                <span class="rango-corto">{{ rango_semana_corto }}</span>
+            </span>
 
             {% if hay_semana_siguiente %}
-            <a class="btn btn-secundario" href="/?semana={{ semana + 1 }}">Semana siguiente ›</a>
+            <a class="btn btn-secundario semana-flecha" href="/?semana={{ semana + 1 }}" aria-label="Semana siguiente"><span class="semana-texto">Semana siguiente </span>›</a>
             {% else %}
-            <span class="btn btn-secundario btn-disabled">Semana siguiente ›</span>
+            <span class="btn btn-secundario btn-disabled semana-flecha" aria-hidden="true"><span class="semana-texto">Semana siguiente </span>›</span>
             {% endif %}
-        </div>
+        </nav>
 
         {% if dias %}
         <div class="cards cards-semana">

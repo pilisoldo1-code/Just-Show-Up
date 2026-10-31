@@ -181,5 +181,34 @@ class Pantallas(unittest.TestCase):
         self.assertRegex(contenido, r'<div class="tabla-scroll">\s*<table class="horario-table tabla-tarjetas">')
 
 
+    def test_horarios_encabezado_con_separacion(self):
+        self.como(PROFESORA)
+        main._sb.return_value.table.return_value.select.return_value.execute.return_value.data = []
+        html = self.client.get("/profesora/horarios").text
+        self.assertIn('<div class="header-row encabezado-seccion">', html)
+
+    def test_semana_navegacion_compacta(self):
+        self.como(ALUMNA)
+        with mock.patch.object(clases, "generar_clases"), mock.patch.object(clases, "clases_entre", return_value=[]):
+            for semana, anterior, siguiente in ((0, False, True), (1, True, True), (main.SEMANAS_HACIA_ADELANTE, True, False)):
+                with self.subTest(semana=semana):
+                    html = self.client.get(f"/?semana={semana}").text
+                    nav = re.search(r'<nav class="semana-nav".*?</nav>', html, re.S).group(0)
+                    inicio, fin = main._rango_semana(semana)
+                    self.assertIn(main._formato_rango(inicio, fin), nav)
+                    self.assertIn(main._formato_rango_corto(inicio, fin), nav)
+                    # mismos destinos que antes; deshabilitada en los extremos
+                    self.assertEqual('href="/?semana=%d"' % (semana - 1) in nav, anterior)
+                    self.assertEqual('href="/?semana=%d"' % (semana + 1) in nav, siguiente)
+                    self.assertEqual(nav.count("btn-disabled"), (not anterior) + (not siguiente))
+
+
+class RangoCorto(unittest.TestCase):
+    def test_formato(self):
+        from datetime import date
+        self.assertEqual(main._formato_rango_corto(date(2026, 10, 26), date(2026, 11, 1)), "26 oct – 1 nov")
+        self.assertEqual(main._formato_rango_corto(date(2026, 12, 28), date(2027, 1, 3)), "28 dic – 3 ene")
+
+
 if __name__ == "__main__":
     unittest.main()

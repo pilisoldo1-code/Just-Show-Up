@@ -1051,6 +1051,9 @@ Para cada módulo, en este orden:
 - **Tablas en celular**: las tablas de listados con acciones llevan la clase `tabla-tarjetas` y cada `<td>` un
   `data-label` (el nombre de la columna): hasta 720 px cada fila pasa a ser una tarjeta, sin desplazamiento
   horizontal (hoy: Alumnas, Profesoras y Horarios). La celda de botones lleva `class="acciones"`.
+- **Navegación de semanas** (`.semana-nav` en la grilla): una sola fila; hasta 600 px solo flechas de 44 px y el
+  rango abreviado (`_formato_rango_corto`, «26 oct – 1 nov»). Encabezados con botón al lado del título:
+  `header-row encabezado-seccion` (separa la primera tarjeta y en celular pone el botón debajo).
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
 - Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).
