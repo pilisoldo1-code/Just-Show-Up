@@ -1048,6 +1048,9 @@ Para cada módulo, en este orden:
   check de `horario.dia_semana` solo acepta esos valores). Para mostrarlos usar
   siempre `clases.nombre_dia(...)` (o el filtro Jinja `| nombre_dia`), que da
   "Miércoles"/"Sábado"; nunca `.capitalize()` sobre el valor guardado.
+- **Tablas en celular**: las tablas de listados con acciones llevan la clase `tabla-tarjetas` y cada `<td>` un
+  `data-label` (el nombre de la columna): hasta 720 px cada fila pasa a ser una tarjeta, sin desplazamiento
+  horizontal (hoy: Alumnas, Profesoras y Horarios). La celda de botones lleva `class="acciones"`.
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
 - Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).

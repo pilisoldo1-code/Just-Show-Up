@@ -2121,7 +2121,7 @@ main.ancho {
     opacity: 0.6;
 }
 
-.tabla-personas .acciones {
+.tabla-tarjetas .acciones {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -2146,21 +2146,25 @@ main.ancho {
     opacity: 0.6;
 }
 
-/* En celular cada persona es una tarjeta (sin desplazamiento horizontal) */
+/* En celular cada fila es una tarjeta (sin desplazamiento horizontal) */
 @media (max-width: 720px) {
-    .tabla-personas thead {
+    .tabla-tarjetas thead {
         display: none;
     }
 
-    .tabla-personas,
-    .tabla-personas tbody,
-    .tabla-personas tr,
-    .tabla-personas td {
+    .tabla-tarjetas {
+        background: transparent;
+    }
+
+    .tabla-tarjetas,
+    .tabla-tarjetas tbody,
+    .tabla-tarjetas tr,
+    .tabla-tarjetas td {
         display: block;
         width: 100%;
     }
 
-    .tabla-personas tr {
+    .tabla-tarjetas tr {
         background: var(--card);
         border: 1px solid #2a2e37;
         border-radius: 12px;
@@ -2168,7 +2172,7 @@ main.ancho {
         margin-bottom: 12px;
     }
 
-    .tabla-personas td {
+    .tabla-tarjetas td {
         display: flex;
         justify-content: space-between;
         gap: 12px;
@@ -2178,19 +2182,19 @@ main.ancho {
         overflow-wrap: anywhere;
     }
 
-    .tabla-personas td[data-label]::before {
+    .tabla-tarjetas td[data-label]::before {
         content: attr(data-label);
         color: var(--muted);
         text-align: left;
         flex-shrink: 0;
     }
 
-    .tabla-personas td.acciones {
+    .tabla-tarjetas td.acciones {
         justify-content: flex-start;
         padding-top: 10px;
     }
 
-    .tabla-personas td.empty {
+    .tabla-tarjetas td.empty {
         text-align: center;
         justify-content: center;
     }

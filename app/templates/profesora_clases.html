@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Just Show Up - Clases</title>
+    <title>Just Show Up - Asistencias</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
     {% include "_menu.html" %}
     <main>
-        <h1>Clases</h1>
+        <h1>Asistencias</h1>
         <nav class="dias-nav" aria-label="Elegir día">
             {% for d in dias %}
             <a href="/profesora/clases?fecha={{ d.fecha }}" class="dia-chip {{ 'dia-chip-activo' if d.activo else '' }}"

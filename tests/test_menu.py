@@ -168,7 +168,7 @@ class Pantallas(unittest.TestCase):
                     self.assertEqual(enlaces(bloque(r.text, "menu-links")), SECCIONES_ALUMNA)
                     self.assertEqual(activos(r.text), [ruta] if ruta != "/perfil" else [])
 
-    def test_horarios_sin_boton_duplicado_y_tabla_con_scroll(self):
+    def test_horarios_sin_boton_duplicado_y_tabla_en_tarjetas(self):
         self.como(PROFESORA)
         sb = main._sb.return_value
         sb.table.return_value.select.return_value.execute.return_value.data = []
@@ -177,7 +177,8 @@ class Pantallas(unittest.TestCase):
         self.assertNotIn('href="/profesora/tipos-clase"', contenido)
         self.assertIn('href="/profesora/horarios/nuevo">+ Nuevo horario</a>', contenido)
         self.assertIn('href="/profesora/tipos-clase"', bloque(html, "menu-links"))
-        self.assertRegex(contenido, r'<div class="tabla-scroll">\s*<table class="horario-table">')
+        # en celular cada horario pasa a ser una tarjeta (sin desplazamiento horizontal)
+        self.assertRegex(contenido, r'<div class="tabla-scroll">\s*<table class="horario-table tabla-tarjetas">')
 
 
 if __name__ == "__main__":
