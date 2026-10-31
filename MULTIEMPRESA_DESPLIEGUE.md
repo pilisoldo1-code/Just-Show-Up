@@ -38,7 +38,15 @@ prueba y solo en la Empresa 1. Las pruebas que escriben datos se hacen solo en l
 que es lo previsto pero complica comparar datos) ni cerca de la defensa. Conviene un momento sin clases en
 curso; todo el procedimiento lleva unos 45 minutos.
 
-## Paso 0 — Ensayo y respaldo [autorización solo para el respaldo, que lee producción]
+## Paso 0 — Ensayo y respaldo — **HECHO el 31/10 a las 11:03** (autorizado; solo lectura)
+
+Respaldo en `~/Documents/Just Show Up - respaldos/2026-10-31 11h antes de aplicar multiempresa/` (ver su `LEAME.md`):
+cantidades iguales a producción, estructura idéntica a la del respaldo con el que se probó todo, todas las pruebas
+de multiempresa pasan sobre esta copia y la restauración se ensayó en un Supabase local real (todas las filas
+iguales, contador de facturas igual, theta funciona sobre los datos restaurados). Si pasan días antes del paso 1,
+repetir el respaldo el mismo día de aplicar las migraciones.
+
+Procedimiento:
 
 1. **Ensayo en Supabase local** (no toca producción): con Colima y `supabase start` en la copia aislada
    `~/.local/share/jsu-supabase-local`, correr `tests/supabase_local/recorrido_pantallas.py` con el código de
@@ -97,7 +105,9 @@ sesión sin lugar elegido no ve nada.
 | Migración 1 | `…/vuelta_atras_multiempresa_1.sql` | |
 
 Todas probadas sobre la copia de producción: la estructura vuelve a quedar idéntica a la de antes de cada
-migración. Puntos sin vuelta atrás exacta: las sesiones abiertas se cierran una vez; las facturas confirmadas
+migración. Si además hubiera que recuperar datos: `scripts/restaurar_datos.py "<respaldo>" --confirmo-produccion`
+recrea las cuentas que falten (contraseña nueva: «Olvidé mi contraseña») y genera un SQL que Julieta ejecuta en el
+editor SQL del panel de Supabase (la API no permite conservar los ids). Puntos sin vuelta atrás exacta: las sesiones abiertas se cierran una vez; las facturas confirmadas
 con numeración por empresa conservan su número.
 
 ## Vistas previas de Vercel

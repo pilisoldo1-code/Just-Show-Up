@@ -167,3 +167,15 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
 - `MULTIEMPRESA_DESPLIEGUE.md` revisado (ensayo, respaldo, verificaciones de solo lectura, compatibilidad,
   cuándo no desplegar, vuelta atrás con advertencias, vistas previas viejas).
 
+### Sáb 31/10 — respaldo de producción (autorizado, solo lectura)
+- El commit `257d146` está en GitHub y es la cabeza del PR #27 (texto actualizado). Ya no hay verificaciones de
+  Vercel en el PR porque `vercel.json` apaga las vistas previas de la rama (el push nuevo no generó ninguna).
+- Vistas previas viejas de la rama `multiempresa`: 6 (commits `e802070` a `00bca68`), protegidas por Vercel
+  Authentication (sin sesión redirigen a vercel.com). Pilar puede borrarlas desde el panel (gratis).
+- Respaldo tomado a las 11:03 con lecturas: 16 tablas + 16 cuentas (sin contraseñas), cantidades iguales a
+  producción, estructura idéntica a la del 31/10 (11 categorías), 16 migraciones aplicadas (ninguna de
+  multiempresa), copia del repositorio. Las 8 suites de multiempresa pasan sobre esta copia.
+- **Restauración ensayada** en un Supabase local real con `scripts/restaurar_datos.py` (nuevo): la API no deja
+  conservar ids (columnas de identidad), así que los datos se restauran con un SQL generado; desde una base vacía
+  todas las filas quedan iguales, el contador de facturas también, repetirla no duplica y theta funciona (32/32).
+
