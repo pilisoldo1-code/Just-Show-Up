@@ -60,7 +60,19 @@ Procedimiento:
    - `git bundle` del repositorio.
 3. Sobre ese respaldo nuevo, correr todas las pruebas de `tests/base_local/` (copia de producción local): todo OK.
 
+### Etapa A — HECHA el 31/10 a las 11:15 (autorizada; solo lectura)
+Respaldo `2026-10-31 11h15 etapa A antes de migraciones`: igual fila por fila al de las 11:03 y estructura igual a
+producción; sin sesiones activas en las 2 horas previas. Huellas esperadas después de cada migración calculadas
+(`huellas_esperadas.json`, con `tests/base_local/huellas_esperadas.py`). Ensayo general en Supabase local real con
+estos datos: huellas iguales a las esperadas tras cada migración, `scripts/verificar_despliegue.py` todo OK, theta
+32/32, y vuelta atrás completa 3c → 1 con estructura igual a producción y datos iguales al respaldo.
+
 ## Paso 1 — Migraciones 1, 2, 3, 3b y 3c [autorización]
+
+Nombres con los que se aplican (las vueltas atrás los borran del registro por nombre): `multiempresa_1_estructura`,
+`multiempresa_2_permisos`, `multiempresa_3_funciones`, `multiempresa_3b_acceso`, `multiempresa_3c_sesiones`.
+Después de cada una: huellas de estructura (lectura) iguales a `huellas_esperadas.json`; si no, se frena y se
+deshace. Al final: `python scripts/verificar_despliegue.py "<respaldo etapa A>"` (solo lectura) y las pantallas de theta.
 
 1. Aplicarlas en ese orden (una por vez con el conector de Supabase), comprobando que cada una termina bien.
 2. Verificación de **solo lectura**:
