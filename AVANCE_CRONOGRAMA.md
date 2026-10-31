@@ -192,3 +192,16 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
   `alumna@prueba.invalid`, solo JSU); acceso sin sesión cerrado (amber deja de funcionar: aceptado).
 - Siguiente: etapa C (merge del PR #27) con autorización.
 
+### Sáb 31/10 — ETAPAS C y D en producción (autorizadas) ✅ — multiempresa desplegada
+- **C (13:58)**: merge del PR #27 (`1a7603d`, merge común) → Vercel desplegó theta en menos de un minuto. theta con el
+  código nuevo: 23/23 (login con «Just Show Up», panel de administración, rutas por rol, mensaje genérico ante lugar
+  inexistente o contraseña incorrecta, acceso de superadministradora protegido). Datos todo OK.
+- **D (14:07)**: migración `multiempresa_4_datos_personales` (22 migraciones). Huellas idénticas a las esperadas,
+  datos 40/40 OK. Seguridad con tokens reales en producción 18/18: una sesión sin lugar no ve nada, dos dispositivos
+  de la misma alumna independientes, cédulas ilegibles directo, intentos de elevar permisos rechazados, sin sesión
+  no se lee nada. theta 13/13. Mercado Pago: la credencial del Vault es de una cuenta de PRUEBA (`test_user`, MLU) y
+  el código exige vendedora de prueba, compradora TESTUSER y solo `alumna@prueba.invalid`.
+- Datos finales: 146 reservas, 71 asistencias, 1 factura (JSU-2026-09-0001), 0 pagos, contador sin usar.
+- Falta (con autorización aparte): superadministradora, Pilates Centro, revisión de las vistas previas viejas (Pilar).
+- Rama `panel-admin-simple` (sin desplegar): inicio del panel con 3 indicadores.
+

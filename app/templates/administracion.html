@@ -13,28 +13,21 @@
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
         <h1>Panel de administración</h1>
-        <p class="subtitle">{{ usuario.empresa_nombre or 'Tu lugar' }}{% if usuario.es_profesora %} · también das clases: Horarios, Asistencias y Planificación incluyen las tuyas{% endif %}</p>
+        <p class="subtitle">{{ usuario.empresa_nombre or 'Tu lugar' }}</p>
 
         <div class="panel-numeros">
-            <div><span class="panel-numero">{{ resumen.alumnas }}</span><span>alumnas</span></div>
-            <div><span class="panel-numero">{{ resumen.profesoras }}</span><span>profesoras</span></div>
-            <div><span class="panel-numero">{{ resumen.clases_hoy }}</span><span>clases hoy</span></div>
-            <div><span class="panel-numero">{{ resumen.facturas_pendientes }}</span><span>facturas por cobrar</span></div>
-        </div>
-
-        <div class="panel-secciones">
-            {% for href, titulo, texto in secciones %}
-            <a class="panel-seccion" href="{{ href }}">
-                <strong>{{ titulo }}</strong>
-                <span>{{ texto }}</span>
-            </a>
-            {% endfor %}
-            {% if usuario.es_alumna %}
-            <a class="panel-seccion" href="/">
-                <strong>Mis clases</strong>
-                <span>Tus reservas como alumna en este lugar.</span>
-            </a>
-            {% endif %}
+            <div>
+                <span class="panel-numero">{{ resumen.alumnas }}</span>
+                <span>Alumnas activas</span>
+            </div>
+            <div>
+                <span class="panel-numero">{{ resumen.profesoras }}</span>
+                <span>Profesoras activas</span>
+            </div>
+            <div>
+                <span class="panel-numero">{{ resumen.clases_semanales }}</span>
+                <span>Clases semanales activas</span>
+            </div>
         </div>
     </main>
 </body>

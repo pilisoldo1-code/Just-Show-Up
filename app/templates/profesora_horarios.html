@@ -20,7 +20,7 @@
         </div>
 
         <div class="tabla-scroll">
-            <table class="horario-table">
+            <table class="horario-table tabla-tarjetas">
                 <thead>
                     <tr>
                         <th>Día</th>
@@ -34,17 +34,17 @@
                 <tbody>
                     {% for h in horarios %}
                     <tr>
-                        <td>{{ h.dia_semana | nombre_dia }}</td>
-                        <td>{{ h.hora_inicio[:5] }}</td>
-                        <td>{{ h.tipo_clase.nombre if h.tipo_clase else '—' }}</td>
-                        {% if usuario.es_admin and usuario.empresa_id %}<td>{{ h.profesora or '—' }}</td>{% endif %}
-                        <td>
+                        <td data-label="Día">{{ h.dia_semana | nombre_dia }}</td>
+                        <td data-label="Hora">{{ h.hora_inicio[:5] }}</td>
+                        <td data-label="Tipo">{{ h.tipo_clase.nombre if h.tipo_clase else '—' }}</td>
+                        {% if usuario.es_admin and usuario.empresa_id %}<td data-label="Profesora">{{ h.profesora or '—' }}</td>{% endif %}
+                        <td data-label="Estado">
                             <span class="badge {{ 'badge-on' if h.activo else 'badge-off' }}">
                                 {{ 'Activo' if h.activo else 'Inactivo' }}
                             </span>
                         </td>
                         <td class="acciones">
-                            <a href="/profesora/horarios/{{ h.id }}/editar">Editar</a>
+                            <a class="btn btn-chico" href="/profesora/horarios/{{ h.id }}/editar">Editar</a>
                             <form action="/profesora/horarios/{{ h.id }}/toggle" method="post">
                                 <button type="submit" class="link-btn">
                                     {{ 'Desactivar' if h.activo else 'Activar' }}

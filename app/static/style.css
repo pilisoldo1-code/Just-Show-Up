@@ -558,13 +558,14 @@ main.ancho {
     display: inline;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1320px) {
     .menu .cuenta-nombre {
-        display: none;
+        display: none;  /* deja lugar a las 9 secciones de la administradora (el círculo con las iniciales queda) */
     }
 }
 
-@media (max-width: 900px) {
+/* Con 9 secciones (administradora) el menú no entra en una línea por debajo de 1100 px: desplegable */
+@media (max-width: 1099px) {
     .menu {
         gap: 12px;
     }
@@ -2072,16 +2073,17 @@ main.ancho {
 
 .panel-numeros {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-    margin: 24px 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin: 28px 0;
+    max-width: 900px;
 }
 
 .panel-numeros > div {
     background: var(--card);
     border: 1px solid #2a2e37;
     border-radius: 12px;
-    padding: 16px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -2090,41 +2092,110 @@ main.ancho {
 }
 
 .panel-numero {
-    font-size: 1.8rem;
+    font-size: 2.2rem;
     font-weight: 700;
     color: var(--text);
 }
 
-.panel-secciones {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 12px;
+@media (max-width: 600px) {
+    .panel-numeros {
+        grid-template-columns: 1fr;
+    }
 }
 
-.panel-seccion {
+/* ---------- alumnas y profesoras ---------- */
+.btn-chico {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+}
+
+.acciones a.btn {
+    color: #0f1115;  /* «.acciones a» pinta los enlaces de verde: el botón conserva su texto oscuro */
+}
+
+.acciones a.btn:hover {
+    text-decoration: none;
+}
+
+.fila-inactiva td {
+    opacity: 0.6;
+}
+
+.tabla-tarjetas .acciones {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.bloque-persona {
     background: var(--card);
     border: 1px solid #2a2e37;
     border-radius: 12px;
-    padding: 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    color: var(--muted);
-    text-decoration: none;
-    font-size: 0.9rem;
+    padding: 20px;
+    margin: 20px 0;
+    max-width: 640px;
 }
 
-.panel-seccion strong {
-    color: var(--text);
-    font-size: 1.05rem;
+.bloque-persona h2 {
+    margin-top: 0;
+    font-size: 1.1rem;
 }
 
-.panel-seccion:hover {
-    border-color: var(--accent);
+.bloque-persona input:disabled {
+    opacity: 0.6;
 }
 
+/* En celular cada fila es una tarjeta (sin desplazamiento horizontal) */
 @media (max-width: 720px) {
-    .panel-numeros {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+    .tabla-tarjetas thead {
+        display: none;
+    }
+
+    .tabla-tarjetas {
+        background: transparent;
+    }
+
+    .tabla-tarjetas,
+    .tabla-tarjetas tbody,
+    .tabla-tarjetas tr,
+    .tabla-tarjetas td {
+        display: block;
+        width: 100%;
+    }
+
+    .tabla-tarjetas tr {
+        background: var(--card);
+        border: 1px solid #2a2e37;
+        border-radius: 12px;
+        padding: 10px 14px;
+        margin-bottom: 12px;
+    }
+
+    .tabla-tarjetas td {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 6px 0;
+        border: none;
+        text-align: right;
+        overflow-wrap: anywhere;
+    }
+
+    .tabla-tarjetas td[data-label]::before {
+        content: attr(data-label);
+        color: var(--muted);
+        text-align: left;
+        flex-shrink: 0;
+    }
+
+    .tabla-tarjetas td.acciones {
+        justify-content: flex-start;
+        padding-top: 10px;
+    }
+
+    .tabla-tarjetas td.empty {
+        text-align: center;
+        justify-content: center;
     }
 }

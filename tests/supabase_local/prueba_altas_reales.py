@@ -226,5 +226,74 @@ ok("el registro público está apagado (nadie crea su propia cuenta)",
 ok("al final, la única superadministradora es la del alta inicial",
    [f["mail"] for f in sql("select mail from profiles where es_superadmin")] == ["superadmin@prueba.invalid"])
 
+# ---------- Alumnas y Profesoras separadas, edición, estado e indicadores del inicio ----------
+A2, _ = entrar("Pilates Centro", "admin.pil@prueba.invalid", CLAVE_ADMIN2)
+A1, _ = entrar("Just Show Up", "profesora@prueba.invalid", CLAVE)
+PIL = sql("select id from empresa where codigo = 'PIL'", uno=True)["id"]
+mails_pil = {f["mail"] for f in sql("select p.mail from membresia m join profiles p on p.id = m.id_usuario where m.id_empresa = %s", (PIL,))}
+h_alumnas, h_profes = A2.get("/profesora/alumnas").text, A2.get("/profesora/profesoras").text
+ok("Alumnas (Pilates Centro): título, botón y solo personas con rol alumna de su empresa",
+   "<h1>Alumnas</h1>" in h_alumnas and "+ Nueva alumna" in h_alumnas and "nueva.alumna.pil@prueba.invalid" in h_alumnas
+   and "alumna@prueba.invalid" in h_alumnas and "nueva.admin.pil@prueba.invalid" not in h_alumnas
+   and "sofia@demo.invalid" not in h_alumnas)
+ok("Profesoras (Pilates Centro): profesoras y administradoras de su empresa, sin alumnas ni otras empresas",
+   "<h1>Profesoras</h1>" in h_profes and "+ Nueva profesora" in h_profes and "nueva.profesora.pil@prueba.invalid" in h_profes
+   and "admin.pil@prueba.invalid" in h_profes and "nueva.alumna.pil@prueba.invalid" not in h_profes
+   and "profesora@prueba.invalid" not in h_profes)
+ok("la profesora que también es alumna aparece en las dos secciones (una sola cuenta)",
+   "nueva.profesora.pil@prueba.invalid" in h_alumnas and "nueva.profesora.pil@prueba.invalid" in h_profes
+   and sql("select count(*) n from auth.users where email = 'nueva.profesora.pil@prueba.invalid'", uno=True)["n"] == 1)
+ALU = sql("select id::text from profiles where mail = 'nueva.alumna.pil@prueba.invalid'", uno=True)["id"]
+r = A2.post(f"/profesora/alumnas/{ALU}/datos", data={"nombre": "Nueva", "apellido": "Repetida", "telefono": "099 555 444",
+                                                      "cedula": "1.234.567-2"}, follow_redirects=False)
+ok("editar con una cédula que ya tiene otra alumna de la empresa: aviso y no se guarda nada",
+   r.status_code == 400 and "otra persona de tu empresa" in r.text
+   and sql("select apellido from profiles where id = %s", (ALU,), uno=True)["apellido"] != "Repetida")
+r = A2.post(f"/profesora/alumnas/{ALU}/datos", data={"nombre": "Nueva", "apellido": "Editada", "telefono": "099 555 444",
+                                                      "cedula": "1.111.111-1"}, follow_redirects=False)
+fila = sql("select p.apellido, p.telefono, m.cedula from profiles p join membresia m on m.id_usuario = p.id and m.id_empresa = %s "
+           "where p.id = %s", (PIL, ALU), uno=True)
+ok("editar datos de una alumna: perfil y cédula de la empresa guardados", r.status_code == 303
+   and fila == {"apellido": "Editada", "telefono": "099555444", "cedula": "11111111"}, fila)
+r = A2.post(f"/profesora/alumnas/{ALU}/roles", data={"es_alumna": "1", "es_profesora": "1"}, follow_redirects=False)
+ok("roles: la alumna pasa a ser también profesora (misma cuenta)", membresias("nueva.alumna.pil@prueba.invalid") == {"PIL": (False, True, True)})
+A2.post(f"/profesora/alumnas/{ALU}/roles", data={"es_alumna": "1"})
+r = A2.post(f"/profesora/alumnas/{ALU}/estado", data={"activa": "0"}, follow_redirects=False)
+ok("estado: queda inactiva y no puede entrar (mensaje genérico)",
+   sql("select activa from membresia where id_usuario = %s and id_empresa = %s", (ALU, PIL), uno=True)["activa"] is False
+   and entrar("Pilates Centro", "nueva.alumna.pil@prueba.invalid", claves["alumna"])[1].status_code == 401)
+ok("la inactiva sigue en la lista, marcada como Inactiva", "Inactiva" in A2.get("/profesora/alumnas").text)
+A2.post(f"/profesora/alumnas/{ALU}/roles", data={"es_alumna": "1"})
+ok("cambiar roles de una inactiva no la reactiva",
+   sql("select activa from membresia where id_usuario = %s and id_empresa = %s", (ALU, PIL), uno=True)["activa"] is False)
+A2.post(f"/profesora/alumnas/{ALU}/estado", data={"activa": "1"})
+ok("reactivada: vuelve a entrar", entrar("Pilates Centro", "nueva.alumna.pil@prueba.invalid", claves["alumna"])[1].status_code == 303)
+r = A1.get(f"/profesora/alumnas/{ALU}", follow_redirects=False)
+ok("la administradora de Just Show Up no puede abrir la ficha de una alumna de Pilates Centro",
+   r.status_code == 303 and "No+encontramos" in r.headers["location"])
+r = A1.post(f"/profesora/alumnas/{ALU}/datos", data={"nombre": "Intrusa", "apellido": "X"}, follow_redirects=False)
+ok("ni editarla", sql("select apellido from profiles where id = %s", (ALU,), uno=True)["apellido"] == "Editada")
+A2_ID = sql("select id::text from profiles where mail = 'admin.pil@prueba.invalid'", uno=True)["id"]
+A2.post(f"/profesora/profesoras/{A2_ID}/estado", data={"activa": "0"})
+ok("la administradora no puede desactivarse a sí misma",
+   sql("select activa from membresia where id_usuario = %s and id_empresa = %s", (A2_ID, PIL), uno=True)["activa"] is True)
+# indicadores del inicio: lo que dice la base para la empresa activa
+esperado_alumnas = sql("select count(distinct id_usuario) n from membresia where id_empresa = %s and activa and es_alumna", (PIL,), uno=True)["n"]
+esperado_profes = sql("select count(distinct id_usuario) n from membresia where id_empresa = %s and activa and es_profesora", (PIL,), uno=True)["n"]
+esperado_clases = sql("select count(*) n from horario where id_empresa = %s and activo", (PIL,), uno=True)["n"]
+h = A2.get("/administracion").text
+numeros = re.findall(r'panel-numero">([^<]+)<', h)
+ok("inicio: tres indicadores con los valores reales de la empresa activa",
+   numeros == [str(esperado_alumnas), str(esperado_profes), str(esperado_clases)]
+   and "Clases hoy" not in h and "Facturas por cobrar" not in h, (numeros, esperado_alumnas, esperado_profes, esperado_clases))
+h1 = A1.get("/administracion").text
+jsu_alumnas = sql("select count(distinct id_usuario) n from membresia m join empresa e on e.id = m.id_empresa where e.codigo = 'JSU' and m.activa and m.es_alumna", uno=True)["n"]
+ok("inicio de Just Show Up: cuenta solo sus alumnas", re.findall(r'panel-numero">([^<]+)<', h1)[0] == str(jsu_alumnas))
+P2, _ = entrar("Pilates Centro", "nueva.profesora.pil@prueba.invalid", claves["profesora"])
+ok("una profesora no administradora no ve Profesoras ni el inicio de administración",
+   P2.get("/profesora/profesoras", follow_redirects=False).status_code == 303
+   and P2.get("/administracion", follow_redirects=False).status_code == 303
+   and "Editar" not in P2.get("/profesora/alumnas").text)
+
 print(f"\n{total - fallas}/{total} casos OK")
 sys.exit(1 if fallas else 0)

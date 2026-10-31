@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Just Show Up - Alumnas</title>
+    <title>Just Show Up - {{ textos.titulo }}</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -15,70 +15,61 @@
         {% endif %}
 
         <div class="header-row">
-            <h1>Alumnas</h1>
-            {% if usuario.es_admin %}<a class="btn" href="/profesora/alumnas/nueva">+ Nueva persona</a>{% endif %}
+            <h1>{{ textos.titulo }}</h1>
+            {% if usuario.es_admin %}<a class="btn" href="/profesora/{{ seccion }}/nueva">{{ textos.nueva }}</a>{% endif %}
         </div>
         {% if usuario.es_admin %}
-        <p class="subtitle">Dás de alta a alumnas y profesoras{% if usuario.empresa_nombre %} de {{ usuario.empresa_nombre }}{% endif %}: entran con su mail y una contraseña.</p>
+        <p class="subtitle">{{ textos.titulo }} de {{ usuario.empresa_nombre or 'tu empresa' }}. Tocá «Editar» para ver o cambiar sus datos,
+            roles y estado. Una persona con varios roles tiene una sola cuenta y aparece en cada sección.</p>
         {% else %}
-        <p class="subtitle">Contacto de las alumnas y profesoras{% if usuario.empresa_nombre %} de {{ usuario.empresa_nombre }}{% endif %}. Las altas y los cambios los hace la administradora.</p>
+        <p class="subtitle">Contacto de las alumnas de {{ usuario.empresa_nombre or 'tu empresa' }}. Las altas y los cambios los hace la administradora.</p>
         {% endif %}
 
         <div class="tabla-scroll">
-        <table class="horario-table">
+        <table class="horario-table tabla-tarjetas">
             <thead>
                 <tr>
                     <th>Apellido</th>
                     <th>Nombre</th>
-                    <th>Rol</th>
                     <th>Mail</th>
-                    {% if usuario.es_admin %}<th>Cédula</th>{% endif %}
                     <th>Teléfono</th>
                     {% if usuario.es_admin %}
-                    <th>Carné de salud vence</th>
+                    {% if seccion == 'alumnas' %}<th>Cédula</th><th>Carné de salud vence</th>{% endif %}
+                    <th>Roles</th>
+                    <th>Estado</th>
                     <th></th>
                     {% endif %}
                 </tr>
             </thead>
             <tbody>
                 {% for a in alumnas %}
-                <tr>
-                    <td>{{ a.apellido }}</td>
-                    <td>{{ a.nombre }}</td>
-                    <td>{{ (a.roles or ['Alumna'])|join(' · ') }}</td>
-                    <td>{{ a.mail }}</td>
-                    {% if usuario.es_admin %}<td>{{ a.cedula_txt or 'No registrada' }}</td>{% endif %}
-                    <td>{{ a.telefono or '—' }}</td>
+                <tr class="{{ '' if a.activa else 'fila-inactiva' }}">
+                    <td data-label="Apellido">{{ a.apellido }}</td>
+                    <td data-label="Nombre">{{ a.nombre }}</td>
+                    <td data-label="Mail">{{ a.mail }}</td>
+                    <td data-label="Teléfono">{{ a.telefono or '—' }}</td>
                     {% if usuario.es_admin %}
-                    <td>{{ a.fecha_vencimiento_carne_salud or '—' }}</td>
+                    {% if seccion == 'alumnas' %}
+                    <td data-label="Cédula">{{ a.cedula_txt or 'No registrada' }}</td>
+                    <td data-label="Carné vence">{{ a.fecha_vencimiento_carne_salud or '—' }}</td>
+                    {% endif %}
+                    <td data-label="Roles">{{ (a.roles or ['Alumna'])|join(' · ') }}</td>
+                    <td data-label="Estado"><span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span></td>
                     <td class="acciones">
-                        <button type="button" class="link-btn" onclick="document.getElementById('cedula-{{ loop.index }}').showModal()">{{ 'Corregir cédula' if a.cedula else 'Cargar cédula' }}</button>
-                        <dialog id="cedula-{{ loop.index }}" class="modal">
-                            <form action="/profesora/alumnas/{{ a.id }}/cedula" method="post" class="horario-form">
-                                <h2>Cédula de {{ a.nombre }} {{ a.apellido }}</h2>
-                                <label>
-                                    Cédula de identidad
-                                    <input type="text" name="cedula" value="{{ a.cedula_txt }}" inputmode="numeric" maxlength="11"
-                                           pattern="[0-9.\-\s]{7,11}" placeholder="1.234.567-2" />
-                                </label>
-                                <p class="nota">Dejala vacía para quitarla. La alumna no puede modificarla. Las facturas ya
-                                    confirmadas conservan la cédula que tenían al confirmarse.</p>
-                                <div class="modal-botones">
-                                    <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
-                                    <button type="submit" class="btn">Guardar</button>
-                                </div>
-                            </form>
-                        </dialog>
+                        <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}">Editar</a>
+                        {% if not a.yo %}
                         <form action="/profesora/alumnas/{{ a.id }}/reiniciar-contrasena" method="post"
                               onsubmit="return confirm('¿Generar una contraseña nueva para {{ a.nombre }} {{ a.apellido }}? La anterior dejará de funcionar.')">
+                            <input type="hidden" name="desde" value="{{ seccion }}" />
                             <button type="submit" class="link-btn">Reiniciar contraseña</button>
                         </form>
+                        {% endif %}
                     </td>
                     {% endif %}
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="{{ 8 if usuario.es_admin else 5 }}" class="empty">Todavía no hay alumnas cargadas.</td>
+                    <td colspan="{{ 9 if usuario.es_admin else 4 }}" class="empty">{{ textos.vacia }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

@@ -975,41 +975,81 @@ ROLES_PERSONA = {"alumna": "Alumna", "profesora": "Profesora", "admin_profesora"
                  "admin": "Administradora"}
 
 
-def _personas_empresa(usuario: Usuario) -> list[dict]:
-    """Personas con membresía activa en la empresa activa, con sus roles."""
+SECCIONES_PERSONAS = {
+    "alumnas": {"titulo": "Alumnas", "singular": "alumna", "nueva": "+ Nueva alumna", "vacia": "Todavía no hay alumnas cargadas."},
+    "profesoras": {"titulo": "Profesoras", "singular": "profesora", "nueva": "+ Nueva profesora",
+                   "vacia": "Todavía no hay profesoras cargadas."},
+}
+ROLES_POR_SECCION = {
+    "alumnas": {"alumna": "Alumna"},
+    "profesoras": {"profesora": "Profesora", "admin_profesora": "Profesora y administradora",
+                   "admin": "Administradora (sin dar clases)"},
+}
+
+
+def _seccion(rol: str) -> str:
+    return "alumnas" if rol == "alumna" else "profesoras"
+
+
+def _volver_seccion(seccion: str, ok: bool, aviso: str) -> RedirectResponse:
+    seccion = seccion if seccion in SECCIONES_PERSONAS else "alumnas"
+    return RedirectResponse(url=f"/profesora/{seccion}?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303)
+
+
+def _roles_txt(m: dict) -> list[str]:
+    return [t for t, si in (("Administradora", m["es_admin"]), ("Profesora", m["es_profesora"]), ("Alumna", m["es_alumna"])) if si]
+
+
+def _personas_empresa(usuario: Usuario, seccion: str = "alumnas") -> list[dict]:
+    """Personas de la empresa activa de una sección: «alumnas» (rol alumna) o «profesoras» (profesoras y
+    administradoras). Una sola cuenta por persona: con varios roles aparece en las dos secciones. La
+    administradora ve también las membresías inactivas; una profesora, solo el contacto de las activas."""
     sb = _sb(usuario)
     if usuario.empresa_id is None:  # sesión armada sin membresías (pruebas): alumnas como antes
         filas = sb.table("profiles").select(COLUMNAS_ALUMNA if usuario.es_admin else COLUMNAS_PERSONA_PROFESORA) \
             .eq("rol", "alumna").order("apellido").order("nombre").execute().data
         if usuario.es_admin:
             personas.completar(sb, filas)
-        return [{**f, "roles": ["Alumna"], "es_alumna": True} for f in filas]
-    membresias = {m["id_usuario"]: m for m in sb.table("membresia").select("id_usuario, es_admin, es_profesora, es_alumna")
-                  .eq("id_empresa", usuario.empresa_id).eq("activa", True).execute().data}
+        return [{**f, "roles": ["Alumna"], "es_alumna": True, "activa": True} for f in filas] if seccion == "alumnas" else []
+    consulta = (sb.table("membresia").select("id_usuario, es_admin, es_profesora, es_alumna, activa")
+                .eq("id_empresa", usuario.empresa_id))
+    if not usuario.es_admin:
+        consulta = consulta.eq("activa", True)
+    en_seccion = (lambda m: m["es_alumna"]) if seccion == "alumnas" else (lambda m: m["es_profesora"] or m["es_admin"])
+    membresias = {m["id_usuario"]: m for m in consulta.execute().data if en_seccion(m)}
     if not membresias:
         return []
-    filas = sb.table("profiles").select(COLUMNAS_ALUMNA if usuario.es_admin else COLUMNAS_PERSONA_PROFESORA) \
-        .in_("id", list(membresias)).execute().data
+    filas = [f for f in sb.table("profiles").select(COLUMNAS_ALUMNA if usuario.es_admin else COLUMNAS_PERSONA_PROFESORA)
+             .in_("id", list(membresias)).execute().data if f["id"] in membresias]
     if usuario.es_admin:
         personas.completar(sb, filas)
     for f in filas:
         m = membresias[f["id"]]
-        f["roles"] = [t for t, si in (("Administradora", m["es_admin"]), ("Profesora", m["es_profesora"]),
-                                      ("Alumna", m["es_alumna"])) if si]
-        f["es_alumna"] = m["es_alumna"]
-    return sorted(filas, key=lambda f: (not f["es_alumna"], f["apellido"].lower(), f["nombre"].lower()))
+        f["roles"] = _roles_txt(m)
+        f["es_alumna"], f["activa"], f["yo"] = m["es_alumna"], m.get("activa", True), f["id"] == usuario.id
+    return sorted(filas, key=lambda f: (not f["activa"], f["apellido"].lower(), f["nombre"].lower()))
+
+
+def _lista_personas(request: Request, usuario: Usuario, seccion: str, ok: int, aviso: str):
+    try:
+        filas = _personas_empresa(usuario, seccion)
+    except Exception:
+        logging.exception("No se pudo listar %s", seccion)
+        filas, aviso, ok = [], f"No pudimos cargar la lista de {seccion}. Probá de nuevo.", 0
+    for a in filas:
+        a["cedula_txt"] = validaciones.formatear_cedula(a.get("cedula"))
+    return _render(request, "profesora_alumnas.html", usuario, alumnas=filas, seccion=seccion,
+                   textos=SECCIONES_PERSONAS[seccion], aviso=aviso, aviso_ok=bool(ok))
 
 
 @app.get("/profesora/alumnas")
 def alumnas_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_profesora)):
-    try:
-        filas = _personas_empresa(usuario)
-    except Exception:
-        logging.exception("No se pudo listar alumnas")
-        filas, aviso, ok = [], "No pudimos cargar la lista de alumnas. Probá de nuevo.", 0
-    for a in filas:
-        a["cedula_txt"] = validaciones.formatear_cedula(a.get("cedula"))
-    return _render(request, "profesora_alumnas.html", usuario, alumnas=filas, aviso=aviso, aviso_ok=bool(ok))
+    return _lista_personas(request, usuario, "alumnas", ok, aviso)
+
+
+@app.get("/profesora/profesoras")
+def profesoras_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_admin)):
+    return _lista_personas(request, usuario, "profesoras", ok, aviso)
 
 
 def _fechas_formulario() -> dict:
@@ -1017,10 +1057,20 @@ def _fechas_formulario() -> dict:
     return {"ayer_iso": (hoy - timedelta(days=1)).isoformat(), "manana_iso": (hoy + timedelta(days=1)).isoformat()}
 
 
+def _form_nueva(request: Request, usuario: Usuario, seccion: str, datos: dict, errores: list[str], status_code: int = 200):
+    return _render(request, "profesora_alumna_nueva.html", usuario, status_code=status_code, datos=datos, errores=errores,
+                   seccion=seccion, textos=SECCIONES_PERSONAS[seccion], roles=ROLES_POR_SECCION[seccion],
+                   **_fechas_formulario())
+
+
 @app.get("/profesora/alumnas/nueva")
 def alumna_nueva_form(request: Request, usuario: Usuario = Depends(requiere_admin)):
-    return _render(request, "profesora_alumna_nueva.html", usuario, datos={"rol": "alumna"}, errores=[],
-                   roles=ROLES_PERSONA, **_fechas_formulario())
+    return _form_nueva(request, usuario, "alumnas", {"rol": "alumna"}, [])
+
+
+@app.get("/profesora/profesoras/nueva")
+def profesora_nueva_form(request: Request, usuario: Usuario = Depends(requiere_admin)):
+    return _form_nueva(request, usuario, "profesoras", {"rol": "profesora"}, [])
 
 
 def _cuenta_existente(mail: str) -> dict | None:
@@ -1077,10 +1127,10 @@ def alumna_crear(
                 r = None
             if r == "ok":
                 nota = _guardar_cedula(usuario, existente["id"], datos["cedula"])
-                return RedirectResponse(url="/profesora/alumnas?" + urlencode({
-                    "ok": int(not nota), "aviso": f"{existente['nombre']} {existente['apellido']} ya tenía cuenta en Just Show Up: "
-                                      f"se agregó a {usuario.empresa_nombre or 'tu empresa'} con su misma contraseña." + (f" {nota}" if nota else "")}),
-                    status_code=303)
+                return _volver_seccion(_seccion(rol), not nota,
+                                       f"{existente['nombre']} {existente['apellido']} ya tenía cuenta en Just Show Up: "
+                                       f"quedó como {ROLES_PERSONA[rol].lower()} en {usuario.empresa_nombre or 'tu empresa'} "
+                                       "con su misma contraseña (conserva sus otros roles)." + (f" {nota}" if nota else ""))
             errores = ["No se pudo agregar a esa persona. Probá de nuevo."]
     nota = ""
     if not errores:
@@ -1099,13 +1149,14 @@ def alumna_crear(
             logging.exception("Error al crear alumna")
             errores = [auth.MSG_GENERICO]
     if errores:
-        return _render(request, "profesora_alumna_nueva.html", usuario, status_code=400,
-                       datos={**{k: v.strip() for k, v in ingresados.items()}, "rol": rol}, errores=errores,
-                       roles=ROLES_PERSONA, **_fechas_formulario())
+        return _form_nueva(request, usuario, _seccion(rol), {**{k: v.strip() for k, v in ingresados.items()}, "rol": rol},
+                           errores, 400)
+    seccion = _seccion(rol)
     return _render(
         request, "alumna_credenciales.html", usuario,
         titulo=f"{ROLES_PERSONA[rol]}: cuenta creada", nombre=f"{datos['nombre']} {datos['apellido']}",
         mail=datos["mail"], contrasena=contrasena, nota=nota,
+        volver=(f"/profesora/{seccion}", f"Volver a {SECCIONES_PERSONAS[seccion]['titulo'].lower()}"),
     )
 
 
@@ -1138,9 +1189,9 @@ def _guardar_cedula(usuario: Usuario, id_persona: str, cedula: str) -> str:
 
 
 @app.post("/profesora/alumnas/{alumna_id}/cedula")
-def alumna_cedula(alumna_id: str, cedula: str = Form(""), usuario: Usuario = Depends(requiere_admin)):
+def alumna_cedula(alumna_id: str, cedula: str = Form(""), desde: str = Form("alumnas"), usuario: Usuario = Depends(requiere_admin)):
     def volver(ok: bool, aviso: str) -> RedirectResponse:
-        return RedirectResponse(url="/profesora/alumnas?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303)
+        return _volver_seccion(desde, ok, aviso)
 
     try:
         uuid.UUID(alumna_id)
@@ -1165,14 +1216,11 @@ def alumna_cedula(alumna_id: str, cedula: str = Form(""), usuario: Usuario = Dep
 
 
 @app.post("/profesora/alumnas/{alumna_id}/reiniciar-contrasena")
-def alumna_reiniciar(request: Request, alumna_id: str, usuario: Usuario = Depends(requiere_admin)):
+def alumna_reiniciar(request: Request, alumna_id: str, desde: str = Form("alumnas"), usuario: Usuario = Depends(requiere_admin)):
     try:
         uuid.UUID(alumna_id)
     except ValueError:
-        return RedirectResponse(
-            url="/profesora/alumnas?" + urlencode({"ok": 0, "aviso": "No encontramos a esa alumna."}),
-            status_code=303,
-        )
+        return _volver_seccion(desde, False, "No encontramos a esa persona.")
     filas = (
         auth.cliente_con_token(usuario.token).table("profiles").select("nombre, apellido, mail, rol")
         .eq("id", alumna_id).execute().data
@@ -1185,27 +1233,23 @@ def alumna_reiniciar(request: Request, alumna_id: str, usuario: Usuario = Depend
         if usuario.empresa_id not in empresas or alumna_id == usuario.id:
             filas = []
         elif empresas - {usuario.empresa_id}:
-            return RedirectResponse(url="/profesora/alumnas?" + urlencode({
-                "ok": 0, "aviso": "Esa persona también usa Just Show Up en otra empresa: puede cambiar su contraseña desde Mi perfil "
-                                  "o con «Olvidé mi contraseña»."}), status_code=303)
+            return _volver_seccion(desde, False, "Esa persona también usa Just Show Up en otra empresa: puede cambiar su "
+                                                 "contraseña desde Mi perfil o con «Olvidé mi contraseña».")
         else:
             filas[0]["rol"] = "alumna"
     if not filas or filas[0]["rol"] != "alumna":
-        return RedirectResponse(
-            url="/profesora/alumnas?" + urlencode({"ok": 0, "aviso": "No encontramos a esa alumna."}),
-            status_code=303,
-        )
+        return _volver_seccion(desde, False, "No encontramos a esa persona.")
     try:
         contrasena = auth.reiniciar_contrasena(alumna_id)
     except ErrorAuth as e:
-        return RedirectResponse(
-            url="/profesora/alumnas?" + urlencode({"ok": 0, "aviso": str(e)}), status_code=303
-        )
+        return _volver_seccion(desde, False, str(e))
     a = filas[0]
+    seccion = desde if desde in SECCIONES_PERSONAS else "alumnas"
     return _render(
         request, "alumna_credenciales.html", usuario,
         titulo="Contraseña reiniciada", nombre=f"{a['nombre']} {a['apellido']}",
         mail=a["mail"], contrasena=contrasena,
+        volver=(f"/profesora/{seccion}", f"Volver a {SECCIONES_PERSONAS[seccion]['titulo'].lower()}"),
     )
 
 
@@ -1598,35 +1642,149 @@ def _asignar_administradora(request: Request, usuario: Usuario, empresa_id: int,
 
 # ---------- multiempresa: panel de la administradora ----------
 
-SECCIONES_ADMIN = [
-    ("/profesora/alumnas", "Personas", "Alumnas y profesoras: altas, roles, cédula y contraseñas."),
-    ("/profesora/tipos-clase", "Tipos de clase", "Nombre, duración, precio y cupo de cada clase."),
-    ("/profesora/horarios", "Horarios", "Horarios fijos de cada profesora."),
-    ("/profesora/planificacion", "Planificación", "Licencias, vacaciones y clases puntuales canceladas."),
-    ("/profesora/clases", "Asistencias", "Quién reservó cada clase y presente / ausente."),
-    ("/profesora/resumenes", "Facturación y pagos", "Facturas mensuales, ajustes y cobros."),
-    ("/profesora/estadisticas", "Estadísticas", "Asistencia de toda la empresa."),
-]
+def indicadores_admin(membresias: list[dict], horarios: list[dict]) -> dict:
+    """Los tres números del inicio: personas con membresía ACTIVA (cada persona una vez, aunque tenga varios
+    roles) y horarios semanales activos (no clases históricas ni futuras)."""
+    activas = [m for m in membresias if m.get("activa", True)]
+    return {
+        "alumnas": len({m["id_usuario"] for m in activas if m["es_alumna"]}),
+        "profesoras": len({m["id_usuario"] for m in activas if m["es_profesora"]}),
+        "clases_semanales": len({h["id"] for h in horarios if h.get("activo")}),
+    }
 
 
 def _resumen_admin(usuario: Usuario) -> dict:
     sb = _sb(usuario)
-    resumen = {"profesoras": 0, "alumnas": 0, "clases_hoy": 0, "facturas_pendientes": 0}
     try:
-        miembros = (sb.table("membresia").select("es_admin, es_profesora, es_alumna")
-                    .eq("id_empresa", usuario.empresa_id).eq("activa", True).execute().data)
-        resumen["profesoras"] = sum(1 for m in miembros if m["es_profesora"])
-        resumen["alumnas"] = sum(1 for m in miembros if m["es_alumna"])
-        resumen["clases_hoy"] = len(sb.table("clase").select("id").eq("fecha", clases.ahora().date().isoformat())
-                                    .eq("estado", "programada").execute().data)
-        resumen["facturas_pendientes"] = len(sb.table("resumen_mensual").select("id").eq("estado_factura", "confirmada")
-                                             .eq("estado_pago", "pendiente").execute().data)
+        membresias = (sb.table("membresia").select("id_usuario, es_alumna, es_profesora, activa")
+                      .eq("id_empresa", usuario.empresa_id).eq("activa", True).execute().data)
+        horarios = (sb.table("horario").select("id, activo")
+                    .eq("id_empresa", usuario.empresa_id).eq("activo", True).execute().data)
+        return indicadores_admin(membresias, horarios)
     except Exception:
         logging.exception("No se pudo armar el resumen de la administradora")
-    return resumen
+        return {"alumnas": "—", "profesoras": "—", "clases_semanales": "—"}
 
 
 @app.get("/administracion")
 def administracion(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_admin)):
-    return _render(request, "administracion.html", usuario, resumen=_resumen_admin(usuario), secciones=SECCIONES_ADMIN,
-                   aviso=aviso, aviso_ok=bool(ok))
+    return _render(request, "administracion.html", usuario, resumen=_resumen_admin(usuario), aviso=aviso, aviso_ok=bool(ok))
+
+
+# ---------- personas de la empresa: edición (compartida por Alumnas y Profesoras) ----------
+
+def _persona_de_empresa(usuario: Usuario, persona_id: str) -> dict | None:
+    """La persona, si tiene membresía en la empresa activa (lo comprueba la base con la sesión de la
+    administradora: nunca se ve ni se toca a alguien de otra empresa)."""
+    try:
+        uuid.UUID(persona_id)
+    except ValueError:
+        return None
+    sb = _sb(usuario)
+    m = (sb.table("membresia").select("id_usuario, es_admin, es_profesora, es_alumna, activa")
+         .eq("id_empresa", usuario.empresa_id).eq("id_usuario", persona_id).execute().data)
+    if not m:
+        return None
+    p = sb.table("profiles").select("id, nombre, apellido, mail, telefono").eq("id", persona_id).execute().data
+    if not p:
+        return None
+    persona = {**p[0], **personas.datos_personales(sb, [persona_id]).get(persona_id, dict.fromkeys(personas.PRIVADOS)),
+               "membresia": m[0], "roles": _roles_txt(m[0]), "yo": persona_id == usuario.id}
+    persona["cedula_txt"] = validaciones.formatear_cedula(persona.get("cedula"))
+    return persona
+
+
+def _editar_persona(request: Request, usuario: Usuario, seccion: str, persona: dict, errores=None, aviso="", ok=0,
+                    datos=None, status_code=200):
+    return _render(request, "persona_editar.html", usuario, status_code=status_code, seccion=seccion,
+                   textos=SECCIONES_PERSONAS[seccion], persona=persona, datos=datos or persona, errores=errores or [],
+                   aviso=aviso, aviso_ok=bool(ok), **_fechas_formulario())
+
+
+@app.get("/profesora/{seccion}/{persona_id}")
+def persona_ver(request: Request, seccion: str, persona_id: str, ok: int = 0, aviso: str = "",
+                usuario: Usuario = Depends(requiere_admin)):
+    if seccion not in SECCIONES_PERSONAS:
+        return RedirectResponse(url="/administracion", status_code=303)
+    persona = _persona_de_empresa(usuario, persona_id)
+    if persona is None:
+        return _volver_seccion(seccion, False, "No encontramos a esa persona en tu empresa.")
+    return _editar_persona(request, usuario, seccion, persona, aviso=aviso, ok=ok)
+
+
+@app.post("/profesora/{seccion}/{persona_id}/datos")
+def persona_datos(
+    request: Request, seccion: str, persona_id: str, nombre: str = Form(""), apellido: str = Form(""),
+    telefono: str = Form(""), fecha_nacimiento: str = Form(""), fecha_vencimiento_carne_salud: str = Form(""),
+    cedula: str = Form(""), usuario: Usuario = Depends(requiere_admin),
+):
+    seccion = seccion if seccion in SECCIONES_PERSONAS else "alumnas"
+    persona = _persona_de_empresa(usuario, persona_id)
+    if persona is None:
+        return _volver_seccion(seccion, False, "No encontramos a esa persona en tu empresa.")
+    ingresados = {"nombre": nombre, "apellido": apellido, "mail": persona["mail"], "telefono": telefono,
+                  "fecha_nacimiento": fecha_nacimiento, "fecha_vencimiento_carne_salud": fecha_vencimiento_carne_salud,
+                  "cedula": cedula}
+    datos, errores = validaciones.validar_alumna(ingresados, clases.ahora().date())
+    if not errores and datos["cedula"] and datos["cedula"] != persona.get("cedula") and _cedula_en_uso(usuario, datos["cedula"]):
+        errores = [MSG_CEDULA_REPETIDA]  # se avisa antes de guardar nada (sin guardados a medias)
+    if errores:
+        return _editar_persona(request, usuario, seccion, persona, errores=errores,
+                               datos={**persona, **{k: v.strip() for k, v in ingresados.items()}, "cedula_txt": cedula.strip()},
+                               status_code=400)
+    try:
+        # perfil (de toda la cuenta) con la clave del servidor: solo después de comprobar que es de esta empresa
+        auth.cliente_admin().table("profiles").update({
+            "nombre": datos["nombre"], "apellido": datos["apellido"], "telefono": datos["telefono"] or None,
+            "fecha_nacimiento": datos["fecha_nacimiento"] or None,
+            "fecha_vencimiento_carne_salud": datos["fecha_vencimiento_carne_salud"] or None,
+        }).eq("id", persona_id).execute()
+        r = _sb(usuario).rpc("actualizar_cedula", {"p_id_alumna": persona_id, "p_cedula": datos["cedula"] or None}).execute().data
+    except Exception:
+        logging.exception("No se pudieron guardar los datos de la persona")
+        r = None
+    if r != "ok":
+        mensaje = MSG_CEDULA_REPETIDA if r == "cedula_repetida" else "No se pudieron guardar todos los datos. Probá de nuevo."
+        return _editar_persona(request, usuario, seccion, _persona_de_empresa(usuario, persona_id) or persona,
+                               errores=[mensaje], status_code=400)
+    return RedirectResponse(url=f"/profesora/{seccion}/{persona_id}?" + urlencode({"ok": 1, "aviso": "Datos guardados."}),
+                            status_code=303)
+
+
+@app.post("/profesora/{seccion}/{persona_id}/roles")
+def persona_roles(seccion: str, persona_id: str, es_admin: str = Form(""), es_profesora: str = Form(""),
+                  es_alumna: str = Form(""), usuario: Usuario = Depends(requiere_admin)):
+    seccion = seccion if seccion in SECCIONES_PERSONAS else "alumnas"
+    persona = _persona_de_empresa(usuario, persona_id)
+    if persona is None:
+        return _volver_seccion(seccion, False, "No encontramos a esa persona en tu empresa.")
+    flags = {"p_es_admin": bool(es_admin), "p_es_profesora": bool(es_profesora), "p_es_alumna": bool(es_alumna)}
+    try:
+        sb = _sb(usuario)
+        r = sb.rpc("asignar_membresia", {"p_id_usuario": persona_id, **flags}).execute().data
+        if r == "ok" and not persona["membresia"]["activa"]:
+            sb.rpc("cambiar_estado_membresia", {"p_id_usuario": persona_id, "p_activa": False}).execute()  # sigue inactiva
+    except Exception:
+        logging.exception("No se pudieron cambiar los roles")
+        r = None
+    mensajes = {"ok": "Roles actualizados.", "sin_rol": "Tiene que tener al menos un rol.",
+                "no_puede_quitarse_admin": "No podés quitarte a vos misma el rol de administradora."}
+    return RedirectResponse(url=f"/profesora/{seccion}/{persona_id}?" + urlencode(
+        {"ok": int(r == "ok"), "aviso": mensajes.get(r, "No se pudieron cambiar los roles.")}), status_code=303)
+
+
+@app.post("/profesora/{seccion}/{persona_id}/estado")
+def persona_estado(seccion: str, persona_id: str, activa: int = Form(...), usuario: Usuario = Depends(requiere_admin)):
+    seccion = seccion if seccion in SECCIONES_PERSONAS else "alumnas"
+    if _persona_de_empresa(usuario, persona_id) is None:
+        return _volver_seccion(seccion, False, "No encontramos a esa persona en tu empresa.")
+    try:
+        r = _sb(usuario).rpc("cambiar_estado_membresia", {"p_id_usuario": persona_id, "p_activa": bool(activa)}).execute().data
+    except Exception:
+        logging.exception("No se pudo cambiar el estado")
+        r = None
+    mensajes = {"ok": "Ahora está activa: puede entrar a tu empresa." if activa else
+                      "Quedó inactiva: ya no puede entrar a tu empresa (sus datos y su historial se conservan).",
+                "no_puede_desactivarse": "No podés desactivar tu propia cuenta."}
+    return RedirectResponse(url=f"/profesora/{seccion}/{persona_id}?" + urlencode(
+        {"ok": int(r == "ok"), "aviso": mensajes.get(r, "No se pudo cambiar el estado.")}), status_code=303)

@@ -92,7 +92,7 @@ P = entrar("profe")
 for url in ["/profesora/horarios", "/profesora/horarios/nuevo", "/profesora/tipos-clase", "/profesora/tipos-clase/nuevo",
             "/profesora/clases", "/profesora/planificacion", f"/profesora/planificacion?modo=puntual&fecha={hoy + timedelta(days=2)}",
             "/profesora/alumnas", "/profesora/alumnas/nueva", "/profesora/estadisticas", "/profesora/resumenes",
-            f"/profesora/resumenes?mes={hoy.month}&anio={hoy.year}", "/perfil", "/api/horario"] + (["/administracion"] if MODO == "nuevo" else []):
+            f"/profesora/resumenes?mes={hoy.month}&anio={hoy.year}", "/perfil", "/api/horario"] + (["/administracion", "/profesora/profesoras", "/profesora/profesoras/nueva"] if MODO == "nuevo" else []):
     visitar(P, "profesora", url)
 t = sql("select id from tipo_clase order by id limit 1")[0]["id"]
 # horarios creados desde la app (prueba la escritura con la sesión de la profesora): todos los días a las 22:00.

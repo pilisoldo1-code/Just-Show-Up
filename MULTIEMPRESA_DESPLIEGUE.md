@@ -90,21 +90,65 @@ deshace. Al final: `python scripts/verificar_despliegue.py "<respaldo etapa A>"`
 
 ## Paso 2 — Merge del PR #27 [autorización]
 
+**HECHO el 31/10 a las 13:58** (`1a7603d`): theta desplegada y verificada.
+
 1. Merge común de `multiempresa` a `main` → theta despliega solo (Vercel, plan gratuito).
 2. Comprobaciones de solo lectura en theta: «Just Show Up» + cuenta de prueba de alumna y de profesora;
    mensaje genérico con un lugar inventado; la profesora entra al «Panel de administración».
 
 ## Paso 3 — Migración 4 [autorización]
 
+**HECHO el 31/10 a las 14:07**: huellas iguales a las esperadas, datos y seguridad verificados.
+
 Aplicarla enseguida. Verificar (solo lectura): las cédulas actuales quedaron en la Empresa 1; una sesión de
 alumna ya no puede leer cédulas directo; Mi perfil y las facturas muestran la cédula a quien corresponde; una
 sesión sin lugar elegido no ve nada.
 
-## Paso 4 — Superadministradora y Empresa 2 [autorización aparte]
+## Paso 4 — Superadministradora y Empresa 2 [autorización aparte] — **PLAN (31/10), no ejecutado**
 
-1. `python scripts/crear_superadmin.py` (Julieta escribe la contraseña en su teclado).
-2. Cuando lo autorice: `python scripts/empresa_demo.py crear` (Pilates Centro con sus cuentas `@demo.invalid`,
-   clases, reservas y asistencias; Mercado Pago apagado). Se borra con `empresa_demo.py borrar`.
+Va **después** de integrar y verificar el PR del panel (`panel-admin-simple`): así Lucía ya ve el inicio con 3
+indicadores y las secciones Alumnas/Profesoras nuevas. Sin costo: unas 7 cuentas nuevas en Supabase Auth (muy
+por debajo del límite gratuito), unas pocas cientos de filas, **ningún mail** (las cuentas nacen confirmadas) y
+**ningún despliegue** de Vercel (los scripts escriben directo en la base desde esta computadora).
+
+**4.0 Antes (local, sin tocar producción)**
+1. Ensayo completo en el Supabase local (Colima): `empresa_demo.py crear` con el `.env` apuntando al local →
+   entrar como Lucía (lugar «Pilates Centro»): 3 indicadores (6 alumnas, 2 profesoras, 4 clases semanales);
+   alumna@prueba.invalid entra a los dos lugares y en cada uno ve solo lo suyo; en Pilates Centro **no aparece
+   «Pagar con Mercado Pago»** (`mp_habilitado = false`, también lo rechaza la base) → `empresa_demo.py borrar`
+   → la base queda igual. Más `python tests/base_local/test_empresa_demo_base.py "<respaldo>"`.
+2. Adaptar `scripts/verificar_despliegue.py` para que acepte una Empresa 2 (hoy exige «una sola empresa» y que
+   todas las filas sean de la Empresa 1): comparar con el respaldo **solo las filas de JSU**.
+3. Respaldo nuevo de producción (solo lectura), como en el Paso 0: `descargar_datos.py "<carpeta nueva>"`.
+
+**4.1 Superadministradora** [autorización]
+- `python scripts/crear_superadmin.py`: Julieta escribe mail (por defecto `superadmin@prueba.invalid`), nombre y
+  contraseña en su teclado (no pasa por el chat). El script verifica que la cuenta no quede en ningún lugar; si
+  quedara, la borra.
+- Verificar: entra por `/admin/login` y solo ve el panel de empresas; con «Just Show Up» en `/login` **no** entra;
+  ninguna otra persona quedó con `es_superadmin`.
+- Vuelta atrás: borrar esa cuenta (Authentication → Users), no tiene datos asociados.
+
+**4.2 Pilates Centro (PIL)** [autorización]
+- `python scripts/empresa_demo.py crear`. Crea: empresa PIL (Mercado Pago apagado); Lucía Bentancor
+  (`admin.pilates@demo.invalid`, administradora y profesora), Carolina Méndez (`profe.pilates@demo.invalid`,
+  profesora), 5 alumnas `*.pilates@demo.invalid` y la membresía de alumna para `alumna@prueba.invalid` (misma
+  cuenta que en JSU); tipos Pilates mat/reformer, 4 horarios, clases de las últimas 3 semanas a la próxima,
+  reservas y asistencias. **Sin facturas ni pagos.** Contraseñas de Lucía, Carolina y Rocío en
+  `.env.cuentas-prueba` (fuera de git).
+- Se niega a correr si PIL o alguna de esas cuentas ya existe.
+
+**4.3 Verificación (solo lectura, en theta)**
+- `verificar_despliegue.py` adaptado: todas las filas de JSU iguales al respaldo.
+- Lucía en Pilates Centro: inicio con 3 indicadores, Alumnas/Profesoras solo de PIL; no ve nada de JSU.
+- Carolina: solo sus horarios y clases; no ve Profesoras, Facturación ni Tipos de clase.
+- `profesora@prueba.invalid` en JSU: los indicadores y listados no cambiaron (no cuenta a nadie de PIL).
+- alumna@prueba.invalid: elige el lugar al entrar; en PIL no tiene botón de Mercado Pago; en JSU sigue igual.
+- Superadministradora: ve las dos empresas en `/admin/empresas`.
+- **No** abrir Facturación de PIL el último día del mes (crearía borradores; no es un error, pero ensucia la demo).
+
+**4.4 Vuelta atrás**: `python scripts/empresa_demo.py borrar` (solo PIL y las cuentas que creó; a
+alumna@prueba.invalid le quita solo la membresía de PIL) y comparar con el respaldo de 4.0.
 
 ## Vuelta atrás (en orden inverso, cada script es todo o nada)
 

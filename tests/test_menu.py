@@ -18,11 +18,9 @@ ALUMNA = Usuario(id="a", mail="alumna@prueba.invalid", nombre="Ana", apellido="P
 
 # PROFESORA (rol «profesora» sin membresías) es administradora y profesora: panel de administración.
 SECCIONES_PROFESORA = [
-    ("/administracion", "Inicio"),
-    ("/profesora/horarios", "Horarios"), ("/profesora/tipos-clase", "Tipos de clase"),
-    ("/profesora/clases", "Asistencias"), ("/profesora/planificacion", "Planificación"),
-    ("/profesora/alumnas", "Personas"), ("/profesora/resumenes", "Facturación"),
-    ("/profesora/estadisticas", "Estadísticas"),
+    ("/administracion", "Inicio"), ("/profesora/horarios", "Horarios"), ("/profesora/tipos-clase", "Tipos de clase"),
+    ("/profesora/planificacion", "Planificación"), ("/profesora/clases", "Asistencias"), ("/profesora/alumnas", "Alumnas"),
+    ("/profesora/profesoras", "Profesoras"), ("/profesora/resumenes", "Facturación"), ("/profesora/estadisticas", "Estadísticas"),
 ]
 SECCIONES_ALUMNA = [
     ("/", "Clases"), ("/mis-inscripciones", "Mis inscripciones"),
@@ -52,7 +50,7 @@ def activos(html):
 
 
 class MenuPrincipal(unittest.TestCase):
-    def test_administradora_tiene_sus_ocho_secciones_en_orden(self):
+    def test_administradora_tiene_sus_nueve_secciones_en_orden(self):
         self.assertEqual(enlaces(bloque(menu_de(PROFESORA, "/profesora/horarios"), "menu-links")), SECCIONES_PROFESORA)
 
     def test_alumna_tiene_sus_cuatro_secciones_en_orden(self):
@@ -170,7 +168,7 @@ class Pantallas(unittest.TestCase):
                     self.assertEqual(enlaces(bloque(r.text, "menu-links")), SECCIONES_ALUMNA)
                     self.assertEqual(activos(r.text), [ruta] if ruta != "/perfil" else [])
 
-    def test_horarios_sin_boton_duplicado_y_tabla_con_scroll(self):
+    def test_horarios_sin_boton_duplicado_y_tabla_en_tarjetas(self):
         self.como(PROFESORA)
         sb = main._sb.return_value
         sb.table.return_value.select.return_value.execute.return_value.data = []
@@ -179,7 +177,8 @@ class Pantallas(unittest.TestCase):
         self.assertNotIn('href="/profesora/tipos-clase"', contenido)
         self.assertIn('href="/profesora/horarios/nuevo">+ Nuevo horario</a>', contenido)
         self.assertIn('href="/profesora/tipos-clase"', bloque(html, "menu-links"))
-        self.assertRegex(contenido, r'<div class="tabla-scroll">\s*<table class="horario-table">')
+        # en celular cada horario pasa a ser una tarjeta (sin desplazamiento horizontal)
+        self.assertRegex(contenido, r'<div class="tabla-scroll">\s*<table class="horario-table tabla-tarjetas">')
 
 
 if __name__ == "__main__":
