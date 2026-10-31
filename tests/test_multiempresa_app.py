@@ -123,11 +123,33 @@ class Permisos(Base):
         self.como(ALUMNA_DOS)
         self.assertTrue(self.get("/administracion").headers["location"].startswith("/?"))
         self.como(ADMIN)
+        self.sb.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = []
         r = self.get("/administracion")
         self.assertEqual(r.status_code, 200)
         self.assertIn("Panel de administración", r.text)
-        for href, *_ in main.SECCIONES_ADMIN:
-            self.assertIn(f'href="{href}"', r.text)
+        self.assertIn("Just Show Up", r.text)
+        for texto in ("Alumnas activas", "Profesoras activas", "Clases semanales activas"):
+            self.assertIn(texto, r.text)
+        for texto in ("Clases hoy", "clases hoy", "Facturas por cobrar", "facturas por cobrar", "panel-seccion"):
+            self.assertNotIn(texto, r.text)  # sin indicadores viejos ni tarjetas que repiten el menú
+
+    def test_indicadores_del_panel(self):
+        membresias = [
+            {"id_usuario": "a1", "es_alumna": True, "es_profesora": False, "activa": True},
+            {"id_usuario": "a2", "es_alumna": True, "es_profesora": False, "activa": False},  # inactiva: no cuenta
+            {"id_usuario": "ap", "es_alumna": True, "es_profesora": True, "activa": True},   # dos roles: una vez en cada número
+            {"id_usuario": "ad", "es_alumna": False, "es_profesora": True, "activa": True},  # administradora y profesora
+            {"id_usuario": "ad2", "es_alumna": False, "es_profesora": False, "activa": True},  # solo administradora
+        ]
+        horarios = [{"id": 1, "activo": True}, {"id": 2, "activo": True}, {"id": 3, "activo": False}]
+        self.assertEqual(main.indicadores_admin(membresias, horarios), {"alumnas": 2, "profesoras": 2, "clases_semanales": 2})
+        self.assertEqual(main.indicadores_admin([], []), {"alumnas": 0, "profesoras": 0, "clases_semanales": 0})
+
+    def test_indicadores_filtran_por_la_empresa_activa(self):
+        self.como(ADMIN)
+        self.get("/administracion")
+        filtros = [c.args for c in self.sb.table.return_value.select.return_value.eq.call_args_list]
+        self.assertIn(("id_empresa", ADMIN.empresa_id), filtros)
 
     def test_roles_combinados(self):
         self.sb.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = []

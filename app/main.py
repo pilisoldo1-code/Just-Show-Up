@@ -1598,35 +1598,30 @@ def _asignar_administradora(request: Request, usuario: Usuario, empresa_id: int,
 
 # ---------- multiempresa: panel de la administradora ----------
 
-SECCIONES_ADMIN = [
-    ("/profesora/alumnas", "Personas", "Alumnas y profesoras: altas, roles, cédula y contraseñas."),
-    ("/profesora/tipos-clase", "Tipos de clase", "Nombre, duración, precio y cupo de cada clase."),
-    ("/profesora/horarios", "Horarios", "Horarios fijos de cada profesora."),
-    ("/profesora/planificacion", "Planificación", "Licencias, vacaciones y clases puntuales canceladas."),
-    ("/profesora/clases", "Asistencias", "Quién reservó cada clase y presente / ausente."),
-    ("/profesora/resumenes", "Facturación y pagos", "Facturas mensuales, ajustes y cobros."),
-    ("/profesora/estadisticas", "Estadísticas", "Asistencia de toda la empresa."),
-]
+def indicadores_admin(membresias: list[dict], horarios: list[dict]) -> dict:
+    """Los tres números del inicio: personas con membresía ACTIVA (cada persona una vez, aunque tenga varios
+    roles) y horarios semanales activos (no clases históricas ni futuras)."""
+    activas = [m for m in membresias if m.get("activa", True)]
+    return {
+        "alumnas": len({m["id_usuario"] for m in activas if m["es_alumna"]}),
+        "profesoras": len({m["id_usuario"] for m in activas if m["es_profesora"]}),
+        "clases_semanales": len({h["id"] for h in horarios if h.get("activo")}),
+    }
 
 
 def _resumen_admin(usuario: Usuario) -> dict:
     sb = _sb(usuario)
-    resumen = {"profesoras": 0, "alumnas": 0, "clases_hoy": 0, "facturas_pendientes": 0}
     try:
-        miembros = (sb.table("membresia").select("es_admin, es_profesora, es_alumna")
-                    .eq("id_empresa", usuario.empresa_id).eq("activa", True).execute().data)
-        resumen["profesoras"] = sum(1 for m in miembros if m["es_profesora"])
-        resumen["alumnas"] = sum(1 for m in miembros if m["es_alumna"])
-        resumen["clases_hoy"] = len(sb.table("clase").select("id").eq("fecha", clases.ahora().date().isoformat())
-                                    .eq("estado", "programada").execute().data)
-        resumen["facturas_pendientes"] = len(sb.table("resumen_mensual").select("id").eq("estado_factura", "confirmada")
-                                             .eq("estado_pago", "pendiente").execute().data)
+        membresias = (sb.table("membresia").select("id_usuario, es_alumna, es_profesora, activa")
+                      .eq("id_empresa", usuario.empresa_id).eq("activa", True).execute().data)
+        horarios = (sb.table("horario").select("id, activo")
+                    .eq("id_empresa", usuario.empresa_id).eq("activo", True).execute().data)
+        return indicadores_admin(membresias, horarios)
     except Exception:
         logging.exception("No se pudo armar el resumen de la administradora")
-    return resumen
+        return {"alumnas": "—", "profesoras": "—", "clases_semanales": "—"}
 
 
 @app.get("/administracion")
 def administracion(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_admin)):
-    return _render(request, "administracion.html", usuario, resumen=_resumen_admin(usuario), secciones=SECCIONES_ADMIN,
-                   aviso=aviso, aviso_ok=bool(ok))
+    return _render(request, "administracion.html", usuario, resumen=_resumen_admin(usuario), aviso=aviso, aviso_ok=bool(ok))
