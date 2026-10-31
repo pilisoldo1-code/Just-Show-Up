@@ -69,6 +69,9 @@ estos datos: huellas iguales a las esperadas tras cada migración, `scripts/veri
 
 ## Paso 1 — Migraciones 1, 2, 3, 3b y 3c [autorización]
 
+**HECHO el 31/10 entre las 13:47 y las 13:55** (etapa B autorizada): huellas iguales a las esperadas después de
+cada migración, verificación de datos todo OK y theta funcionando. Ver `AVANCE_CRONOGRAMA.md`.
+
 Nombres con los que se aplican (las vueltas atrás los borran del registro por nombre): `multiempresa_1_estructura`,
 `multiempresa_2_permisos`, `multiempresa_3_funciones`, `multiempresa_3b_acceso`, `multiempresa_3c_sesiones`.
 Después de cada una: huellas de estructura (lectura) iguales a `huellas_esperadas.json`; si no, se frena y se

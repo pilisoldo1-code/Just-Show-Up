@@ -179,3 +179,16 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
   conservar ids (columnas de identidad), así que los datos se restauran con un SQL generado; desde una base vacía
   todas las filas quedan iguales, el contador de facturas también, repetirla no duplica y theta funciona (32/32).
 
+### Sáb 31/10 — ETAPA B aplicada en producción (autorizada) ✅
+- 13:47 sin actividad en theta (0 sesiones, 0 tokens renovados, 0 reservas en la última hora); respaldo de las 11:15.
+- Aplicadas con el conector de Supabase, una por vez: `multiempresa_1_estructura`, `multiempresa_2_permisos`,
+  `multiempresa_3_funciones`, `multiempresa_3b_acceso`, `multiempresa_3c_sesiones` (21 migraciones en total).
+- Después de **cada** una: huellas de estructura **idénticas a las esperadas** (11 categorías) y
+  `scripts/verificar_despliegue.py` **TODO OK** (16 tablas intactas fila por fila, todo en la Empresa 1, 16
+  membresías según el rol, profesora en clases y facturas, consultas anidadas de la API sin errores).
+- theta (código actual `c1608d5`) funciona: login de profesora y alumna, 8 pantallas de solo lectura en 200, la
+  alumna ve su factura de demostración. Al final: 146 reservas, 71 asistencias, 1 factura (JSU-2026-09-0001,
+  confirmada/pendiente, $800), 0 pagos, contador sin usar; Mercado Pago igual (prueba, solo
+  `alumna@prueba.invalid`, solo JSU); acceso sin sesión cerrado (amber deja de funcionar: aceptado).
+- Siguiente: etapa C (merge del PR #27) con autorización.
+
