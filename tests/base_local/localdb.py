@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import tempfile
+import uuid
 
 import pgserver
 import psycopg2
@@ -26,6 +27,8 @@ alter default privileges in schema public grant all on sequences to anon, authen
 create schema auth;
 grant usage on schema auth to anon, authenticated, service_role;
 create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}'::jsonb);
+-- una fila por sesión abierta (dispositivo); el token lleva su id en el claim session_id
+create table auth.sessions (id uuid primary key, user_id uuid references auth.users(id) on delete cascade);
 create function auth.uid() returns uuid language sql stable as
   $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 grant execute on function auth.uid() to anon, authenticated, service_role;
@@ -76,13 +79,28 @@ def migraciones():
 
 
 def conectar(uri, uid=None, rol=None):
+    """Conexión como superusuaria, o con `rol` + `uid` como una sesión de esa persona (una sesión fija por
+    persona que ya eligió su empresa por defecto, igual que ClienteFalso sin `sesion`)."""
     c = psycopg2.connect(uri)
     c.autocommit = True
     if rol:
         with c.cursor() as cur:
+            sesion = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sesion:{uid}")) if uid else ""
+            if uid:
+                cur.execute("select to_regclass('auth.sessions') is not null, to_regclass('public.sesion_empresa') is not null")
+                hay_sesiones, hay_sesion_empresa = cur.fetchone()
+                if hay_sesiones:
+                    cur.execute("insert into auth.sessions (id, user_id) select %s, %s where exists "
+                                "(select 1 from auth.users where id = %s) on conflict do nothing", (sesion, uid, uid))
+                if hay_sesion_empresa:
+                    cur.execute("insert into public.sesion_empresa (session_id, id_usuario, id_empresa) "
+                                "select %s, p.id, p.empresa_activa from public.profiles p "
+                                "where p.id = %s and p.empresa_activa is not null on conflict do nothing", (sesion, uid))
             cur.execute(f"set role {rol}")
             if uid:
                 cur.execute("select set_config('request.jwt.claim.sub', %s, false)", (uid,))
+                cur.execute("select set_config('request.jwt.claims', %s, false)",
+                            (json.dumps({"sub": uid, "session_id": sesion, "role": rol}),))
     return c
 
 

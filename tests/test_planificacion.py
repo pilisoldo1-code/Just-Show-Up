@@ -81,7 +81,7 @@ class PantallaPuntual(Base):
             r = self.client.get("/profesora/planificacion?modo=puntual&fecha=2026-06-22")
         self.assertEqual(r.status_code, 200)
         gc.assert_called_once()
-        cp.assert_called_once_with("SB", date(2026, 6, 22))
+        cp.assert_called_once_with("SB", date(2026, 6, 22), None)  # administradora: todas las clases
         self.assertIn("08:00", r.text)
         self.assertIn("Gimnasia", r.text)
 

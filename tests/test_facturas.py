@@ -500,13 +500,22 @@ class Cedula(Base):
 
     ALTA = {"nombre": "Ana", "apellido": "Uno", "mail": "ana@prueba.invalid", "cedula": "1.234.567-2"}
 
+    def setUp(self):
+        super().setUp()
+        p = mock.patch.object(main, "_cuenta_existente", return_value=None)  # mail nuevo
+        p.start()
+        self.addCleanup(p.stop)
+
     def test_alta_con_cedula(self):
+        # multiempresa: la cédula no va al perfil (de toda la cuenta) sino a la empresa de la administradora
         self.como(PROFESORA)
         with mock.patch.object(main, "_cedula_en_uso", return_value=False), \
+                mock.patch.object(main, "_guardar_cedula", return_value="") as gc, \
                 mock.patch.object(main.auth, "crear_cuenta", return_value=("id", "Temporal1")) as cc:
             r = self.post("/profesora/alumnas", self.ALTA)
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(cc.call_args.kwargs["extras"]["cedula"], "12345672")
+        self.assertNotIn("cedula", cc.call_args.kwargs["extras"])
+        gc.assert_called_once_with(PROFESORA, "id", "12345672")
 
     def test_alta_cedula_invalida_o_repetida(self):
         self.como(PROFESORA)
@@ -517,7 +526,7 @@ class Cedula(Base):
         cc.assert_not_called()
         with mock.patch.object(main, "_cedula_en_uso", return_value=True), mock.patch.object(main.auth, "crear_cuenta") as cc:
             r = self.post("/profesora/alumnas", self.ALTA)
-        self.assertIn("Ya existe una alumna con esa cédula", r.text)
+        self.assertIn(main.MSG_CEDULA_REPETIDA, r.text)
         cc.assert_not_called()
 
     def test_alta_sin_cedula_sigue_funcionando(self):
@@ -527,7 +536,7 @@ class Cedula(Base):
             r = self.post("/profesora/alumnas", {**self.ALTA, "cedula": ""})
         self.assertEqual(r.status_code, 200)
         uso.assert_not_called()
-        self.assertEqual(cc.call_args.kwargs["extras"]["cedula"], "")
+        self.assertNotIn("cedula", cc.call_args.kwargs["extras"])
 
     def test_cargar_y_quitar_cedula(self):
         self.como(PROFESORA)

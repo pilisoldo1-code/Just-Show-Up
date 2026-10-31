@@ -60,7 +60,7 @@ VUELTA = os.path.join(localdb.REPO, "supabase/pendientes/vuelta_atras_solo_alumn
 with su.cursor() as cur:
     cur.execute(localdb.SHIM)
     for a in localdb.migraciones():
-        if a not in RESTRICCION:
+        if os.path.basename(a) < os.path.basename(RESTRICCION[0]):  # producción tal como estaba antes
             cur.execute(open(a).read())
     # Igual que en Supabase: la tabla de migraciones aplicadas (la usa la vuelta atrás).
     cur.execute("create schema if not exists supabase_migrations")

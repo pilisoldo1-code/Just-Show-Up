@@ -58,8 +58,9 @@ su = conectar(uri)
 NUEVAS = [a for a in localdb.migraciones() if a.endswith(("_profiles_cedula.sql", "_resumen_mensual_pagos.sql"))]
 assert len(NUEVAS) == 2, NUEVAS
 # Las que dependen de facturación (Mercado Pago) van después de ella.
-DEPENDIENTES = [a for a in localdb.migraciones() if a.endswith(("_mercado_pago_prueba.sql", "_mercado_pago_solo_alumna_demo.sql",
-                                                                  "_vencimiento_facturas.sql"))]
+# Todas las posteriores a facturación (Mercado Pago, vencimiento, multiempresa...) van después de ella.
+_BASE_FACT = os.path.basename([a for a in NUEVAS if a.endswith("_resumen_mensual_pagos.sql")][0])
+DEPENDIENTES = [a for a in localdb.migraciones() if os.path.basename(a) > _BASE_FACT and a not in NUEVAS]
 with su.cursor() as cur:
     cur.execute(localdb.SHIM)
     for a in localdb.migraciones():
@@ -106,13 +107,15 @@ q(su, "insert into asistencia (id_reserva, estado) select id, 'presente' from re
 
 TABLAS = ["horario", "clase", "reserva", "listadeespera", "asistencia", "bloqueo", "tipo_clase"]
 COLS_PERFIL = "id, nombre, apellido, mail, telefono, fecha_nacimiento, fecha_vencimiento_carne_salud, rol"
-antes = {t: huella(su, t) for t in TABLAS}
+COLS = {t: ", ".join(c["column_name"] for c in q(su, """select column_name from information_schema.columns
+          where table_schema = 'public' and table_name = %s order by ordinal_position""", (t,))) for t in TABLAS}
+antes = {t: huella(su, t, COLS[t]) for t in TABLAS}  # columnas anteriores (las posteriores agregan columnas)
 antes["profiles"] = huella(su, "profiles", COLS_PERFIL)
 with su.cursor() as cur:
     for a in NUEVAS + DEPENDIENTES:
         cur.execute(open(a).read())
 ok("las migraciones nuevas (cédula y facturación) se aplican después de todas las demás", True)
-despues = {t: huella(su, t) for t in TABLAS}
+despues = {t: huella(su, t, COLS[t]) for t in TABLAS}
 despues["profiles"] = huella(su, "profiles", COLS_PERFIL)
 ok("las migraciones no modifican ningún dato existente", despues == antes)
 q(su, localdb.RELOJ)
@@ -229,17 +232,21 @@ ok("la base rechaza una cédula inválida aunque se escriba directo", error_de(s
 ok("alumna no puede cargar cédulas", rpc(a, "actualizar_cedula", p_id_alumna=A1, p_cedula="12345672") == "no_autorizada")
 ok("profesora carga una cédula con puntos y guion (se guarda solo con dígitos)",
    rpc(p, "actualizar_cedula", p_id_alumna=A2, p_cedula="1.234.567-2") == "ok"
-   and q(su, "select cedula from profiles where id = %s", (A2,), True)["cedula"] == "12345672")
+   and q(su, "select cedula from membresia where id_usuario = %s", (A2,), True)["cedula"] == "12345672")  # cédula por empresa
 ok("cédula inválida: cedula_invalida", rpc(p, "actualizar_cedula", p_id_alumna=A1, p_cedula="1.234.567-9") == "cedula_invalida")
 ok("cédula repetida entre alumnas: cedula_repetida", rpc(p, "actualizar_cedula", p_id_alumna=A1, p_cedula="12345672") == "cedula_repetida")
-ok("no se le carga cédula a quien no es alumna", rpc(p, "actualizar_cedula", p_id_alumna=prof, p_cedula="98765430") == "no_existe")
+ok("no se le carga cédula a quien no es de la empresa",
+   rpc(p, "actualizar_cedula", p_id_alumna=str(uuid.uuid4()), p_cedula="98765430") == "no_existe")
 ok("la alumna no puede cambiar su cédula directo",
    error_de(conectar(uri, A2, "authenticated"), f"update profiles set cedula = '12345672' where id = '{A2}'") == "42501")
+# desde multiempresa (parte 4) los datos personales se leen con datos_personales(), no directo de profiles
 ok("cada alumna lee solo su fila y su cédula",
-   [x["cedula"] for x in leer(AL(A2, T1), "profiles")] == ["12345672"] and [x["cedula"] for x in leer(AL(A1, T1), "profiles")] == [None])
+   [x["cedula"] for x in rpc(AL(A2, T1), "datos_personales", p_ids=[A1, A2])] == ["12345672"]
+   and [x["cedula"] for x in rpc(AL(A1, T1), "datos_personales", p_ids=[A1, A2])] == [None]
+   and len(AL(A2, T1).table("profiles").select("id, nombre").execute().data) == 1)
 ok("sin sesión no se lee profiles", error_de(ANON, "select cedula from profiles") is not None
    or q(ANON, "select count(*) n from profiles", uno=True)["n"] == 0)
-ok("la profesora lee las cédulas de todas", len(leer(P(T1), "profiles")) == 6)
+ok("la profesora lee las cédulas de todas", len(rpc(P(T1), "datos_personales", p_ids=list(usuarias.values()))) == 6)
 d2 = facturas.factura(P(T1), F2)
 ok("app: el borrador muestra los datos actuales del perfil", d2["cedula_txt"] == "1.234.567-2" and not d2["identificacion_fija"]
    and d2["alumna"] == "Dos Prueba")
@@ -513,7 +520,7 @@ ok("la alumna ve la anulada (ya estaba publicada) pero no el borrador nuevo", vi
 mis = facturas.mis_facturas(a1, A1)
 ok("app: Mis facturas muestra la anulada sin el motivo", mis[0]["estado_factura"] == "anulada" and "se cobró una clase de más" not in str(mis[0]))
 ok("cargar la cédula de A1 después (9.876.543-8)", rpc(p, "actualizar_cedula", p_id_alumna=A1, p_cedula="9.876.543-8") == "ok")
-ced_a1 = q(su, "select cedula from profiles where id = %s", (A1,), True)["cedula"]
+ced_a1 = q(su, "select cedula from membresia where id_usuario = %s", (A1,), True)["cedula"]
 lc = q(su, "select id from resumen_mensual_detalle where id_resumen_mensual = %s and id_clase = %s", (N, c3), True)["id"]
 r = rpc(p, "ajustar_linea", p_id_linea=lc, p_tipo="bonificada", p_importe=None, p_motivo="corrección", p_version=n["version"])
 r = rpc(p, "confirmar_factura", p_id=N, p_version=r["version"])

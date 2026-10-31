@@ -45,6 +45,8 @@ for nombre in ("Profe", "Uno", "Dos", "Tres"):
     usuarias[nombre] = uid
 PROF = usuarias["Profe"]
 q(su, "update profiles set rol = 'profesora' where id = %s", (PROF,))
+# desde multiempresa (parte 4) los roles salen solo de la membresía
+q(su, "update membresia set es_admin = true, es_profesora = true, es_alumna = false where id_usuario = %s", (PROF,))
 A1, A2, A3 = (usuarias[n] for n in ("Uno", "Dos", "Tres"))
 
 GIM = q(su, "select id from tipo_clase where nombre = 'Gimnasia'", uno=True)["id"]

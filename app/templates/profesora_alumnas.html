@@ -16,9 +16,13 @@
 
         <div class="header-row">
             <h1>Alumnas</h1>
-            <a class="btn" href="/profesora/alumnas/nueva">+ Nueva alumna</a>
+            {% if usuario.es_admin %}<a class="btn" href="/profesora/alumnas/nueva">+ Nueva persona</a>{% endif %}
         </div>
-        <p class="subtitle">Dás de alta a tus alumnas y ellas entran con su mail y una contraseña.</p>
+        {% if usuario.es_admin %}
+        <p class="subtitle">Dás de alta a alumnas y profesoras{% if usuario.empresa_nombre %} de {{ usuario.empresa_nombre }}{% endif %}: entran con su mail y una contraseña.</p>
+        {% else %}
+        <p class="subtitle">Contacto de las alumnas y profesoras{% if usuario.empresa_nombre %} de {{ usuario.empresa_nombre }}{% endif %}. Las altas y los cambios los hace la administradora.</p>
+        {% endif %}
 
         <div class="tabla-scroll">
         <table class="horario-table">
@@ -26,11 +30,14 @@
                 <tr>
                     <th>Apellido</th>
                     <th>Nombre</th>
+                    <th>Rol</th>
                     <th>Mail</th>
-                    <th>Cédula</th>
+                    {% if usuario.es_admin %}<th>Cédula</th>{% endif %}
                     <th>Teléfono</th>
+                    {% if usuario.es_admin %}
                     <th>Carné de salud vence</th>
                     <th></th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -38,9 +45,11 @@
                 <tr>
                     <td>{{ a.apellido }}</td>
                     <td>{{ a.nombre }}</td>
+                    <td>{{ (a.roles or ['Alumna'])|join(' · ') }}</td>
                     <td>{{ a.mail }}</td>
-                    <td>{{ a.cedula_txt or 'No registrada' }}</td>
+                    {% if usuario.es_admin %}<td>{{ a.cedula_txt or 'No registrada' }}</td>{% endif %}
                     <td>{{ a.telefono or '—' }}</td>
+                    {% if usuario.es_admin %}
                     <td>{{ a.fecha_vencimiento_carne_salud or '—' }}</td>
                     <td class="acciones">
                         <button type="button" class="link-btn" onclick="document.getElementById('cedula-{{ loop.index }}').showModal()">{{ 'Corregir cédula' if a.cedula else 'Cargar cédula' }}</button>
@@ -65,10 +74,11 @@
                             <button type="submit" class="link-btn">Reiniciar contraseña</button>
                         </form>
                     </td>
+                    {% endif %}
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="7" class="empty">Todavía no hay alumnas cargadas.</td>
+                    <td colspan="{{ 8 if usuario.es_admin else 5 }}" class="empty">Todavía no hay alumnas cargadas.</td>
                 </tr>
                 {% endfor %}
             </tbody>

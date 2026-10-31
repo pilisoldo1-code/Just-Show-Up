@@ -3,5 +3,11 @@
     "api/index.py": {
       "includeFiles": "app/**"
     }
+  },
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true
+    }
   }
 }

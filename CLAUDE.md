@@ -757,6 +757,46 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **Multiempresa, parte 4 (datos personales)**: con la migración 4 aplicada, una sesión NO puede leer `cedula`,
+  `fecha_nacimiento` ni `fecha_vencimiento_carne_salud` de `profiles` (ni `select *`: da 42501). Leerlos siempre con
+  `personas.datos_personales(sb, ids)` / `personas.completar(sb, filas)`, que usan la función de la base y, si todavía
+  no existe, leen la tabla (por eso el código funciona antes y después del merge). Los nombres de las profesoras para
+  las alumnas salen de `personas.nombres_profesoras(sb)`.
+- **Restaurar datos con ids originales no se puede por la API**: las tablas tienen `id` «generated always» y
+  PostgREST no acepta `OVERRIDING SYSTEM VALUE`. `scripts/restaurar_datos.py` recrea las cuentas por la API (mismo
+  id) y genera un SQL para el editor SQL del panel; contra un Supabase local lo ejecuta y compara fila por fila.
+- **Nunca dos claves foráneas entre las mismas tablas** (30/10): la API de Supabase (PostgREST) ve dos relaciones y
+  las consultas anidadas (`reserva(..., asistencia(...))`) fallan con PGRST201 — rompía theta. La integridad de
+  empresa entre fila hija y madre la valida el trigger `_validar_empresa_madre`. El Postgres local de
+  `tests/base_local/` no tiene PostgREST: esto solo se detecta con el Supabase local.
+- **PL/pgSQL en triggers compartidos por varias tablas**: usar `if tg_table_name = ...` por tabla, no una sola
+  expresión `case` (se analiza entera y falla con columnas que la tabla no tiene).
+- **Supabase local real (gratis)**: Colima + Lima + cliente de Docker instalados sin permisos de administradora en
+  `~/.local/bin` y `~/.local/opt/lima` (no hay Homebrew). Para usarlo:
+  `export PATH="$HOME/.local/bin:$HOME/.local/opt/lima/bin:$PATH" DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"`,
+  `colima start` y `supabase start` **dentro de la copia aislada** `~/.local/share/jsu-supabase-local` (copiar ahí
+  `supabase/migrations`; nunca `supabase link` ni conectarlo a producción). Pruebas en `tests/supabase_local/`
+  (se niegan a correr si la URL no es localhost). Apagar con `supabase stop` y `colima stop`.
+- **Inicio de sesión multiempresa**: `/login` pide lugar + mail + contraseña; `entrar_a_empresa()` valida todo y
+  guarda el lugar para ESA sesión (`sesion_empresa`, por el `session_id` del token: cada dispositivo tiene el suyo).
+  El servidor lo lee con `empresa_de_sesion()`; sin lugar, se pide iniciar sesión de nuevo. En las pruebas locales,
+  `ClienteFalso(uri, uid)` comparte una sesión fija por persona; `ClienteFalso(uri, uid, sesion=uuid)` es otro
+  dispositivo. La cédula es de cada empresa (`membresia.cedula`): no escribir cédulas en `profiles`. Nunca mostrar listas de empresas ni mensajes que
+  distingan «lugar inexistente» de «credenciales incorrectas» o «no pertenece». Superadministradora: `/admin/login`.
+- **Los roles salen solo de `membresia`**: el trigger de compatibilidad `_membresia_desde_rol` (parte 1) copiaba
+  `profiles.rol` a la membresía y una profesora creada desde la app pasaba a administradora (30/10). Se corrigió en
+  la app y el trigger se elimina en la parte 4. Las personas pueden editar sus propios `user_metadata` en Supabase
+  Auth: nunca decidir permisos con ellos después del alta. Auditoría: `tests/base_local/test_altas_cuentas_base.py`.
+- **Roles en el servidor**: `usuario.es_profesora` = docente de la empresa activa (administradora o profesora);
+  `usuario.es_admin` = administradora. Lo de plata, altas, cédula y tipos de clase va con `Depends(requiere_admin)`.
+  Un `Usuario` armado a mano sin `con_membresias` toma `rol` de profiles («profesora» = administradora + profesora): así
+  siguen funcionando las pruebas viejas.
+- **`tests/base_local/clientefalso.py`** pasa las listas de `rpc` como literal de arreglo (como PostgREST), así toman el
+  tipo del parámetro (`uuid[]`, `bigint[]`).
+- **`scripts/empresa_demo.py`** crea/borra la Empresa 2 de demostración con la clave de administrador del `.env`:
+  correrlo contra Supabase escribe en producción (necesita autorización). Se prueba con
+  `tests/base_local/test_empresa_demo_base.py "<respaldo>"`.
+
 - **PENDIENTE DE SEGURIDAD — rotar las claves de Supabase antes de cargar
   alumnas reales.** La `service_role` legacy fue pegada en el chat el 2026-10-06:
   tratarla como expuesta. El proyecto ya usa el sistema nuevo de JWT Signing
@@ -875,6 +915,13 @@ Para cada módulo, en este orden:
   próxima factura real habría sido la 0002). Se restauró con `setval('public.factura_numero_seq', 1, false)`
   con autorización. Regla: en producción solo lecturas y funciones que no escriben (`_vencimiento`); todo lo
   que confirma, anula o reemite se prueba en el Postgres local (`tests/base_local/`).
+- **Multiempresa (rama `multiempresa`, en desarrollo)**: diseño en `MULTIEMPRESA_DISENO.md`, avance diario en
+  `AVANCE_CRONOGRAMA.md`. Mientras exista **una sola empresa**, las filas creadas sin sesión (scripts con la
+  clave de administrador) van a ella (`_empresa_unica()` como valor por defecto de `id_empresa`); con dos o más,
+  la empresa es obligatoria. Para agregar columnas a tablas con datos, usar `add column ... default` y no un
+  `UPDATE` (dispara triggers como `_horario_desde_tipo`). Las pruebas de una migración vieja aplican solo las
+  migraciones anteriores a ella; las pruebas con copia de producción cargan `datos.json` del respaldo en el
+  Postgres local (nunca se copia al repo).
 - **Logo de Mercado Pago**: el oficial está en `app/static/img/mercado-pago-logo.svg` (zip
   "Logos Mercado Pago 2025", uso digital RGB, color horizontal), **sin editar** (la guía lo
   prohíbe; una prueba compara su huella). Reglas de la marca: no ponerlo sobre celeste/azul de

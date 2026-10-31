@@ -24,6 +24,11 @@ ALFABETO_TEMPORAL = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
 MSG_CONEXION = "No pudimos conectarnos con el servidor. Revisá tu conexión y probá de nuevo."
 MSG_GENERICO = "No pudimos completar la operación. Probá de nuevo en unos minutos."
 MSG_SESION_VENCIDA = "Tu sesión venció. Iniciá sesión de nuevo."
+# Mismo mensaje para lugar inexistente o desactivado, mail o contraseña incorrectos y persona que no es del lugar.
+MSG_INGRESO = "No pudimos iniciar sesión con esos datos. Revisá el nombre del lugar, tu mail y tu contraseña."
+MSG_INGRESO_ADMIN = "No pudimos iniciar sesión con esos datos. Revisá tu mail y tu contraseña."
+MSG_DEMASIADOS_INTENTOS = "Hiciste demasiados intentos. Esperá unos minutos y probá de nuevo."
+MSG_REINGRESAR = "Volvé a iniciar sesión escribiendo el nombre de tu lugar."
 MSG_LINK_INVALIDO = "El link para restablecer la contraseña venció o ya se usó. Pedí uno nuevo."
 
 # Solo a estos sitios puede apuntar el link del mail: armarlo con cualquier Host
@@ -46,16 +51,50 @@ class Redirigir(Exception):
 
 @dataclass
 class Usuario:
+    """Persona con sesión. Los roles son los de su empresa activa (multiempresa); la base vuelve a
+    comprobar todo. `rol` es el de profiles (compatibilidad): sin datos de membresía, «profesora» se
+    toma como administradora y profesora, y «alumna» como alumna (así se arman en las pruebas)."""
     id: str
     mail: str
     nombre: str
     apellido: str
     rol: str
     token: str = ""
+    es_admin: bool = False
+    es_docente: bool = False
+    es_alumna: bool = False
+    es_superadmin: bool = False
+    empresa_id: Optional[int] = None
+    empresa_nombre: str = ""
+    empresa_codigo: str = ""
+    con_membresias: bool = False
+
+    def __post_init__(self):
+        if not self.con_membresias and not self.es_superadmin:
+            if self.rol == "profesora":
+                self.es_admin = self.es_docente = True
+            elif self.rol == "alumna":
+                self.es_alumna = True
 
     @property
     def es_profesora(self) -> bool:
-        return self.rol == "profesora"
+        """Docente (administradora o profesora) de la empresa activa: entra a la parte de profesora."""
+        return self.es_docente
+
+    @property
+    def sin_empresa(self) -> bool:
+        return self.con_membresias and not self.es_superadmin and self.empresa_id is None
+
+    @property
+    def inicio(self) -> str:
+        """Pantalla de inicio según los roles en la empresa activa: administradora > profesora > alumna."""
+        if self.es_superadmin:
+            return "/admin/empresas"
+        if self.es_admin:
+            return "/administracion"
+        if self.es_docente:
+            return "/profesora/horarios"
+        return "/"
 
 
 # ---------- clientes de Supabase ----------
@@ -95,7 +134,7 @@ def traducir_error(error: Exception) -> str:
         if codigo == "email_not_confirmed":
             return "Tu cuenta todavía no está confirmada."
         if codigo == "over_request_rate_limit" or getattr(error, "status", None) == 429:
-            return "Hiciste demasiados intentos. Esperá unos minutos y probá de nuevo."
+            return MSG_DEMASIADOS_INTENTOS
         if codigo == "same_password" or "different from the old" in texto:
             return "La contraseña nueva tiene que ser distinta a la anterior."
         if codigo == "validation_failed" or "valid email" in texto:
@@ -128,6 +167,22 @@ def iniciar_sesion(mail: str, contrasena: str) -> tuple[str, str]:
     return sesion.access_token, sesion.refresh_token
 
 
+def entrar_a_empresa(acceso: str, lugar: str) -> Optional[int]:
+    """Valida en la base que el lugar exista, esté activo y la persona tenga un rol ahí. None si algo falla."""
+    r = cliente_con_token(acceso).rpc("entrar_a_empresa", {"p_lugar": lugar}).execute().data or {}
+    return r.get("id") if r.get("resultado") == "ok" else None
+
+
+def salir_de_empresa(acceso: Optional[str]) -> None:
+    """Olvida el lugar de esta sesión (al cerrar sesión)."""
+    if not acceso:
+        return
+    try:
+        cliente_con_token(acceso).rpc("salir_de_empresa", {}).execute()
+    except Exception:
+        logging.warning("No se pudo olvidar el lugar de la sesión (se cierra igual).")
+
+
 def usuario_de_acceso(acceso: str) -> Optional[Usuario]:
     cliente = cliente_nuevo()
     try:
@@ -138,16 +193,35 @@ def usuario_de_acceso(acceso: str) -> Optional[Usuario]:
         return None
     cliente.postgrest.auth(acceso)
     filas = (
-        cliente.table("profiles").select("nombre, apellido, mail, rol")
+        cliente.table("profiles").select("nombre, apellido, mail, rol, es_superadmin, empresa_activa")
         .eq("id", respuesta.user.id).execute().data
     )
     if not filas:
         return None
     p = filas[0]
-    return Usuario(
-        id=respuesta.user.id, mail=p["mail"], nombre=p["nombre"],
-        apellido=p["apellido"], rol=p["rol"], token=acceso,
+    usuario = Usuario(
+        id=respuesta.user.id, mail=p["mail"], nombre=p["nombre"], apellido=p["apellido"], rol=p["rol"],
+        token=acceso, es_superadmin=bool(p.get("es_superadmin")), con_membresias=True,
     )
+    if usuario.es_superadmin:
+        return usuario
+    # La empresa es la que eligió ESTA sesión al iniciar sesión (la base la guarda por session_id del token
+    # y valida membresía y empresa activas): otra sesión de la misma cuenta en otro dispositivo no la cambia.
+    empresa_id = cliente.rpc("empresa_de_sesion", {}).execute().data
+    if not empresa_id:
+        return usuario  # sin lugar en esta sesión: tiene que volver a iniciar sesión con el nombre del lugar
+    membresia = (cliente.table("membresia").select("es_admin, es_profesora, es_alumna")
+                 .eq("id_usuario", usuario.id).eq("id_empresa", empresa_id).eq("activa", True).execute().data)
+    empresa = (cliente.table("empresa").select("id, nombre, codigo, activa").eq("id", empresa_id).execute().data
+               if membresia else [])
+    if not empresa or not empresa[0]["activa"]:
+        return usuario
+    m, e = membresia[0], empresa[0]
+    usuario.empresa_id, usuario.empresa_nombre, usuario.empresa_codigo = e["id"], e["nombre"], e["codigo"]
+    usuario.es_admin = bool(m["es_admin"])
+    usuario.es_docente = bool(m["es_admin"] or m["es_profesora"])
+    usuario.es_alumna = bool(m["es_alumna"])
+    return usuario
 
 
 def _validar(request: Request) -> Optional[Usuario]:
@@ -208,22 +282,56 @@ def _exigir_sesion(request: Request) -> Usuario:
 
 # ---------- dependencias de FastAPI ----------
 
+def destino(usuario: Usuario) -> str:
+    """Pantalla de inicio según el rol en la empresa activa (sin empresa: volver a iniciar sesión)."""
+    return url_login(MSG_REINGRESAR) if usuario.sin_empresa else usuario.inicio
+
+
+def _con_empresa(request: Request) -> Usuario:
+    usuario = _exigir_sesion(request)
+    if usuario.es_superadmin:
+        raise Redirigir(usuario.inicio)
+    if usuario.sin_empresa:
+        cerrar_sesion(request.cookies.get(COOKIE_ACCESO))
+        raise Redirigir(url_login(MSG_REINGRESAR), borrar_cookies=True)
+    return usuario
+
+
 def requiere_login(request: Request) -> Usuario:
     return _exigir_sesion(request)
 
 
 def requiere_alumna(request: Request) -> Usuario:
-    usuario = _exigir_sesion(request)
-    if usuario.es_profesora:
-        raise Redirigir("/profesora/horarios")
+    """Alumna de la empresa activa (también una profesora o administradora que además es alumna ahí)."""
+    usuario = _con_empresa(request)
+    if not usuario.es_alumna:
+        raise Redirigir(usuario.inicio)
     return usuario
 
 
 def requiere_profesora(request: Request) -> Usuario:
-    usuario = _exigir_sesion(request)
+    """Administradora o profesora de la empresa activa."""
+    usuario = _con_empresa(request)
     if not usuario.es_profesora:
         logging.warning("Acceso denegado a %s para %s", request.url.path, usuario.id)
         raise Redirigir("/?" + urlencode({"ok": 0, "aviso": "No tenés permiso para entrar a esa sección."}))
+    return usuario
+
+
+def requiere_admin(request: Request) -> Usuario:
+    """Solo la administradora de la empresa activa (facturación, pagos, altas, tipos de clase)."""
+    usuario = requiere_profesora(request)
+    if not usuario.es_admin:
+        logging.warning("Acceso de administradora denegado a %s para %s", request.url.path, usuario.id)
+        raise Redirigir("/profesora/horarios?" + urlencode({"ok": 0, "aviso": "Esa sección es solo para la administradora."}))
+    return usuario
+
+
+def requiere_superadmin(request: Request) -> Usuario:
+    usuario = _exigir_sesion(request)
+    if not usuario.es_superadmin:
+        logging.warning("Acceso de superadministradora denegado a %s para %s", request.url.path, usuario.id)
+        raise Redirigir(destino(usuario))
     return usuario
 
 
@@ -263,24 +371,33 @@ def generar_contrasena_temporal(largo: int = 10) -> str:
 
 def crear_cuenta(
     mail: str, nombre: str, apellido: str, rol: str = "alumna", extras: Optional[dict] = None,
-    contrasena: Optional[str] = None,
+    contrasena: Optional[str] = None, id_empresa: Optional[int] = None, rol_empresa: Optional[str] = None,
+    sin_empresa: bool = False,
 ) -> tuple[str, str]:
+    """Crea la cuenta (ya confirmada). Con id_empresa y rol_empresa la base crea la membresía en esa
+    empresa (alumna, profesora, admin o admin_profesora); sin_empresa=True es para la superadministradora."""
     contrasena = contrasena or generar_contrasena_temporal()
     admin = cliente_admin()
+    meta = {"nombre": nombre, "apellido": apellido}
+    if id_empresa is not None:
+        meta.update({"id_empresa": id_empresa, "rol_empresa": rol_empresa or "alumna"})
+    elif sin_empresa:
+        meta["sin_empresa"] = True
     try:
         creada = admin.auth.admin.create_user(
             {
                 "email": mail,
                 "password": contrasena,
                 "email_confirm": True,
-                "user_metadata": {"nombre": nombre, "apellido": apellido},
+                "user_metadata": meta,
             }
         )
     except (AuthError, httpx.HTTPError) as e:
         raise ErrorAuth(traducir_error(e)) from e
 
     cambios = {k: v for k, v in (extras or {}).items() if v}
-    if rol != "alumna":
+    if rol != "alumna" and id_empresa is None:
+        # solo el alta vieja (sin empresa) usa profiles.rol; con empresa, el rol es el de la membresía
         cambios["rol"] = rol
     if cambios:
         try:

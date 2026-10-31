@@ -8,7 +8,7 @@
         {% for l in f.lineas %}
         <tr>
             <td>{{ l.fecha_txt }}<br /><span class="nota-chica">{{ l.hora }}</span></td>
-            <td>{{ l.tipo }}</td>
+            <td>{{ l.tipo }}{% if l.profesora %}<br /><span class="nota-chica">{{ l.profesora }}</span>{% endif %}</td>
             <td class="num">${{ l.precio_original }}</td>
             <td class="num">{% if l.ajuste_tipo != 'ninguno' %}{{ l.ajuste_txt }}{% if l.ajuste_tipo == 'importe' %} −${{ -l.ajuste }}{% endif %}{% if interno and l.motivo %}<br /><span class="nota-chica">«{{ l.motivo }}»</span>{% endif %}{% else %}—{% endif %}</td>
             <td class="num">${{ l.importe_final }}</td>

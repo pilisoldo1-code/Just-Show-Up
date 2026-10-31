@@ -24,11 +24,13 @@
         </div>
 
         <div class="aviso aviso-error">
-            Guardá esta contraseña ahora: <strong>no se vuelve a mostrar</strong>. Pasásela a la alumna;
+            Guardá esta contraseña ahora: <strong>no se vuelve a mostrar</strong>. Pasásela a esa persona;
             puede cambiarla desde "Cambiar contraseña" apenas entre.
         </div>
 
-        <a class="btn" href="/profesora/alumnas">Volver a alumnas</a>
+        {% if nota %}<div class="aviso aviso-error">{{ nota }}</div>{% endif %}
+        {% set v = volver or ("/profesora/alumnas", "Volver a alumnas") %}
+        <a class="btn" href="{{ v[0] }}">{{ v[1] }}</a>
     </main>
 </body>
 </html>

@@ -29,7 +29,7 @@
             <a class="card card-link {{ 'card-pasada' if c.ventana == 'cerrada' else '' }} {{ 'card-inscripta' if c.ventana == 'abierta' else '' }}"
                href="/profesora/clases/{{ c.id }}">
                 <div class="card-hora">{{ c.hora }}</div>
-                {% if c.tipo %}<div class="card-tipo"><span>{{ c.tipo }}</span></div>{% endif %}
+                {% if c.tipo %}<div class="card-tipo"><span>{{ c.tipo }}{% if c.profesora and usuario.es_admin %} · {{ c.profesora }}{% endif %}</span></div>{% endif %}
                 <ul class="card-datos">
                     <li>Duración: {{ c.duracion }} min</li>
                     <li>Reservas: {{ c.reservadas }} de {{ c.cupo_max }}</li>

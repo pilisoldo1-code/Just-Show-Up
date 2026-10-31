@@ -59,7 +59,8 @@ VUELTA = os.path.join(localdb.REPO, "supabase/pendientes/vuelta_atras_vencimient
 with su.cursor() as cur:
     cur.execute(localdb.SHIM)
     for a in localdb.migraciones():
-        if a not in NUEVA:
+        # solo las anteriores: esta prueba reconstruye producción tal como estaba antes del vencimiento
+        if os.path.basename(a) < os.path.basename(NUEVA[0]):
             cur.execute(open(a).read())
     cur.execute("create schema if not exists supabase_migrations")
     cur.execute("create table if not exists supabase_migrations.schema_migrations (version text primary key, name text)")
