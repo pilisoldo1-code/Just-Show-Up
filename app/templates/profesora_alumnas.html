@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+    {% from "_correo.html" import correo %}
     {% include "_menu.html" %}
     <main class="ancho">
 
@@ -14,67 +15,77 @@
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
-        <div class="header-row">
+        <div class="seccion-encabezado">
             <h1>{{ textos.titulo }}</h1>
             {% if usuario.es_admin %}<a class="btn" href="/profesora/{{ seccion }}/nueva">{{ textos.nueva }}</a>{% endif %}
         </div>
-        {% if usuario.es_admin %}
-        <p class="subtitle">{{ textos.titulo }} de {{ usuario.empresa_nombre or 'tu empresa' }}. Tocá «Editar» para ver o cambiar sus datos,
-            roles y estado. Una persona con varios roles tiene una sola cuenta y aparece en cada sección.</p>
+        {% if not usuario.es_admin %}
+        <p class="subtitle seccion-descripcion">Contacto de las alumnas de {{ usuario.empresa_nombre or 'tu empresa' }}.</p>
+        {% elif seccion == 'profesoras' %}
+        <p class="subtitle seccion-descripcion">Profesoras y administradoras de {{ usuario.empresa_nombre or 'tu empresa' }}.
+            En «Gestionar» ves todos sus datos; las otras administradoras solo se consultan (sus permisos los gestiona la
+            superadministradora).</p>
         {% else %}
-        <p class="subtitle">Contacto de las alumnas de {{ usuario.empresa_nombre or 'tu empresa' }}. Las altas y los cambios los hace la administradora.</p>
+        <p class="subtitle seccion-descripcion">Alumnas de {{ usuario.empresa_nombre or 'tu empresa' }}. En «Gestionar alumna» ves
+            todos sus datos y podés editarlos.</p>
         {% endif %}
 
-        <div class="tabla-scroll">
-        <table class="horario-table tabla-tarjetas">
+        {% if not alumnas %}
+        <p class="empty personas-vacio">{{ textos.vacia }}</p>
+        {% elif usuario.es_admin %}
+        {# escritorio: tabla corta; celular: tarjetas compactas (todo lo demás está en la ficha de cada persona) #}
+        <table class="personas-tabla">
             <thead>
                 <tr>
                     <th>Apellido</th>
                     <th>Nombre</th>
-                    <th>Mail</th>
-                    <th>Teléfono</th>
-                    {% if usuario.es_admin %}
-                    {% if seccion == 'alumnas' %}<th>Cédula</th><th>Carné de salud vence</th>{% endif %}
-                    <th>Roles</th>
+                    {% if seccion == 'profesoras' %}<th>Rol</th>{% endif %}
                     <th>Estado</th>
-                    <th></th>
-                    {% endif %}
+                    <th><span class="visualmente-oculto">Acción</span></th>
                 </tr>
             </thead>
             <tbody>
                 {% for a in alumnas %}
                 <tr class="{{ '' if a.activa else 'fila-inactiva' }}">
-                    <td data-label="Apellido">{{ a.apellido }}</td>
-                    <td data-label="Nombre">{{ a.nombre }}</td>
-                    <td data-label="Mail">{{ a.mail }}</td>
-                    <td data-label="Teléfono">{{ a.telefono or '—' }}</td>
-                    {% if usuario.es_admin %}
-                    {% if seccion == 'alumnas' %}
-                    <td data-label="Cédula">{{ a.cedula_txt or 'No registrada' }}</td>
-                    <td data-label="Carné vence">{{ a.fecha_vencimiento_carne_salud or '—' }}</td>
-                    {% endif %}
-                    <td data-label="Roles">{{ (a.roles or ['Alumna'])|join(' · ') }}</td>
-                    <td data-label="Estado"><span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span></td>
-                    <td class="acciones">
-                        <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}">Editar</a>
-                        {% if not a.yo %}
-                        <form action="/profesora/alumnas/{{ a.id }}/reiniciar-contrasena" method="post"
-                              onsubmit="return confirm('¿Generar una contraseña nueva para {{ a.nombre }} {{ a.apellido }}? La anterior dejará de funcionar.')">
-                            <input type="hidden" name="desde" value="{{ seccion }}" />
-                            <button type="submit" class="link-btn">Reiniciar contraseña</button>
-                        </form>
-                        {% endif %}
+                    <td>{{ a.apellido }}</td>
+                    <td>{{ a.nombre }}</td>
+                    {% if seccion == 'profesoras' %}<td>{{ (a.roles or ['Profesora'])|join(' · ') }}</td>{% endif %}
+                    <td><span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span></td>
+                    <td class="personas-accion">
+                        <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}">{{ 'Gestionar' if seccion == 'profesoras' else 'Gestionar ' ~ textos.singular }}</a>
                     </td>
-                    {% endif %}
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="{{ 9 if usuario.es_admin else 4 }}" class="empty">{{ textos.vacia }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+        <ul class="personas-lista">
+            {% for a in alumnas %}
+            <li class="persona-fila {{ '' if a.activa else 'persona-inactiva' }}">
+                <strong class="persona-fila-nombre">{{ a.apellido }}, {{ a.nombre }}</strong>
+                <span class="persona-fila-sub">
+                    <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
+                    {% if seccion == 'profesoras' %}<span>{{ (a.roles or ['Profesora'])|join(' · ') }}</span>{% endif %}
+                </span>
+                <a class="btn btn-chico persona-fila-boton" href="/profesora/{{ seccion }}/{{ a.id }}"
+                   aria-label="Gestionar a {{ a.nombre }} {{ a.apellido }}">Gestionar</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        {# profesora: solo el contacto #}
+        <div class="personas-grid">
+            {% for a in alumnas %}
+            <article class="persona-card">
+                <h2 class="persona-card-nombre">{{ a.nombre }} {{ a.apellido }}</h2>
+                <div class="persona-contacto">
+                    {{ correo(a.mail, a.nombre ~ ' ' ~ a.apellido) }}
+                    <span class="persona-telefono">{{ a.telefono or 'Sin teléfono' }}</span>
+                </div>
+            </article>
+            {% endfor %}
         </div>
+        {% endif %}
     </main>
+    {% include "_correo_script.html" %}
 </body>
 </html>

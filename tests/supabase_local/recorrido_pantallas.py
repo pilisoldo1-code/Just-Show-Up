@@ -58,7 +58,7 @@ admin = create_client(URL, os.environ["SUPABASE_SERVICE_KEY"])
 CLAVE = "Recorrido-" + uuid.uuid4().hex[:8]
 sufijo = uuid.uuid4().hex[:6]
 cuentas = {}
-for quien, rol_empresa in (("profe", "admin_profesora"), ("alumna", "alumna")):
+for quien, rol_empresa in (("profe", "admin"), ("alumna", "alumna")):
     mail = f"{quien}.{sufijo}@prueba.invalid"
     meta = {"nombre": quien.title(), "apellido": "Recorrido"}
     if MODO == "nuevo":

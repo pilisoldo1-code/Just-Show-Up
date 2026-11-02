@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Just Show Up - Panel de horarios</title>
+    <title>Just Show Up - {{ 'Horarios' if usuario.es_admin else 'Mis horarios' }}</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -12,8 +12,8 @@
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
-        <div class="header-row encabezado-seccion">
-            <h1>Horarios fijos</h1>
+        <div class="seccion-encabezado">
+            <h1>{{ 'Horarios fijos' if usuario.es_admin else 'Mis horarios' }}</h1>
             <div class="header-acciones">
                 <a class="btn" href="/profesora/horarios/nuevo">+ Nuevo horario</a>
             </div>

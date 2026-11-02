@@ -757,11 +757,28 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **Tres roles por empresa (rama `tres-roles`, PR #29; migración `20261101000000_tres_roles.sql` APLICADA en Supabase el 02/11
+  como `20261102173826 tres_roles`, con respaldo previo `2026-11-02 antes de tres roles`; estructura igual a la esperada y
+  datos iguales al respaldo; theta con el código anterior verificada 37/37)**:
+  cada membresía tiene EXACTAMENTE un rol (`membresia_un_solo_rol`: alumna, profesora o administradora). La
+  administradora tiene los permisos docentes por `es_docente()` (no lleva `es_profesora`) y puede tener cero clases.
+  Solo la superadministradora da o quita el rol de administradora (`asignar_administradora`, `quitar_administradora`
+  → pasa a profesora o queda inactiva; nunca deja una empresa sin administradora activa). Una administradora común no
+  modifica a otra (ni datos, ni estado, ni contraseña: `puede_gestionar_persona`, `editar_datos_persona`). Cambio
+  alumna ↔ profesora solo sin pendientes (`_pendientes_alumna` / `_pendientes_docente`; la pantalla los pregunta con
+  `pendientes_cambio_rol`). **Orden de despliegue: primero la migración (el código de theta funciona con ella, probado
+  35/35) y después el merge** (el código nuevo usa funciones que crea la migración). Vuelta atrás exacta:
+  `supabase/pendientes/vuelta_atras_tres_roles.sql` (usa `_tres_roles_respaldo`). Pruebas:
+  `tests/base_local/test_tres_roles_base.py "<respaldo>"` (83). Hoy no existe forma de reasignar un horario o una clase
+  a otra profesora: las «clases futuras» que bloquean un cambio se resuelven cancelándolas en Planificación.
 - **Multiempresa, parte 4 (datos personales)**: con la migración 4 aplicada, una sesión NO puede leer `cedula`,
   `fecha_nacimiento` ni `fecha_vencimiento_carne_salud` de `profiles` (ni `select *`: da 42501). Leerlos siempre con
   `personas.datos_personales(sb, ids)` / `personas.completar(sb, filas)`, que usan la función de la base y, si todavía
   no existe, leen la tabla (por eso el código funciona antes y después del merge). Los nombres de las profesoras para
   las alumnas salen de `personas.nombres_profesoras(sb)`.
+- **Respaldos con multiempresa**: `descargar_datos.py` del respaldo del 02/11 incluye `empresa` y `membresia`, y
+  `scripts/restaurar_datos.py` carga `empresa` antes que los perfiles y `membresia` por (persona, empresa) sin su id:
+  al recrear una cuenta, el trigger de alta ya le crea una membresía. `sesion_empresa` no se respalda.
 - **Restaurar datos con ids originales no se puede por la API**: las tablas tienen `id` «generated always» y
   PostgREST no acepta `OVERRIDING SYSTEM VALUE`. `scripts/restaurar_datos.py` recrea las cuentas por la API (mismo
   id) y genera un SQL para el editor SQL del panel; contra un Supabase local lo ejecuta y compara fila por fila.
@@ -1051,9 +1068,14 @@ Para cada módulo, en este orden:
 - **Tablas en celular**: las tablas de listados con acciones llevan la clase `tabla-tarjetas` y cada `<td>` un
   `data-label` (el nombre de la columna): hasta 720 px cada fila pasa a ser una tarjeta, sin desplazamiento
   horizontal (hoy: Alumnas, Profesoras y Horarios). La celda de botones lleva `class="acciones"`.
+- **Fichas de personas y correos**: Alumnas y Profesoras se muestran en fichas (`.personas-grid` / `.persona-card`,
+  mismo estilo que Empresas). Los correos van con la macro `correo(mail, quien)` de `_correo.html` (una línea, «…» si no
+  entra y al tocarlo se despliega) más `{% include "_correo_script.html" %}` una vez por página; dentro de una grilla,
+  la columna que lo contiene necesita `minmax(0, 1fr)` para que se recorte. Encabezado de pantalla: `.seccion-encabezado`.
 - **Navegación de semanas** (`.semana-nav` en la grilla): una sola fila; hasta 600 px solo flechas de 44 px y el
-  rango abreviado (`_formato_rango_corto`, «26 oct – 1 nov»). Encabezados con botón al lado del título:
-  `header-row encabezado-seccion` (separa la primera tarjeta y en celular pone el botón debajo).
+  rango abreviado (`_formato_rango_corto`, «26 oct – 1 nov»). Encabezados con botón al lado del título (Horarios,
+  Tipos de clase, Alumnas, Profesoras, Empresas): `.seccion-encabezado`, título a la izquierda y botón a la derecha
+  en la misma fila también en celular (hasta 400 px se achican título y botón).
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
 - Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).

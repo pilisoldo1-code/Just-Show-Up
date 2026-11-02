@@ -977,8 +977,9 @@ COLUMNAS_ALUMNA = "id, nombre, apellido, mail, telefono"  # + datos personales (
 
 # Lo que ve una profesora que no es administradora: nombre y contacto, sin cédula ni otros datos personales.
 COLUMNAS_PERSONA_PROFESORA = "id, nombre, apellido, mail, telefono"
-ROLES_PERSONA = {"alumna": "Alumna", "profesora": "Profesora", "admin_profesora": "Administradora y profesora",
-                 "admin": "Administradora"}
+# Un solo rol por empresa. La administradora común da de alta y gestiona alumnas y profesoras; a las administradoras
+# las designa y las quita solo la superadministradora.
+ROLES_PERSONA = {"alumna": "Alumna", "profesora": "Profesora"}
 
 
 SECCIONES_PERSONAS = {
@@ -986,11 +987,17 @@ SECCIONES_PERSONAS = {
     "profesoras": {"titulo": "Profesoras", "singular": "profesora", "nueva": "+ Nueva profesora",
                    "vacia": "Todavía no hay profesoras cargadas."},
 }
-ROLES_POR_SECCION = {
-    "alumnas": {"alumna": "Alumna"},
-    "profesoras": {"profesora": "Profesora", "admin_profesora": "Profesora y administradora",
-                   "admin": "Administradora (sin dar clases)"},
+ROLES_POR_SECCION = {"alumnas": {"alumna": "Alumna"}, "profesoras": {"profesora": "Profesora"}}
+# Lo que impide cambiar de rol (códigos de la base: _pendientes_alumna y _pendientes_docente)
+PENDIENTES = {
+    "reservas": "tiene reservas confirmadas de este mes o próximas (se facturan como alumna)",
+    "lista_espera": "está en lista de espera de una clase próxima",
+    "borradores": "tiene una factura en borrador",
+    "facturas_pendientes": "tiene facturas confirmadas sin pagar",
+    "horarios": "tiene horarios activos a su nombre (desactivalos en Horarios)",
+    "clases_futuras": "tiene clases próximas programadas a su nombre (cancelalas en Planificación o esperá a que pasen)",
 }
+MSG_OTRA_ADMIN = "Es administradora de tu empresa: sus datos, su estado y su rol solo los cambia la administración general."
 
 
 def _seccion(rol: str) -> str:
@@ -1003,13 +1010,26 @@ def _volver_seccion(seccion: str, ok: bool, aviso: str) -> RedirectResponse:
 
 
 def _roles_txt(m: dict) -> list[str]:
-    return [t for t, si in (("Administradora", m["es_admin"]), ("Profesora", m["es_profesora"]), ("Alumna", m["es_alumna"])) if si]
+    return ["Administradora" if m["es_admin"] else "Profesora" if m["es_profesora"] else "Alumna"]
+
+
+def _texto_pendientes(codigos) -> str:
+    return "Antes hay que resolver que " + "; que ".join(PENDIENTES.get(c, c) for c in codigos) + "."
+
+
+def _mensaje_rol(r) -> str | None:
+    """Mensaje para un resultado de la base que impide un cambio de rol (None si no es uno de esos)."""
+    if isinstance(r, str) and r.startswith("pendientes:"):
+        return _texto_pendientes(r.split(":", 1)[1].split(","))
+    return {"es_administradora": MSG_OTRA_ADMIN,
+            "solo_superadmin": "Solo la administración general de Just Show Up designa administradoras.",
+            "un_solo_rol": "Cada persona tiene un solo rol en tu empresa.", "sin_rol": "Elegí un rol."}.get(r)
 
 
 def _personas_empresa(usuario: Usuario, seccion: str = "alumnas") -> list[dict]:
-    """Personas de la empresa activa de una sección: «alumnas» (rol alumna) o «profesoras» (profesoras y
-    administradoras). Una sola cuenta por persona: con varios roles aparece en las dos secciones. La
-    administradora ve también las membresías inactivas; una profesora, solo el contacto de las activas."""
+    """Personas de la empresa activa de una sección: «alumnas» o «profesoras» (profesoras y administradoras; cada
+    persona tiene un solo rol en la empresa). La administradora ve también las membresías inactivas; una profesora,
+    solo el contacto de las activas."""
     sb = _sb(usuario)
     if usuario.empresa_id is None:  # sesión armada sin membresías (pruebas): alumnas como antes
         filas = sb.table("profiles").select(COLUMNAS_ALUMNA if usuario.es_admin else COLUMNAS_PERSONA_PROFESORA) \
@@ -1025,14 +1045,14 @@ def _personas_empresa(usuario: Usuario, seccion: str = "alumnas") -> list[dict]:
     membresias = {m["id_usuario"]: m for m in consulta.execute().data if en_seccion(m)}
     if not membresias:
         return []
+    # la lista muestra solo nombre, rol y estado (y contacto, a una profesora): los datos personales van en la ficha
     filas = [f for f in sb.table("profiles").select(COLUMNAS_ALUMNA if usuario.es_admin else COLUMNAS_PERSONA_PROFESORA)
              .in_("id", list(membresias)).execute().data if f["id"] in membresias]
-    if usuario.es_admin:
-        personas.completar(sb, filas)
     for f in filas:
         m = membresias[f["id"]]
         f["roles"] = _roles_txt(m)
         f["es_alumna"], f["activa"], f["yo"] = m["es_alumna"], m.get("activa", True), f["id"] == usuario.id
+        f["es_admin"] = bool(m.get("es_admin"))
     return sorted(filas, key=lambda f: (not f["activa"], f["apellido"].lower(), f["nombre"].lower()))
 
 
@@ -1103,9 +1123,9 @@ def alumna_crear(
         "fecha_nacimiento": fecha_nacimiento, "fecha_vencimiento_carne_salud": fecha_vencimiento_carne_salud,
         "cedula": cedula,
     }
-    rol = rol if rol in ROLES_PERSONA else "alumna"
-    flags = {"p_es_admin": rol in ("admin", "admin_profesora"), "p_es_profesora": rol in ("profesora", "admin_profesora"),
-             "p_es_alumna": rol == "alumna"}
+    if rol not in ROLES_PERSONA:  # nunca administradora desde acá (también lo rechaza la base)
+        return _volver_seccion(_seccion(rol), False, "Solo la administración general de Just Show Up designa administradoras.")
+    flags = {"p_es_admin": False, "p_es_profesora": rol == "profesora", "p_es_alumna": rol == "alumna"}
     datos, errores = validaciones.validar_alumna(ingresados, clases.ahora().date())
     existente = None
     if not errores and datos["cedula"] and _cedula_en_uso(usuario, datos["cedula"]):
@@ -1122,12 +1142,17 @@ def alumna_crear(
             errores = ["Ese mail pertenece a la administración general de Just Show Up."]
         else:
             try:
-                # si ya es de esta empresa, el rol nuevo se SUMA a los que tiene (no los reemplaza)
+                # si ya es de esta empresa: un solo rol, así que el alta no lo cambia (se cambia desde «Editar»)
                 actual = (_sb(usuario).table("membresia").select("es_admin, es_profesora, es_alumna")
                           .eq("id_usuario", existente["id"]).eq("id_empresa", usuario.empresa_id).execute().data)
-                if actual:
-                    flags = {k: v or bool(actual[0][k[2:]]) for k, v in flags.items()}
-                r = _sb(usuario).rpc("asignar_membresia", {"p_id_usuario": existente["id"], **flags}).execute().data
+                if actual and _roles_txt(actual[0]) != [ROLES_PERSONA[rol]]:
+                    r = "otro_rol"
+                    errores = [f"{existente['nombre']} {existente['apellido']} ya es {_roles_txt(actual[0])[0].lower()} de "
+                               f"{usuario.empresa_nombre or 'tu empresa'}. Cada persona tiene un solo rol: "
+                               + ("solo la administración general puede cambiarlo." if actual[0]["es_admin"] else
+                                  "para cambiarlo, buscala en la lista y tocá «Editar».")]
+                else:
+                    r = _sb(usuario).rpc("asignar_membresia", {"p_id_usuario": existente["id"], **flags}).execute().data
             except Exception:
                 logging.exception("No se pudo agregar la cuenta existente")
                 r = None
@@ -1136,8 +1161,10 @@ def alumna_crear(
                 return _volver_seccion(_seccion(rol), not nota,
                                        f"{existente['nombre']} {existente['apellido']} ya tenía cuenta en Just Show Up: "
                                        f"quedó como {ROLES_PERSONA[rol].lower()} en {usuario.empresa_nombre or 'tu empresa'} "
-                                       "con su misma contraseña (conserva sus otros roles)." + (f" {nota}" if nota else ""))
-            errores = ["No se pudo agregar a esa persona. Probá de nuevo."]
+                                       "con su misma contraseña (lo que tenga en otros lugares no cambia)."
+                                       + (f" {nota}" if nota else ""))
+            if not errores:
+                errores = [_mensaje_rol(r) or "No se pudo agregar a esa persona. Probá de nuevo."]
     nota = ""
     if not errores:
         try:
@@ -1216,7 +1243,8 @@ def alumna_cedula(alumna_id: str, cedula: str = Form(""), desde: str = Form("alu
         "cedula_repetida": MSG_CEDULA_REPETIDA,
         "cedula_invalida": "La cédula no es válida: revisá el número y el dígito verificador.",
         "no_existe": "No encontramos a esa alumna.",
-        "no_autorizada": "Solo la profesora puede cargar cédulas.",
+        "no_autorizada": "Solo la administradora puede cargar cédulas.",
+        "es_administradora": MSG_OTRA_ADMIN,
     }
     return volver(r == "ok", mensajes.get(r, "No se pudo guardar la cédula."))
 
@@ -1238,6 +1266,8 @@ def alumna_reiniciar(request: Request, alumna_id: str, desde: str = Form("alumna
                     .eq("id_usuario", alumna_id).execute().data}
         if usuario.empresa_id not in empresas or alumna_id == usuario.id:
             filas = []
+        elif _sb(usuario).rpc("puede_gestionar_persona", {"p_id_usuario": alumna_id}).execute().data == "es_administradora":
+            return _volver_seccion(desde, False, MSG_OTRA_ADMIN)
         elif empresas - {usuario.empresa_id}:
             return _volver_seccion(desde, False, "Esa persona también usa Just Show Up en otra empresa: puede cambiar su "
                                                  "contraseña desde Mi perfil o con «Olvidé mi contraseña».")
@@ -1532,6 +1562,9 @@ async def mp_aviso(request: Request):
 
 MSG_EMPRESA = {
     "no_autorizada": "No tenés permiso para hacer eso.",
+    "ultima_administradora": "No se puede: la empresa se quedaría sin ninguna administradora activa. Designá otra antes.",
+    "no_es_administradora": "Esa persona no es administradora de la empresa.",
+    "accion_invalida": "Elegí si pasa a ser profesora o si queda inactiva.",
     "datos_invalidos": "Revisá los datos: el nombre lleva entre 2 y 80 caracteres y el código, de 2 a 6 letras mayúsculas (sin tildes).",
     "codigo_repetido": "Ya existe otra empresa con ese código.",
     "nombre_repetido": "Ya existe otra empresa con ese nombre (o uno que se escribe igual sin mayúsculas, tildes, espacios ni signos). "
@@ -1541,28 +1574,59 @@ MSG_EMPRESA = {
 }
 
 
-def _volver_empresas(ok: bool, aviso: str):
-    return RedirectResponse(url="/admin/empresas?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303)
+def _volver_empresas(ok: bool, aviso: str, empresa_id: int | None = None):
+    """Al listado de empresas o, si es una acción sobre una empresa, a su pantalla «Gestionar empresa»."""
+    destino = f"/admin/empresas/{empresa_id}" if empresa_id else "/admin/empresas"
+    return RedirectResponse(url=destino + "?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303)
 
 
 def _codigo(codigo: str) -> str:
     return (codigo or "").strip().upper()
 
 
+def _admins_de_empresa(sb, empresa_id: int) -> list[dict]:
+    admins = sb.rpc("administradoras_empresa", {"p_id_empresa": empresa_id}).execute().data or []
+    for a in admins:
+        a["pendientes_txt"] = [PENDIENTES.get(c, c) for c in a.get("pendientes") or []]
+    return admins
+
+
 @app.get("/admin/empresas")
 def admin_empresas(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_superadmin)):
+    """Listado en tarjetas: solo datos generales y cantidades (las administradoras se gestionan dentro de cada empresa)."""
     try:
-        empresas = _sb(usuario).rpc("resumen_empresas", {}).execute().data or []
+        sb = _sb(usuario)
+        empresas = sb.rpc("resumen_empresas", {}).execute().data or []
+        for e in empresas:
+            e["cant_admins"] = sum(1 for a in _admins_de_empresa(sb, e["id"]) if a["activa"])
     except Exception:
         logging.exception("No se pudieron listar las empresas")
         empresas, aviso, ok = [], "No pudimos cargar las empresas. Probá de nuevo.", 0
     return _render(request, "admin_empresas.html", usuario, empresas=empresas, aviso=aviso, aviso_ok=bool(ok))
 
 
+@app.get("/admin/empresas/{empresa_id}")
+def admin_empresa_gestionar(request: Request, empresa_id: int, ok: int = 0, aviso: str = "",
+                            usuario: Usuario = Depends(requiere_superadmin)):
+    try:
+        sb = _sb(usuario)
+        empresa = next((e for e in sb.rpc("resumen_empresas", {}).execute().data or [] if e["id"] == empresa_id), None)
+        admins = _admins_de_empresa(sb, empresa_id) if empresa else []
+    except Exception:
+        logging.exception("No se pudo cargar la empresa")
+        return _volver_empresas(False, "No pudimos cargar la empresa. Probá de nuevo.")
+    if empresa is None:
+        return _volver_empresas(False, MSG_EMPRESA["no_existe"])
+    empresa["cant_admins"] = sum(1 for a in admins if a["activa"])
+    for a in admins:  # solo para mostrar la opción deshabilitada: la base lo vuelve a comprobar al confirmar
+        a["ultima"] = a["activa"] and empresa["cant_admins"] == 1
+    return _render(request, "admin_empresa.html", usuario, e=empresa, admins=admins, aviso=aviso, aviso_ok=bool(ok))
+
+
 @app.post("/admin/empresas")
 def admin_empresa_crear(
     request: Request, nombre: str = Form(""), codigo: str = Form(""), admin_nombre: str = Form(""),
-    admin_apellido: str = Form(""), admin_mail: str = Form(""), tambien_profesora: str = Form(""),
+    admin_apellido: str = Form(""), admin_mail: str = Form(""),
     usuario: Usuario = Depends(requiere_superadmin),
 ):
     nombre = " ".join(nombre.split())
@@ -1577,8 +1641,7 @@ def admin_empresa_crear(
         r = {}
     if r.get("resultado") != "ok":
         return _volver_empresas(False, MSG_EMPRESA.get(r.get("resultado"), auth.MSG_GENERICO))
-    return _asignar_administradora(request, usuario, r["id"], datos, bool(tambien_profesora),
-                                   f"Empresa «{nombre}» creada. ")
+    return _asignar_administradora(request, usuario, r["id"], datos, f"Empresa «{nombre}» creada. ")
 
 
 @app.post("/admin/empresas/{empresa_id}/editar")
@@ -1591,8 +1654,8 @@ def admin_empresa_editar(empresa_id: int, nombre: str = Form(""), codigo: str = 
         logging.exception("No se pudo editar la empresa")
         r = None
     if r == "ok":
-        return _volver_empresas(True, "Empresa actualizada.")
-    return _volver_empresas(False, MSG_EMPRESA.get(r, auth.MSG_GENERICO))
+        return _volver_empresas(True, "Empresa actualizada.", empresa_id)
+    return _volver_empresas(False, MSG_EMPRESA.get(r, auth.MSG_GENERICO), empresa_id)
 
 
 @app.post("/admin/empresas/{empresa_id}/estado")
@@ -1604,53 +1667,116 @@ def admin_empresa_estado(empresa_id: int, activa: int = Form(...), usuario: Usua
         r = None
     if r == "ok":
         return _volver_empresas(True, "Empresa reactivada." if activa else
-                                "Empresa desactivada: sus usuarias ya no pueden entrar a ella. Sus datos se conservan.")
-    return _volver_empresas(False, MSG_EMPRESA.get(r, auth.MSG_GENERICO))
+                                "Empresa desactivada: sus usuarias ya no pueden entrar a ella. Sus datos se conservan.", empresa_id)
+    return _volver_empresas(False, MSG_EMPRESA.get(r, auth.MSG_GENERICO), empresa_id)
 
 
 @app.post("/admin/empresas/{empresa_id}/administradora")
 def admin_empresa_administradora(
     request: Request, empresa_id: int, nombre: str = Form(""), apellido: str = Form(""), mail: str = Form(""),
-    tambien_profesora: str = Form(""), usuario: Usuario = Depends(requiere_superadmin),
+    usuario: Usuario = Depends(requiere_superadmin),
 ):
     datos, errores = validaciones.validar_alumna({"nombre": nombre, "apellido": apellido, "mail": mail}, clases.ahora().date())
     if errores:
-        return _volver_empresas(False, " ".join(errores))
-    return _asignar_administradora(request, usuario, empresa_id, datos, bool(tambien_profesora))
+        return _volver_empresas(False, " ".join(errores), empresa_id)
+    return _asignar_administradora(request, usuario, empresa_id, datos)
 
 
-def _asignar_administradora(request: Request, usuario: Usuario, empresa_id: int, datos: dict, es_profesora: bool,
-                            prefijo: str = ""):
+def _asignar_administradora(request: Request, usuario: Usuario, empresa_id: int, datos: dict, prefijo: str = ""):
+    """Designa administradora (un solo rol: tiene todas las funciones docentes, con o sin clases asignadas)."""
     try:
         existente = _cuenta_existente(datos["mail"])
         if existente:
             if existente.get("es_superadmin"):
-                return _volver_empresas(False, "Esa cuenta es de la administración general.")
+                return _volver_empresas(False, "Esa cuenta es de la administración general.", empresa_id)
             r = _sb(usuario).rpc("asignar_administradora", {"p_id_empresa": empresa_id, "p_id_usuario": existente["id"],
-                                                           "p_es_profesora": es_profesora}).execute().data
+                                                           "p_es_profesora": False}).execute().data
             if r == "ok":
                 return _volver_empresas(True, prefijo + f"{existente['nombre']} {existente['apellido']} ya tenía cuenta: "
-                                              "ahora administra la empresa con su misma contraseña.")
-            return _volver_empresas(False, prefijo + MSG_EMPRESA.get(r, auth.MSG_GENERICO))
+                                              "ahora administra la empresa con su misma contraseña.", empresa_id)
+            return _volver_empresas(False, prefijo + (MSG_EMPRESA.get(r) or _mensaje_rol(r) or auth.MSG_GENERICO), empresa_id)
         _, contrasena = auth.crear_cuenta(
             datos["mail"], datos["nombre"], datos["apellido"], rol="profesora",
-            id_empresa=empresa_id, rol_empresa="admin_profesora" if es_profesora else "admin",
+            id_empresa=empresa_id, rol_empresa="admin",
         )
     except ErrorAuth as e:
-        return _volver_empresas(False, prefijo + "No se pudo crear la administradora: " + str(e))
+        return _volver_empresas(False, prefijo + "No se pudo crear la administradora: " + str(e), empresa_id)
     except Exception:
         logging.exception("No se pudo asignar la administradora")
-        return _volver_empresas(False, prefijo + "No se pudo crear la administradora: " + auth.MSG_GENERICO)
+        return _volver_empresas(False, prefijo + "No se pudo crear la administradora: " + auth.MSG_GENERICO, empresa_id)
     return _render(request, "alumna_credenciales.html", usuario, titulo=prefijo + "Administradora: cuenta creada",
                    nombre=f"{datos['nombre']} {datos['apellido']}", mail=datos["mail"], contrasena=contrasena,
-                   volver=("/admin/empresas", "Volver a empresas"))
+                   volver=(f"/admin/empresas/{empresa_id}", "Ir a la empresa"))
+
+
+def _administradora_de(usuario: Usuario, empresa_id: int, persona_id: str) -> dict | None:
+    """La administradora (activa o no) de esa empresa, según la base (solo la superadministradora la ve)."""
+    try:
+        uuid.UUID(persona_id)
+        return next((a for a in _sb(usuario).rpc("administradoras_empresa", {"p_id_empresa": empresa_id}).execute().data or []
+                     if a["id"] == persona_id), None)
+    except Exception:
+        return None
+
+
+@app.post("/admin/empresas/{empresa_id}/administradoras/{persona_id}/quitar")
+def admin_quitar_administradora(empresa_id: int, persona_id: str, accion: str = Form(""),
+                                usuario: Usuario = Depends(requiere_superadmin)):
+    a = _administradora_de(usuario, empresa_id, persona_id)
+    if a is None:
+        return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"], empresa_id)
+    try:
+        r = _sb(usuario).rpc("quitar_administradora", {"p_id_empresa": empresa_id, "p_id_usuario": persona_id,
+                                                        "p_accion": accion}).execute().data
+    except Exception:
+        logging.exception("No se pudo quitar la administradora")
+        r = None
+    if r == "ok":
+        return _volver_empresas(True, f"{a['nombre']} {a['apellido']} " + (
+            "ya no administra la empresa: ahora es profesora y conserva sus clases." if accion == "profesora" else
+            "ya no administra la empresa y quedó inactiva (sus datos e historial se conservan)."), empresa_id)
+    if isinstance(r, str) and r.startswith("pendientes:"):
+        return _volver_empresas(False, f"Para dejar inactiva a {a['nombre']} {a['apellido']}: " + _mensaje_rol(r)
+                                + " También podés pasarla a profesora.", empresa_id)
+    return _volver_empresas(False, MSG_EMPRESA.get(r, auth.MSG_GENERICO), empresa_id)
+
+
+@app.post("/admin/empresas/{empresa_id}/administradoras/{persona_id}/reactivar")
+def admin_reactivar_administradora(empresa_id: int, persona_id: str, usuario: Usuario = Depends(requiere_superadmin)):
+    a = _administradora_de(usuario, empresa_id, persona_id)
+    if a is None:
+        return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"], empresa_id)
+    try:
+        r = _sb(usuario).rpc("asignar_administradora", {"p_id_empresa": empresa_id, "p_id_usuario": persona_id,
+                                                         "p_es_profesora": False}).execute().data
+    except Exception:
+        logging.exception("No se pudo reactivar la administradora")
+        r = None
+    if r == "ok":
+        return _volver_empresas(True, f"{a['nombre']} {a['apellido']} vuelve a administrar la empresa.", empresa_id)
+    return _volver_empresas(False, MSG_EMPRESA.get(r) or _mensaje_rol(r) or auth.MSG_GENERICO, empresa_id)
+
+
+@app.post("/admin/empresas/{empresa_id}/administradoras/{persona_id}/reiniciar-contrasena")
+def admin_reiniciar_administradora(request: Request, empresa_id: int, persona_id: str,
+                                   usuario: Usuario = Depends(requiere_superadmin)):
+    a = _administradora_de(usuario, empresa_id, persona_id)
+    if a is None:
+        return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"], empresa_id)
+    try:
+        contrasena = auth.reiniciar_contrasena(persona_id)
+    except ErrorAuth as e:
+        return _volver_empresas(False, str(e), empresa_id)
+    return _render(request, "alumna_credenciales.html", usuario, titulo="Contraseña reiniciada",
+                   nombre=f"{a['nombre']} {a['apellido']}", mail=a["mail"], contrasena=contrasena,
+                   volver=(f"/admin/empresas/{empresa_id}", "Volver a la empresa"))
 
 
 # ---------- multiempresa: panel de la administradora ----------
 
 def indicadores_admin(membresias: list[dict], horarios: list[dict]) -> dict:
-    """Los tres números del inicio: personas con membresía ACTIVA (cada persona una vez, aunque tenga varios
-    roles) y horarios semanales activos (no clases históricas ni futuras)."""
+    """Los tres números del inicio: personas con membresía ACTIVA según su rol (las administradoras no cuentan como
+    profesoras, aunque den clases) y horarios semanales activos (no clases históricas ni futuras)."""
     activas = [m for m in membresias if m.get("activa", True)]
     return {
         "alumnas": len({m["id_usuario"] for m in activas if m["es_alumna"]}),
@@ -1697,6 +1823,15 @@ def _persona_de_empresa(usuario: Usuario, persona_id: str) -> dict | None:
     persona = {**p[0], **personas.datos_personales(sb, [persona_id]).get(persona_id, dict.fromkeys(personas.PRIVADOS)),
                "membresia": m[0], "roles": _roles_txt(m[0]), "yo": persona_id == usuario.id}
     persona["cedula_txt"] = validaciones.formatear_cedula(persona.get("cedula"))
+    persona["rol"] = "admin" if m[0]["es_admin"] else "profesora" if m[0]["es_profesora"] else "alumna"
+    persona["solo_lectura"] = persona["rol"] == "admin" and not persona["yo"]
+    persona["pendientes"] = []
+    if persona["rol"] != "admin":
+        try:
+            persona["pendientes"] = [PENDIENTES.get(c, c) for c in
+                                     sb.rpc("pendientes_cambio_rol", {"p_id_usuario": persona_id}).execute().data or []]
+        except Exception:
+            logging.exception("No se pudo consultar qué impide cambiar el rol")
     return persona
 
 
@@ -1728,6 +1863,8 @@ def persona_datos(
     persona = _persona_de_empresa(usuario, persona_id)
     if persona is None:
         return _volver_seccion(seccion, False, "No encontramos a esa persona en tu empresa.")
+    if persona["solo_lectura"]:
+        return _editar_persona(request, usuario, seccion, persona, errores=[MSG_OTRA_ADMIN], status_code=403)
     ingresados = {"nombre": nombre, "apellido": apellido, "mail": persona["mail"], "telefono": telefono,
                   "fecha_nacimiento": fecha_nacimiento, "fecha_vencimiento_carne_salud": fecha_vencimiento_carne_salud,
                   "cedula": cedula}
@@ -1739,18 +1876,21 @@ def persona_datos(
                                datos={**persona, **{k: v.strip() for k, v in ingresados.items()}, "cedula_txt": cedula.strip()},
                                status_code=400)
     try:
-        # perfil (de toda la cuenta) con la clave del servidor: solo después de comprobar que es de esta empresa
-        auth.cliente_admin().table("profiles").update({
-            "nombre": datos["nombre"], "apellido": datos["apellido"], "telefono": datos["telefono"] or None,
-            "fecha_nacimiento": datos["fecha_nacimiento"] or None,
-            "fecha_vencimiento_carne_salud": datos["fecha_vencimiento_carne_salud"] or None,
-        }).eq("id", persona_id).execute()
-        r = _sb(usuario).rpc("actualizar_cedula", {"p_id_alumna": persona_id, "p_cedula": datos["cedula"] or None}).execute().data
+        # el perfil es de toda la cuenta: lo guarda la base después de comprobar que la persona es de esta empresa y no
+        # es otra administradora
+        sb = _sb(usuario)
+        r = sb.rpc("editar_datos_persona", {
+            "p_id_usuario": persona_id, "p_nombre": datos["nombre"], "p_apellido": datos["apellido"],
+            "p_telefono": datos["telefono"] or None, "p_fecha_nacimiento": datos["fecha_nacimiento"] or None,
+            "p_fecha_vencimiento_carne_salud": datos["fecha_vencimiento_carne_salud"] or None}).execute().data
+        if r == "ok":
+            r = sb.rpc("actualizar_cedula", {"p_id_alumna": persona_id, "p_cedula": datos["cedula"] or None}).execute().data
     except Exception:
         logging.exception("No se pudieron guardar los datos de la persona")
         r = None
     if r != "ok":
-        mensaje = MSG_CEDULA_REPETIDA if r == "cedula_repetida" else "No se pudieron guardar todos los datos. Probá de nuevo."
+        mensaje = (MSG_CEDULA_REPETIDA if r == "cedula_repetida" else MSG_OTRA_ADMIN if r == "es_administradora"
+                   else "No se pudieron guardar todos los datos. Probá de nuevo.")
         return _editar_persona(request, usuario, seccion, _persona_de_empresa(usuario, persona_id) or persona,
                                errores=[mensaje], status_code=400)
     return RedirectResponse(url=f"/profesora/{seccion}/{persona_id}?" + urlencode({"ok": 1, "aviso": "Datos guardados."}),
@@ -1758,32 +1898,45 @@ def persona_datos(
 
 
 @app.post("/profesora/{seccion}/{persona_id}/roles")
-def persona_roles(seccion: str, persona_id: str, es_admin: str = Form(""), es_profesora: str = Form(""),
-                  es_alumna: str = Form(""), usuario: Usuario = Depends(requiere_admin)):
+def persona_roles(seccion: str, persona_id: str, rol: str = Form(""), usuario: Usuario = Depends(requiere_admin)):
     seccion = seccion if seccion in SECCIONES_PERSONAS else "alumnas"
     persona = _persona_de_empresa(usuario, persona_id)
     if persona is None:
         return _volver_seccion(seccion, False, "No encontramos a esa persona en tu empresa.")
-    flags = {"p_es_admin": bool(es_admin), "p_es_profesora": bool(es_profesora), "p_es_alumna": bool(es_alumna)}
-    try:
-        sb = _sb(usuario)
-        r = sb.rpc("asignar_membresia", {"p_id_usuario": persona_id, **flags}).execute().data
-        if r == "ok" and not persona["membresia"]["activa"]:
-            sb.rpc("cambiar_estado_membresia", {"p_id_usuario": persona_id, "p_activa": False}).execute()  # sigue inactiva
-    except Exception:
-        logging.exception("No se pudieron cambiar los roles")
-        r = None
-    mensajes = {"ok": "Roles actualizados.", "sin_rol": "Tiene que tener al menos un rol.",
-                "no_puede_quitarse_admin": "No podés quitarte a vos misma el rol de administradora."}
-    return RedirectResponse(url=f"/profesora/{seccion}/{persona_id}?" + urlencode(
-        {"ok": int(r == "ok"), "aviso": mensajes.get(r, "No se pudieron cambiar los roles.")}), status_code=303)
+    if rol not in ROLES_PERSONA:
+        r = "solo_superadmin" if rol == "admin" else "sin_rol"
+    elif persona["rol"] == "admin":
+        r = "es_administradora"
+    elif rol == persona["rol"]:
+        r = "sin_cambios"
+    else:
+        try:
+            sb = _sb(usuario)
+            r = sb.rpc("asignar_membresia", {"p_id_usuario": persona_id, "p_es_admin": False,
+                                             "p_es_profesora": rol == "profesora", "p_es_alumna": rol == "alumna"}).execute().data
+            if r == "ok" and not persona["membresia"]["activa"]:
+                sb.rpc("cambiar_estado_membresia", {"p_id_usuario": persona_id, "p_activa": False}).execute()  # sigue inactiva
+        except Exception:
+            logging.exception("No se pudo cambiar el rol")
+            r = None
+    if r == "ok":  # cambia de sección: se vuelve a su ficha en la sección nueva
+        seccion = _seccion(rol)
+        aviso = f"Ahora es {ROLES_PERSONA[rol].lower()}. Su historial se conserva."
+    else:
+        aviso = {"sin_cambios": "Ya tenía ese rol."}.get(r) or _mensaje_rol(r) or "No se pudo cambiar el rol."
+    return RedirectResponse(url=f"/profesora/{seccion}/{persona_id}?" + urlencode({"ok": int(r == "ok"), "aviso": aviso}),
+                            status_code=303)
 
 
 @app.post("/profesora/{seccion}/{persona_id}/estado")
 def persona_estado(seccion: str, persona_id: str, activa: int = Form(...), usuario: Usuario = Depends(requiere_admin)):
     seccion = seccion if seccion in SECCIONES_PERSONAS else "alumnas"
-    if _persona_de_empresa(usuario, persona_id) is None:
+    persona = _persona_de_empresa(usuario, persona_id)
+    if persona is None:
         return _volver_seccion(seccion, False, "No encontramos a esa persona en tu empresa.")
+    if persona["solo_lectura"]:  # otra administradora (la base también lo rechaza)
+        return RedirectResponse(url=f"/profesora/{seccion}/{persona_id}?" + urlencode({"ok": 0, "aviso": MSG_OTRA_ADMIN}),
+                                status_code=303)
     try:
         r = _sb(usuario).rpc("cambiar_estado_membresia", {"p_id_usuario": persona_id, "p_activa": bool(activa)}).execute().data
     except Exception:
@@ -1791,6 +1944,6 @@ def persona_estado(seccion: str, persona_id: str, activa: int = Form(...), usuar
         r = None
     mensajes = {"ok": "Ahora está activa: puede entrar a tu empresa." if activa else
                       "Quedó inactiva: ya no puede entrar a tu empresa (sus datos y su historial se conservan).",
-                "no_puede_desactivarse": "No podés desactivar tu propia cuenta."}
+                "no_puede_desactivarse": "No podés desactivar tu propia cuenta.", "es_administradora": MSG_OTRA_ADMIN}
     return RedirectResponse(url=f"/profesora/{seccion}/{persona_id}?" + urlencode(
         {"ok": int(r == "ok"), "aviso": mensajes.get(r, "No se pudo cambiar el estado.")}), status_code=303)

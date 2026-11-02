@@ -26,7 +26,7 @@ sys.path.insert(0, str(RAIZ))
 
 NOMBRE, CODIGO = "Pilates Centro", "PIL"
 ALUMNA_COMPARTIDA = "alumna@prueba.invalid"
-ADMIN = ("admin.pilates@demo.invalid", "Lucía", "Bentancor", "admin_profesora")
+ADMIN = ("admin.pilates@demo.invalid", "Lucía", "Bentancor", "admin")
 PROFESORA = ("profe.pilates@demo.invalid", "Carolina", "Méndez", "profesora")
 ALUMNAS = [
     ("rocio.pilates@demo.invalid", "Rocío", "Acosta", "099222333"),

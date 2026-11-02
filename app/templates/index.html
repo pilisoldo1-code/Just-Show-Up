@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Just Show Up - Horarios</title>
+    <title>Just Show Up - Reservar clases</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
     {% include "_menu.html" %}
     <main class="ancho">
-        <h1>Horarios semanales</h1>
+        <h1>Reservar clases</h1>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
@@ -19,7 +19,7 @@
             {% if hay_semana_anterior %}
             <a class="btn btn-secundario semana-flecha" href="/?semana={{ semana - 1 }}" aria-label="Semana anterior">‹<span class="semana-texto"> Semana anterior</span></a>
             {% else %}
-            <span class="btn btn-secundario btn-disabled semana-flecha" aria-hidden="true">‹<span class="semana-texto"> Semana anterior</span></span>
+            <span class="btn btn-secundario btn-disabled semana-flecha" role="link" aria-disabled="true" aria-label="Semana anterior">‹<span class="semana-texto"> Semana anterior</span></span>
             {% endif %}
 
             <span class="semana-rango">
@@ -30,7 +30,7 @@
             {% if hay_semana_siguiente %}
             <a class="btn btn-secundario semana-flecha" href="/?semana={{ semana + 1 }}" aria-label="Semana siguiente"><span class="semana-texto">Semana siguiente </span>›</a>
             {% else %}
-            <span class="btn btn-secundario btn-disabled semana-flecha" aria-hidden="true"><span class="semana-texto">Semana siguiente </span>›</span>
+            <span class="btn btn-secundario btn-disabled semana-flecha" role="link" aria-disabled="true" aria-label="Semana siguiente"><span class="semana-texto">Semana siguiente </span>›</span>
             {% endif %}
         </nav>
 

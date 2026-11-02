@@ -22,7 +22,11 @@ import sys
 
 from supabase import create_client
 
-ORDEN = ["tipo_clase", "horario", "clase", "bloqueo", "reserva", "listadeespera", "asistencia", "resumen_mensual",
+ANTES = ["empresa"]  # multiempresa: antes de los perfiles (profiles.empresa_activa la referencia)
+# membresia: al recrear una cuenta, la base ya le crea una membresía (trigger de alta); se restaura por persona y
+# empresa, sin su id (que nadie referencia)
+POR_PERSONA = {"membresia": ("id_usuario", "id_empresa")}
+ORDEN = ["membresia", "tipo_clase", "horario", "clase", "bloqueo", "reserva", "listadeespera", "asistencia", "resumen_mensual",
          "resumen_mensual_detalle", "factura_historial", "pago", "pago_anulacion", "mp_configuracion", "mp_intento", "mp_evento"]
 CLAVE = {"pago_anulacion": "id_pago"}
 
@@ -51,6 +55,14 @@ def _literal(filas: list) -> str:
 
 def generar_sql(datos: dict, contador: dict) -> str:
     partes = ["-- Restauración del respaldo: agrega lo que falta y deja las filas del respaldo con sus valores (no borra nada). Todo o nada.", "begin;"]
+    for t in ANTES:
+        filas = datos.get(t) or []
+        if filas:
+            cols = list(filas[0])
+            asignaciones = ", ".join(f"{c} = excluded.{c}" for c in cols if c != "id")
+            partes.append(f"insert into public.{t} ({', '.join(cols)}) overriding system value select {', '.join(cols)} "
+                          f"from jsonb_populate_recordset(null::public.{t}, {_literal(filas)}) "
+                          f"on conflict on constraint {t}_pkey do update set {asignaciones};")
     perfiles = datos["profiles"]
     if perfiles:
         cols = list(perfiles[0])
@@ -60,13 +72,19 @@ def generar_sql(datos: dict, contador: dict) -> str:
                       f"on conflict (id) do update set {asignaciones};")
     for t in ORDEN:
         filas = datos.get(t) or []
-        if filas:
+        if filas and t in POR_PERSONA:
+            cols = [c for c in filas[0] if c != "id"]
+            asignaciones = ", ".join(f"{c} = excluded.{c}" for c in cols if c not in POR_PERSONA[t])
+            partes.append(f"insert into public.{t} ({', '.join(cols)}) select {', '.join(cols)} "
+                          f"from jsonb_populate_recordset(null::public.{t}, {_literal(filas)}) "
+                          f"on conflict ({', '.join(POR_PERSONA[t])}) do update set {asignaciones};")
+        elif filas:
             cols = list(filas[0])
             asignaciones = ", ".join(f"{c} = excluded.{c}" for c in cols if c not in ("id", CLAVE.get(t, "id")))
             partes.append(f"insert into public.{t} ({', '.join(cols)}) overriding system value select {', '.join(cols)} "
                           f"from jsonb_populate_recordset(null::public.{t}, {_literal(filas)}) "
                           f"on conflict on constraint {t}_pkey do update set {asignaciones};")
-    for t in ["profiles"] + ORDEN:
+    for t in ANTES + ["profiles"] + ORDEN:
         partes.append(f"""do $$ declare c text; begin
   for c in select a.attname from pg_attribute a where a.attrelid = 'public.{t}'::regclass and a.attidentity <> '' loop
     execute format('select setval(pg_get_serial_sequence(%L, %L), coalesce((select max(%I) from public.{t}), 0) + 1, false)',
@@ -79,14 +97,18 @@ def generar_sql(datos: dict, contador: dict) -> str:
 
 def comparar(sb, datos: dict) -> dict:
     diferencias = {}
-    for t in ["profiles"] + ORDEN:
-        clave = CLAVE.get(t, "id")
-        actuales = {str(f[clave]): f for f in sb.table(t).select("*").execute().data}
+    for t in ANTES + ["profiles"] + ORDEN:
+        if t not in datos:
+            continue  # respaldo anterior a multiempresa
+        def k(f):
+            return "|".join(str(f[c]) for c in POR_PERSONA[t]) if t in POR_PERSONA else str(f[CLAVE.get(t, "id")])
+        actuales = {k(f): f for f in sb.table(t).select("*").execute().data}
         for f in datos.get(t) or []:
-            a = actuales.get(str(f[clave]))
-            distintas = [c for c, v in f.items() if a is None or json.dumps(a.get(c), default=str) != json.dumps(v, default=str)]
+            a = actuales.get(k(f))
+            distintas = [c for c, v in f.items() if (c != "id" or t not in POR_PERSONA)
+                         and (a is None or json.dumps(a.get(c), default=str) != json.dumps(v, default=str))]
             if distintas:
-                diferencias.setdefault(t, []).append((f[clave], distintas[:3]))
+                diferencias.setdefault(t, []).append((k(f), distintas[:3]))
     return diferencias
 
 

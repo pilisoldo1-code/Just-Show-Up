@@ -23,7 +23,7 @@ SECCIONES_PROFESORA = [
     ("/profesora/profesoras", "Profesoras"), ("/profesora/resumenes", "Facturación"), ("/profesora/estadisticas", "Estadísticas"),
 ]
 SECCIONES_ALUMNA = [
-    ("/", "Clases"), ("/mis-inscripciones", "Mis inscripciones"),
+    ("/", "Reservar clases"), ("/mis-inscripciones", "Mis inscripciones"),
     ("/mi-historial", "Mi historial"), ("/mis-facturas", "Mis facturas"),
 ]
 
@@ -185,7 +185,8 @@ class Pantallas(unittest.TestCase):
         self.como(PROFESORA)
         main._sb.return_value.table.return_value.select.return_value.execute.return_value.data = []
         html = self.client.get("/profesora/horarios").text
-        self.assertIn('<div class="header-row encabezado-seccion">', html)
+        # título a la izquierda y botón a la derecha, en la misma fila (también en celular)
+        self.assertRegex(html, r'<div class="seccion-encabezado">\s*<h1>Horarios fijos</h1>\s*<div class="header-acciones">\s*<a class="btn" href="/profesora/horarios/nuevo">')
 
     def test_semana_navegacion_compacta(self):
         self.como(ALUMNA)
@@ -201,6 +202,10 @@ class Pantallas(unittest.TestCase):
                     self.assertEqual('href="/?semana=%d"' % (semana - 1) in nav, anterior)
                     self.assertEqual('href="/?semana=%d"' % (semana + 1) in nav, siguiente)
                     self.assertEqual(nav.count("btn-disabled"), (not anterior) + (not siguiente))
+                    # nombres accesibles siempre, también cuando el botón está deshabilitado
+                    self.assertIn('aria-label="Semana anterior"', nav)
+                    self.assertIn('aria-label="Semana siguiente"', nav)
+                    self.assertEqual(nav.count('aria-disabled="true"'), (not anterior) + (not siguiente))
 
 
 class RangoCorto(unittest.TestCase):

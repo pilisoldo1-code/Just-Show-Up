@@ -34,9 +34,9 @@
             {% else %}
             <input type="hidden" name="rol" value="{{ (roles or {'alumna': ''}).keys()|first }}" />
             {% endif %}
-            <p class="nota">Si el mail ya tiene cuenta en Just Show Up (por ejemplo, alumna de otra empresa o una profesora de tu
-                empresa), se le suma este rol en {{ usuario.empresa_nombre or 'tu empresa' }} con su misma contraseña y sin
-                perder sus otros roles.</p>
+            <p class="nota">Si el mail ya tiene cuenta en Just Show Up (por ejemplo, de otro lugar), queda como
+                {{ textos.singular }} de {{ usuario.empresa_nombre or 'tu empresa' }} con su misma contraseña; lo que tenga en otros
+                lugares no cambia. Cada persona tiene un solo rol en tu empresa.</p>
             <label>
                 Nombre *
                 <input type="text" name="nombre" value="{{ datos.get('nombre', '') }}" maxlength="60" required />

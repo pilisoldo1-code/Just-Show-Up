@@ -2066,10 +2066,6 @@ main.ancho {
     width: auto;
 }
 
-.menu-links a.menu-otro-rol {
-    color: var(--accent);
-    border: 1px solid #2a2e37;
-}
 
 .panel-numeros {
     display: grid;
@@ -2200,6 +2196,725 @@ main.ancho {
     }
 }
 
+/* ---------- tres roles ---------- */
+.datos-lectura {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 16px;
+    margin: 0 0 12px;
+}
+
+.datos-lectura dt {
+    color: var(--muted);
+}
+
+.datos-lectura dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+/* ---------- superadministración: empresas ---------- */
+.empresas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.empresa-card,
+.empresa-bloque {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 20px;
+    min-width: 0;
+}
+
+.empresa-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.empresa-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.empresa-card-titulo {
+    min-width: 0;
+}
+
+.empresa-card-titulo h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    overflow-wrap: anywhere;
+}
+
+.empresa-codigo {
+    color: var(--muted);
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+}
+
+.empresa-cifras {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+}
+
+.empresa-cifras div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+.empresa-cifras dt {
+    color: var(--muted);
+}
+
+.empresa-cifras dd {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.empresa-bloque .empresa-cifras {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.empresa-gestionar {
+    text-align: center;
+    margin-top: auto;
+}
+
+main.ancho.empresa-detalle {
+    max-width: 860px;
+}
+
+.empresa-detalle-titulo {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.empresa-detalle-titulo h1 {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.empresa-bloque {
+    margin: 20px 0;
+}
+
+.empresa-bloque h2 {
+    margin: 0 0 12px;
+    font-size: 1.1rem;
+}
+
+.empresa-bloque .empresa-cifras {
+    margin-bottom: 16px;
+}
+
+.empresa-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.admin-items {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+}
+
+.admin-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 0;
+    border-top: 1px solid #2a2e37;
+}
+
+.admin-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+/* el estado va a continuación del nombre, en el mismo renglón (con un nombre largo, junto a su última palabra) */
+.admin-nombre .badge {
+    display: inline-block;
+    margin-left: 8px;
+    vertical-align: 1px;
+    white-space: nowrap;
+}
+
+.correo {
+    display: block;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font: inherit;
+    text-align: left;
+    cursor: default;
+}
+
+/* sin <wbr>: Chrome corta en ellos aunque haya nowrap */
+.correo .mail-corto {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.correo .mail-completo {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.correo [hidden] {
+    display: none;
+}
+
+.correo[data-recortado] {
+    cursor: pointer;
+}
+
+.correo:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.admin-aviso {
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    margin-top: 6px;
+    opacity: 0.85;
+}
+
+.menu-acciones-lista button:disabled,
+.menu-acciones-lista button:disabled:hover {
+    color: var(--muted);
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: none;
+}
+
+.menu-acciones-motivo {
+    margin: 2px 12px 8px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.menu-acciones {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.menu-acciones summary {
+    list-style: none;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    font-size: 1.4rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.menu-acciones summary::-webkit-details-marker {
+    display: none;
+}
+
+.menu-acciones[open] summary {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.menu-acciones-lista {
+    position: absolute;
+    right: 0;
+    top: 50px;
+    z-index: 20;
+    width: 260px;
+    max-width: calc(100vw - 48px);
+    display: grid;
+    padding: 6px;
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.menu-acciones-lista form {
+    margin: 0;
+}
+
+.menu-acciones-lista button {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    text-align: left;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.menu-acciones-lista button:hover,
+.menu-acciones-lista button:focus-visible {
+    background: #22262f;
+}
+
+.menu-acciones-lista .accion-peligro {
+    color: #f87171;
+}
+
+@media (max-width: 600px) {
+    .empresas-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .empresa-card,
+    .empresa-bloque {
+        padding: 16px;
+    }
+
+    .empresa-acciones .btn,
+    .empresa-acciones form,
+    .empresa-acciones form .btn {
+        width: 100%;
+    }
+}
+
+/* Encabezado de pantalla (título + botón) y de bloque (título y descripción + botón): en una fila si entra; en
+   celular el botón va debajo, a todo el ancho. La descripción de la pantalla va aparte, debajo del encabezado. */
+.seccion-encabezado,
+.bloque-encabezado {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+}
+
+.seccion-encabezado {
+    margin-bottom: 12px;
+}
+
+.seccion-encabezado h1 {
+    margin: 0;
+}
+
+.seccion-descripcion {
+    max-width: 720px;
+}
+
+.bloque-encabezado {
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.bloque-encabezado-texto {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+
+.bloque-encabezado-texto h2 {
+    margin: 0 0 6px;
+}
+
+.bloque-encabezado-texto .nota {
+    margin: 0;
+}
+
+.seccion-encabezado .btn,
+.bloque-encabezado .btn {
+    flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+    .seccion-encabezado {
+        flex-wrap: nowrap;
+        gap: 12px;
+    }
+
+    .seccion-encabezado .btn {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
+    .bloque-encabezado {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .bloque-encabezado .btn {
+        width: 100%;
+        text-align: center;
+    }
+
+    .correo {
+        font-size: 0.9rem;
+    }
+
+    .admin-item {
+        gap: 8px;
+    }
+
+    .menu-acciones summary {
+        width: 40px;
+        height: 40px;
+    }
+
+    .menu-acciones-lista {
+        top: 46px;
+    }
+
+    .bloque-encabezado-texto {
+        flex: none;  /* en columna, la base de 320px sería una altura */
+    }
+
+    .seccion-encabezado {
+        margin-bottom: 16px;
+    }
+}
+
+/* ---------- fichas de personas y Mi historial ---------- */
+.personas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.persona-card {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.persona-inactiva {
+    opacity: 0.65;
+}
+
+.persona-cabecera h2 {
+    margin: 0 0 6px;
+    font-size: 1.1rem;
+    overflow-wrap: anywhere;
+}
+
+.persona-insignias {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+}
+
+.persona-rol {
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.persona-contacto {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);  /* si no, la columna toma el ancho del correo y no se recorta */
+    gap: 2px;
+    min-width: 0;
+}
+
+.persona-telefono {
+    color: var(--muted);
+}
+
+.persona-datos {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 0;
+}
+
+.persona-datos div {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 8px 10px;
+    min-width: 0;
+}
+
+.persona-datos dt {
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.persona-datos dd {
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+}
+
+.persona-acciones {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-top: auto;
+    padding-top: 4px;
+}
+
+.persona-acciones form {
+    margin: 0;
+}
+
+.historial-resumen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 16px;
+}
+
+.historial-cifra {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 999px;
+    padding: 6px 14px;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.historial-cifra strong {
+    color: var(--text);
+}
+
+.historial {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+}
+
+.historial-item {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: grid;
+    gap: 6px;
+}
+
+.historial-cabecera,
+.historial-detalle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.historial-cabecera .badge {
+    flex-shrink: 0;
+    text-align: center;
+}
+
+.historial-fecha {
+    font-weight: 700;
+    font-size: 1.05rem;
+    white-space: nowrap;
+}
+
+.historial-cabecera {
+    flex-wrap: wrap;
+    row-gap: 6px;
+}
+
+.historial-detalle {
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.historial-precio {
+    color: var(--text);
+    font-weight: 600;
+}
+
+@media (max-width: 600px) {
+    .personas-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .persona-card {
+        padding: 16px;
+    }
+}
+
+/* listado de personas: tabla corta en escritorio, filas compactas en celular; el detalle va en la ficha */
+.personas-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.personas-tabla th,
+.personas-tabla td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid #2a2e37;
+    white-space: nowrap;
+}
+
+.personas-tabla th {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.personas-tabla tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.personas-tabla .personas-accion {
+    text-align: right;
+    width: 1%;
+}
+
+.visualmente-oculto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.personas-lista {
+    display: none;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.persona-fila {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "nombre nombre" "sub boton";
+    align-items: center;
+    gap: 6px 10px;
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+}
+
+/* el nombre ocupa todo el ancho de la tarjeta (el botón va abajo, junto al estado) */
+.persona-fila-nombre {
+    grid-area: nombre;
+    font-size: 0.98rem;
+    overflow-wrap: anywhere;
+}
+
+.persona-fila-sub {
+    grid-area: sub;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    min-width: 0;
+}
+
+.persona-fila-boton.btn {
+    grid-area: boton;
+    padding: 5px 12px;
+    font-size: 0.85rem;
+}
+
+.persona-card-nombre {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.ficha-datos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+    margin: 0;
+}
+
+.ficha-datos dt {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.ficha-datos dd {
+    margin: 2px 0 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.ficha-datos .ficha-ancho {
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+
+.ficha-datos .correo {
+    color: var(--text);
+}
+
+.ficha-resumen .nota {
+    margin-bottom: 0;
+}
+
+@media (max-width: 720px) {
+    .personas-tabla {
+        display: none;
+    }
+
+    .personas-lista {
+        display: block;
+    }
+}
+
+.ficha-solo-lectura {
+    margin: 16px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid #2a2e37;
+}
+
+.bloque-persona form > .btn {
+    margin-top: 8px;
+}
+
 /* ---------- horarios en celular ---------- */
 /* Horarios semanales: una sola fila (‹ rango ›); en celular solo flechas y el rango abreviado */
 .semana-nav {
@@ -2267,21 +2982,17 @@ main.ancho {
     }
 }
 
-/* Horarios fijos: separación entre el encabezado y la primera tarjeta; en celular el botón va debajo del título */
-.encabezado-seccion {
-    flex-wrap: wrap;
-    row-gap: 12px;
-    margin-bottom: 20px;
-}
+/* Encabezado de pantalla en celulares chicos: título y botón siguen en la misma fila sin desbordar (Horarios, Tipos
+   de clase, Alumnas, Profesoras, Empresas) */
+@media (max-width: 400px) {
+    .seccion-encabezado h1 {
+        font-size: 1.45rem;
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
 
-.encabezado-seccion h1 {
-    margin: 0;
-}
-
-@media (max-width: 600px) {
-    .encabezado-seccion {
-        flex-direction: column;
-        align-items: flex-start;
-        margin-bottom: 16px;
+    .seccion-encabezado .btn {
+        padding: 7px 10px;
+        font-size: 0.85rem;
     }
 }
