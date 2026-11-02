@@ -127,7 +127,7 @@ v = A.get(f"/profesora/profesoras/{PROF}/baja")
 firma = re.search(r'name="firma" value="([0-9a-f]+)"', v.text).group(1)
 ok("vista previa: horario, clase, 2 reservas y los nombres de las alumnas",
    v.status_code == 200 and "Pilates mat" in v.text and "Ana Prueba, Eva Prueba" in v.text
-   and "<dt>Reservas que se cancelan</dt><dd>2</dd>" in v.text)
+   and "<dt>Reservas a cancelar</dt><dd>2</dd>" in v.text)
 P = entrar("Pilates Centro", "otra.pil@prueba.invalid")
 ok("una profesora común no abre la baja de otra", P.get(f"/profesora/profesoras/{PROF}/baja", follow_redirects=False).status_code == 303)
 ok("otra empresa: la administradora de Just Show Up no la ve",
@@ -138,7 +138,7 @@ ok("otra empresa: la administradora de Just Show Up no la ve",
 EVA.post(f"/clases/{C[PROF]}/cancelar", follow_redirects=False)
 r = A.post(f"/profesora/profesoras/{PROF}/baja", data={"motivo": "PRUEBA dejó el estudio", "firma": firma})
 ok("si algo cambió, no se cancela nada y se muestra la vista previa al día",
-   r.status_code == 409 and "Algo cambió" in r.text and "<dt>Reservas que se cancelan</dt><dd>1</dd>" in r.text
+   r.status_code == 409 and "Algo cambió" in r.text and "<dt>Reservas a cancelar</dt><dd>1</dd>" in r.text
    and sql("select estado from clase where id = %s", (C[PROF],), True)["estado"] == "programada")
 firma = re.search(r'name="firma" value="([0-9a-f]+)"', r.text).group(1)
 r = A.post(f"/profesora/profesoras/{PROF}/baja", data={"motivo": "PRUEBA dejó el estudio", "firma": firma},
@@ -153,7 +153,8 @@ ok("la otra profesora y su clase siguen igual",
    sql("select estado from clase where id = %s", (C[OTRA],), True)["estado"] == "programada")
 ok("Just Show Up queda idéntica", huella_empresa(JSU) == JSU_antes)
 ins = ANA.get("/mis-inscripciones").text
-ok("la alumna ve la clase como cancelada por la profesora en Mis inscripciones", "Cancelada por la profesora" in ins)
+ok("la alumna la ve en «Clases canceladas» de Mis inscripciones, como «Cancelada» (sin el origen)",
+   "Clases canceladas" in ins and ">Cancelada</span>" in ins and "por la profesora" not in ins)
 pl = A.get("/profesora/planificacion").text
 ok("Planificación muestra la baja sin «Eliminar»",
    "Baja de una profesora" in pl and pl.count("Eliminar</button>") == 0)

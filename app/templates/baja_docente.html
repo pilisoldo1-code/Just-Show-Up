@@ -8,10 +8,10 @@
 </head>
 <body>
     {% include "_menu.html" %}
-    <main>
+    <main class="baja-pagina">
         <p class="subtitle"><a href="{{ volver }}">← Volver sin hacer cambios</a></p>
         <h1>Dar de baja a {{ persona.nombre }} {{ persona.apellido }}</h1>
-        <p class="subtitle">{{ 'Deja de ser administradora y' if superadmin else 'Queda' }} inactiva: no puede iniciar sesión en
+        <p class="subtitle">{{ 'Deja de ser administradora y queda' if superadmin else 'Queda' }} inactiva: no puede iniciar sesión en
             {{ 'la empresa' if superadmin else (usuario.empresa_nombre or 'tu empresa') }}. Revisá qué pasa antes de confirmar.</p>
 
         {% if aviso %}
@@ -20,9 +20,9 @@
 
         {% set n_clases = previa.clases|length %}
         <dl class="baja-cifras">
-            <div><dt>Horarios que se desactivan</dt><dd>{{ previa.horarios|length }}</dd></div>
-            <div><dt>Clases próximas que se cancelan</dt><dd>{{ n_clases }}</dd></div>
-            <div><dt>Reservas que se cancelan</dt><dd>{{ previa.reservas }}</dd></div>
+            <div><dt>Horarios a desactivar</dt><dd>{{ previa.horarios|length }}</dd></div>
+            <div><dt>Clases a cancelar</dt><dd>{{ n_clases }}</dd></div>
+            <div><dt>Reservas a cancelar</dt><dd>{{ previa.reservas }}</dd></div>
             <div><dt>En lista de espera</dt><dd>{{ previa.espera }}</dd></div>
         </dl>
 
@@ -30,7 +30,10 @@
         <section class="bloque-persona">
             <h2>Horarios que se desactivan</h2>
             <ul class="baja-lista">
-                {% for h in previa.horarios %}<li>{{ h.dia_txt }} {{ h.hora_inicio }} · {{ h.tipo }}</li>{% endfor %}
+                {% for h in previa.horarios %}
+                <li><span class="baja-item-titulo">{{ h.dia_txt }} · {{ h.hora_inicio }}</span>
+                    <span class="baja-detalle">{{ h.tipo }}</span></li>
+                {% endfor %}
             </ul>
             <p class="nota">Quedan guardados: se pueden volver a activar (o crear para otra profesora) en Horarios.</p>
         </section>
@@ -41,13 +44,16 @@
             <h2>Clases que se cancelan</h2>
             <ul class="baja-lista">
                 {% for c in previa.clases %}
-                <li><strong>{{ c.dia_txt }}</strong> {{ c.hora_inicio }} · {{ c.tipo }}
-                    <span class="baja-detalle">{{ c.reservas }} {{ 'reserva' if c.reservas == 1 else 'reservas' }}{% if c.espera %} · {{ c.espera }} en espera{% endif %}</span></li>
+                <li><span class="baja-item-titulo">{{ c.dia_txt }} · {{ c.hora_inicio }}</span>
+                    <span class="baja-detalle">{{ c.tipo }} · {{ c.reservas }} {{ 'reserva' if c.reservas == 1 else 'reservas' }}{% if c.espera %} · {{ c.espera }} en espera{% endif %}</span></li>
                 {% endfor %}
             </ul>
             {% if previa.alumnas %}
-            <p class="nota">{{ previa.alumnas }} {{ 'alumna afectada' if previa.alumnas == 1 else 'alumnas afectadas' }}{% if previa.nombres %}:
-                {{ previa.nombres|join(', ') }}{% endif %}. Van a ver esas clases como «Cancelada» y no se les cobran.</p>
+            <div class="baja-afectadas">
+                <p><strong>{{ previa.alumnas }} {{ 'alumna afectada' if previa.alumnas == 1 else 'alumnas afectadas' }}</strong>{% if previa.nombres %}:
+                    {{ previa.nombres|join(', ') }}{% endif %}.</p>
+                <p class="nota">Van a ver esas clases como «Cancelada» y no se les cobran.</p>
+            </div>
             {% endif %}
         </section>
         {% endif %}

@@ -37,7 +37,8 @@ class BajaProfesora(Base):
         self.preparar()
         r = self.get(f"/profesora/profesoras/{ID}/baja")
         self.assertEqual(r.status_code, 200)
-        for texto in ("Dar de baja a Pia Dos", "Sábado 10:00 · Pilates", "Sábado 7/11", "Ana Uno, Eva Dos",
+        for texto in ("Dar de baja a Pia Dos", "Sábado · 10:00", "Sábado 7/11 · 10:00", "Pilates · 2 reservas · 1 en espera",
+                      "<strong>2 alumnas afectadas</strong>:", "Ana Uno, Eva Dos",
                       "la clase que está en curso", 'name="firma" value="f1"', "Confirmar baja", "No se puede deshacer"):
             self.assertIn(texto, r.text)
         self.assertNotIn("dar_de_baja_docente", self.llamadas())
@@ -105,8 +106,8 @@ class BajaAdministradora(Base):
         self.responder(dar_de_baja_administradora={"resultado": "ok", "horarios": 1, "clases": 1, "reservas": 2, "espera": 0})
         r = self.get(self.url())
         self.assertEqual(r.status_code, 200)
-        self.assertIn("Deja de ser administradora", r.text)
-        self.assertIn("2 alumnas afectadas.", r.text)  # cantidades, sin nombres
+        self.assertIn("Deja de ser administradora y queda inactiva", r.text)
+        self.assertIn("<strong>2 alumnas afectadas</strong>.", r.text)  # cantidades, sin nombres
         r = self.post(self.url(), {"motivo": "Cambio de dirección", "firma": "f1"})
         self.sb.rpc.assert_any_call("dar_de_baja_administradora", {"p_id_empresa": 2, "p_id_usuario": self.ADM["id"],
                                                                    "p_motivo": "Cambio de dirección", "p_firma": "f1"})
@@ -141,6 +142,40 @@ class HorariosDeInactivas(Base):
             {"id_usuario": "c", "es_admin": False, "es_profesora": False, "activa": True}]
         with mock.patch.object(main.personas, "nombres_profesoras", return_value={"a": "Ana", "b": "Bea (inactiva)"}):
             self.assertEqual(main._docentes_activas(self.sb, ADMIN), {"a": "Ana"})
+
+
+class TextosParaAlumnasYPlanificacion(unittest.TestCase):
+    def test_la_baja_se_muestra_desde_cuando_y_sin_eliminar(self):
+        from datetime import date, datetime
+        from zoneinfo import ZoneInfo
+        from app import clases
+        sb = mock.MagicMock()
+        consulta = sb.table.return_value.select.return_value
+        consulta.order.return_value.execute.return_value.data = [
+            {"id": 1, "tipo": "baja", "fecha_desde": "2026-11-02", "fecha_hasta": "2027-01-01", "id_horario": None,
+             "id_profesora": "p", "motivo": "Se mudó", "horario": None}]
+        consulta.eq.return_value.gte.return_value.lte.return_value.execute.return_value.data = []
+        consulta.in_.return_value.eq.return_value.execute.return_value.data = []
+        with mock.patch.object(clases, "ahora", return_value=datetime(2026, 11, 2, 10, tzinfo=ZoneInfo("America/Montevideo"))):
+            b = clases.bloqueos(sb)["vigentes"][0]
+        self.assertEqual(b["rango_txt"], "Desde el " + clases.fecha_corta(date(2026, 11, 2)).lower()[:1]
+                         + clases.fecha_corta(date(2026, 11, 2))[1:])
+        self.assertNotIn("ene", b["rango_txt"])
+        self.assertTrue(b["es_baja"])
+        self.assertEqual(b["alcance_txt"], "Baja de una profesora (sus clases)")
+
+    def test_mis_inscripciones_dice_solo_cancelada(self):
+        from types import SimpleNamespace
+        from app.auth import Usuario
+        html = main.templates.get_template("mis_inscripciones.html").render(
+            request=SimpleNamespace(url=SimpleNamespace(path="/mis-inscripciones")),
+            usuario=Usuario(id="a", mail="a@prueba.invalid", nombre="Ana", apellido="P", rol="alumna", token="t"),
+            proximas=[], espera=[], ofertas=[], aviso="", aviso_ok=False,
+            canceladas_profesora=[{"dia": "Lunes", "fecha_txt": "9/11", "hora": "19:00", "duracion": 60, "fecha": "2026-11-09"}])
+        self.assertIn("<h2 class=\"seccion\">Clases canceladas</h2>", html)
+        self.assertIn("Estas clases no se van a dictar y no se cobran.", html)
+        self.assertIn(">Cancelada</span>", html)
+        self.assertNotIn("por la profesora", html)
 
 
 if __name__ == "__main__":

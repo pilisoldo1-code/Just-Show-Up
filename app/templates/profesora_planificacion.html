@@ -142,10 +142,13 @@
         {% if bloqueos.vigentes %}
         <ul class="lista-clases lista-bloqueos">
             {% for b in bloqueos.vigentes %}
-            <li>
-                <div class="lc-fecha"><strong>{{ b.rango_txt }}</strong> · {{ b.alcance_txt }}</div>
-                <div class="lc-detalle">{{ b.motivo }} · {{ b.clases }} {{ 'clase cancelada' if b.clases == 1 else 'clases canceladas' }}{% if b.reservas %} · {{ b.reservas }} {{ 'reserva' if b.reservas == 1 else 'reservas' }}{% endif %}</div>
-                <span class="badge {{ 'badge-on' if b.estado == 'en_curso' else 'badge-espera' }}">{{ b.estado_txt }}</span>
+            <li class="bloqueo-item">
+                <div class="bloqueo-cabecera">
+                    <strong class="bloqueo-fechas">{{ b.rango_txt }}</strong>
+                    <span class="badge {{ 'badge-on' if b.estado == 'en_curso' else 'badge-espera' }}">{{ b.estado_txt }}</span>
+                </div>
+                <div class="bloqueo-alcance">{{ b.alcance_txt }}{% if b.motivo %} · <span class="bloqueo-motivo">{{ b.motivo }}</span>{% endif %}</div>
+                <div class="bloqueo-consecuencias">{{ b.clases }} {{ 'clase cancelada' if b.clases == 1 else 'clases canceladas' }}{% if b.reservas %} · {{ b.reservas }} {{ 'reserva cancelada' if b.reservas == 1 else 'reservas canceladas' }}{% endif %}{% if b.es_baja %}<br />No se puede eliminar: si se reactiva a la profesora, estas clases no vuelven.{% endif %}</div>
                 {% if not b.es_baja %}
                 <button type="button" class="btn btn-peligro btn-chico"
                         onclick="document.getElementById('eliminar-{{ b.id }}').showModal()">Eliminar</button>
@@ -183,10 +186,13 @@
         <h2 class="seccion">Historial</h2>
         <ul class="lista-clases lista-historial">
             {% for b in bloqueos.finalizados %}
-            <li>
-                <div class="lc-fecha"><strong>{{ b.rango_txt }}</strong> · {{ b.alcance_txt }}</div>
-                <div class="lc-detalle">{{ b.motivo }} · {{ b.clases }} {{ 'clase cancelada' if b.clases == 1 else 'clases canceladas' }}</div>
-                <span class="badge badge-off">{{ b.estado_txt }}</span>
+            <li class="bloqueo-item">
+                <div class="bloqueo-cabecera">
+                    <strong class="bloqueo-fechas">{{ b.rango_txt }}</strong>
+                    <span class="badge badge-off">{{ b.estado_txt }}</span>
+                </div>
+                <div class="bloqueo-alcance">{{ b.alcance_txt }}{% if b.motivo %} · <span class="bloqueo-motivo">{{ b.motivo }}</span>{% endif %}</div>
+                <div class="bloqueo-consecuencias">{{ b.clases }} {{ 'clase cancelada' if b.clases == 1 else 'clases canceladas' }}</div>
             </li>
             {% endfor %}
         </ul>

@@ -821,7 +821,7 @@ class EditarPersona(Base):
         r = self.get(f"/profesora/profesoras/{self.ID}")
         self.assertEqual(r.status_code, 200)
         for texto in ("Pia Dos", "Guardar datos", "Rol actual: <strong>Profesora</strong>", "Cambiar a alumna",
-                      f'href="/profesora/profesoras/{self.ID}/baja">Dar de baja…', "p@x.uy", "<dt>Teléfono</dt><dd>099123456</dd>", "<dt>Cédula</dt><dd>No registrada</dd>",
+                      f'action="/profesora/profesoras/{self.ID}/baja" method="get"', "Dar de baja…", "p@x.uy", "<dt>Teléfono</dt><dd>099123456</dd>", "<dt>Cédula</dt><dd>No registrada</dd>",
                       "<dt>Carné de salud vence</dt>", "Reiniciar contraseña"):
             self.assertIn(texto, r.text)
         for texto in ("es_admin", "Administradora</label>", "Guardar roles"):

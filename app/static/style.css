@@ -2998,46 +2998,177 @@ main.ancho.empresa-detalle {
 }
 
 /* ---------- baja de docentes ---------- */
+/* todo el contenido de la vista previa con el mismo ancho que las secciones */
+main.baja-pagina > *,
+main.baja-pagina .bloque-persona {
+    max-width: 640px;
+}
+
+main.baja-pagina h1 {
+    margin-bottom: 6px;
+}
+
 .baja-cifras {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
-    margin: 16px 0;
+    margin: 20px 0;
 }
 
 .baja-cifras div {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 6px;
     background: var(--card);
     border: 1px solid #2a2e37;
     border-radius: 10px;
-    padding: 10px 14px;
+    padding: 12px 14px;
+    min-width: 0;
 }
 
 .baja-cifras dt {
     color: var(--muted);
     font-size: 0.85rem;
+    line-height: 1.3;
 }
 
 .baja-cifras dd {
-    margin: 4px 0 0;
-    font-size: 1.3rem;
+    margin: 0;
+    font-size: 1.4rem;
     font-weight: 700;
 }
 
 .baja-lista {
-    margin: 0 0 8px;
-    padding-left: 18px;
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
 }
 
 .baja-lista li {
-    margin: 4px 0;
-    overflow-wrap: anywhere;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 0;
+    border-bottom: 1px solid #2a2e37;
+    min-width: 0;
+}
+
+.baja-lista li:first-child {
+    padding-top: 0;
+}
+
+.baja-lista li:last-child {
+    border-bottom: none;
+}
+
+.baja-item-titulo {
+    font-weight: 600;
 }
 
 .baja-detalle {
     color: var(--muted);
     font-size: 0.9rem;
+    overflow-wrap: anywhere;
+}
+
+.baja-afectadas {
+    margin-top: 4px;
+    padding-top: 12px;
+    border-top: 1px solid #2a2e37;
+}
+
+.baja-afectadas p {
+    margin: 0 0 6px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
 }
 
 .baja-form {
     margin-top: 20px;
+}
+
+@media (max-width: 600px) {
+    .baja-cifras {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* Ficha de persona: el formulario no es una tarjeta dentro de otra, y más aire entre datos */
+.bloque-persona h2 {
+    margin: 0 0 14px;
+}
+
+.bloque-persona .horario-form {
+    background: none;
+    padding: 0;
+}
+
+.bloque-persona .nota {
+    margin: 0 0 12px;
+}
+
+.ficha-datos {
+    gap: 16px 24px;
+}
+
+/* Planificación: cada bloqueo con fechas y estado arriba, alcance y motivo, y consecuencias */
+.lista-bloqueos .bloqueo-item,
+.lista-historial .bloqueo-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 16px;
+    align-items: start;
+}
+
+.bloqueo-item .bloqueo-cabecera,
+.bloqueo-item .bloqueo-alcance,
+.bloqueo-item .bloqueo-consecuencias {
+    grid-column: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.bloqueo-cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+}
+
+.bloqueo-alcance {
+    color: var(--text);
+}
+
+.bloqueo-motivo {
+    color: var(--muted);
+}
+
+.bloqueo-consecuencias {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+.bloqueo-item > .btn {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    align-self: center;
+}
+
+@media (max-width: 600px) {
+    .bloqueo-item > .btn {
+        grid-column: 1;
+        grid-row: auto;
+        justify-self: start;
+    }
+}
+
+.bloque-persona .ficha-solo-lectura {
+    margin: 16px 0 0;
+}
+
+/* una nota de sección seguida de su lista de tarjetas: que no queden pegadas */
+.nota + .lista-clases {
+    margin-top: 12px;
 }
