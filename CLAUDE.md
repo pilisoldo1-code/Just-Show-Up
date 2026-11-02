@@ -757,7 +757,9 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
-- **Tres roles por empresa (rama `tres-roles`, migración `20261101000000_tres_roles.sql`, NO aplicada en producción)**:
+- **Tres roles por empresa (rama `tres-roles`, PR #29; migración `20261101000000_tres_roles.sql` APLICADA en Supabase el 02/11
+  como `20261102173826 tres_roles`, con respaldo previo `2026-11-02 antes de tres roles`; estructura igual a la esperada y
+  datos iguales al respaldo; theta con el código anterior verificada 37/37)**:
   cada membresía tiene EXACTAMENTE un rol (`membresia_un_solo_rol`: alumna, profesora o administradora). La
   administradora tiene los permisos docentes por `es_docente()` (no lleva `es_profesora`) y puede tener cero clases.
   Solo la superadministradora da o quita el rol de administradora (`asignar_administradora`, `quitar_administradora`
