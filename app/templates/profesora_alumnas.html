@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+    {% from "_correo.html" import correo %}
     {% include "_menu.html" %}
     <main class="ancho">
 
@@ -14,69 +15,68 @@
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
-        <div class="header-row">
+        <div class="seccion-encabezado">
             <h1>{{ textos.titulo }}</h1>
             {% if usuario.es_admin %}<a class="btn" href="/profesora/{{ seccion }}/nueva">{{ textos.nueva }}</a>{% endif %}
         </div>
-        {% if usuario.es_admin %}
-        <p class="subtitle">{{ textos.titulo }} de {{ usuario.empresa_nombre or 'tu empresa' }}. Tocá «Editar» para ver o cambiar sus datos,
-            su rol y su estado. Cada persona tiene un solo rol en tu empresa.{% if seccion == 'profesoras' %} Las administradoras
-            aparecen acá para consultarlas: a ellas solo las gestiona la administración general.{% endif %}</p>
+        {% if not usuario.es_admin %}
+        <p class="subtitle seccion-descripcion">Contacto de las alumnas de {{ usuario.empresa_nombre or 'tu empresa' }}.</p>
+        {% elif seccion == 'profesoras' %}
+        <p class="subtitle seccion-descripcion">Profesoras y administradoras de {{ usuario.empresa_nombre or 'tu empresa' }}.
+            Las administradoras aparecen solo para consulta: sus permisos los gestiona la superadministradora.</p>
         {% else %}
-        <p class="subtitle">Contacto de las alumnas de {{ usuario.empresa_nombre or 'tu empresa' }}. Las altas y los cambios los hace la administradora.</p>
+        <p class="subtitle seccion-descripcion">Alumnas de {{ usuario.empresa_nombre or 'tu empresa' }}. Con «Editar» cambiás sus
+            datos, su rol o su estado.</p>
         {% endif %}
 
-        <div class="tabla-scroll">
-        <table class="horario-table tabla-tarjetas">
-            <thead>
-                <tr>
-                    <th>Apellido</th>
-                    <th>Nombre</th>
-                    <th>Mail</th>
-                    <th>Teléfono</th>
+        <div class="personas-grid">
+            {% for a in alumnas %}
+            {% set quien = a.nombre ~ ' ' ~ a.apellido %}
+            {% set otra_admin = a.es_admin and not a.yo %}
+            <article class="persona-card {{ '' if a.activa else 'persona-inactiva' }}">
+                <div class="persona-cabecera">
+                    <h2>{{ quien }}</h2>
                     {% if usuario.es_admin %}
-                    {% if seccion == 'alumnas' %}<th>Cédula</th><th>Carné de salud vence</th>{% endif %}
-                    <th>Roles</th>
-                    <th>Estado</th>
-                    <th></th>
+                    <div class="persona-insignias">
+                        <span class="persona-rol">{{ (a.roles or ['Alumna'])|join(' · ') }}</span>
+                        <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
+                    </div>
                     {% endif %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for a in alumnas %}
-                <tr class="{{ '' if a.activa else 'fila-inactiva' }}">
-                    <td data-label="Apellido">{{ a.apellido }}</td>
-                    <td data-label="Nombre">{{ a.nombre }}</td>
-                    <td data-label="Mail">{{ a.mail }}</td>
-                    <td data-label="Teléfono">{{ a.telefono or '—' }}</td>
-                    {% if usuario.es_admin %}
-                    {% if seccion == 'alumnas' %}
-                    <td data-label="Cédula">{{ a.cedula_txt or 'No registrada' }}</td>
-                    <td data-label="Carné vence">{{ a.fecha_vencimiento_carne_salud or '—' }}</td>
+                </div>
+                <div class="persona-contacto">
+                    {{ correo(a.mail, quien) }}
+                    <span class="persona-telefono">{{ a.telefono or 'Sin teléfono' }}</span>
+                </div>
+                {% if usuario.es_admin and seccion == 'alumnas' %}
+                <dl class="persona-datos">
+                    <div><dt>Cédula</dt><dd>{{ a.cedula_txt or 'No registrada' }}</dd></div>
+                    <div><dt>Carné vence</dt>
+                        <dd>{% if a.fecha_vencimiento_carne_salud %}{% set f = a.fecha_vencimiento_carne_salud.split('-') %}{{ f[2] }}/{{ f[1] }}/{{ f[0] }}{% else %}—{% endif %}</dd></div>
+                </dl>
+                {% endif %}
+                {% if usuario.es_admin %}
+                <div class="persona-acciones">
+                    <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}">{{ 'Ver' if otra_admin else 'Editar' }}</a>
+                    {% if not a.yo and not otra_admin %}
+                    <form action="/profesora/alumnas/{{ a.id }}/reiniciar-contrasena" method="post"
+                          data-confirmar="¿Generar una contraseña nueva para {{ quien }}? La anterior deja de funcionar en su cuenta, en todas las empresas donde usa Just Show Up.">
+                        <input type="hidden" name="desde" value="{{ seccion }}" />
+                        <button type="submit" class="link-btn">Reiniciar contraseña</button>
+                    </form>
                     {% endif %}
-                    <td data-label="Roles">{{ (a.roles or ['Alumna'])|join(' · ') }}</td>
-                    <td data-label="Estado"><span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span></td>
-                    <td class="acciones">
-                        {% set otra_admin = a.es_admin and not a.yo %}
-                        <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}">{{ 'Ver' if otra_admin else 'Editar' }}</a>
-                        {% if not a.yo and not otra_admin %}
-                        <form action="/profesora/alumnas/{{ a.id }}/reiniciar-contrasena" method="post"
-                              onsubmit="return confirm('¿Generar una contraseña nueva para {{ a.nombre }} {{ a.apellido }}? La anterior dejará de funcionar.')">
-                            <input type="hidden" name="desde" value="{{ seccion }}" />
-                            <button type="submit" class="link-btn">Reiniciar contraseña</button>
-                        </form>
-                        {% endif %}
-                    </td>
-                    {% endif %}
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="{{ 9 if usuario.es_admin else 4 }}" class="empty">{{ textos.vacia }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                </div>
+                {% endif %}
+            </article>
+            {% else %}
+            <p class="empty">{{ textos.vacia }}</p>
+            {% endfor %}
         </div>
     </main>
+    {% include "_correo_script.html" %}
+    <script>
+        document.querySelectorAll("form[data-confirmar]").forEach(function (f) {
+            f.addEventListener("submit", function (ev) { if (!confirm(f.dataset.confirmar)) ev.preventDefault(); });
+        });
+    </script>
 </body>
 </html>

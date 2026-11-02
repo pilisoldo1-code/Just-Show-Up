@@ -18,17 +18,24 @@
 
         {% if historial %}
         {% if presentes or ausentes %}
-        <p class="asistencia-resumen">
-            {{ presentes }} {{ 'clase asistida' if presentes == 1 else 'clases asistidas' }} ·
-            {{ ausentes }} {{ 'ausencia' if ausentes == 1 else 'ausencias' }}
-        </p>
+        <div class="historial-resumen">
+            <span class="historial-cifra"><strong>{{ presentes }}</strong> {{ 'clase asistida' if presentes == 1 else 'clases asistidas' }}</span>
+            <span class="historial-cifra"><strong>{{ ausentes }}</strong> {{ 'ausencia' if ausentes == 1 else 'ausencias' }}</span>
+        </div>
         {% endif %}
-        <ul class="lista-clases">
+        <ul class="historial">
             {% for c in historial %}
-            <li>
-                <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
-                <div class="lc-detalle">{{ c.duracion }} min · ${{ '%g'|format(c.precio) }}</div>
-                <span class="badge {{ c.badge }}">{{ c.estado_txt }}</span>
+            {% set cancelada = c.estado_txt.startswith('Cancelada') %}
+            <li class="historial-item">
+                <div class="historial-cabecera">
+                    <span class="historial-fecha">{{ c.dia }} {{ c.fecha_txt }}</span>
+                    <span class="badge {{ c.badge }}">{{ c.estado_txt }}</span>
+                </div>
+                <div class="historial-detalle">
+                    <span>{{ c.hora }} · {{ c.duracion }} min</span>
+                    <span class="historial-precio {{ 'historial-sin-cargo' if cancelada }}"
+                          {% if cancelada %}title="Clase cancelada: no se cobra"{% endif %}>${{ '%g'|format(c.precio) }}</span>
+                </div>
             </li>
             {% endfor %}
         </ul>

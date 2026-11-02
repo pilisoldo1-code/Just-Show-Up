@@ -1068,6 +1068,10 @@ Para cada módulo, en este orden:
 - **Tablas en celular**: las tablas de listados con acciones llevan la clase `tabla-tarjetas` y cada `<td>` un
   `data-label` (el nombre de la columna): hasta 720 px cada fila pasa a ser una tarjeta, sin desplazamiento
   horizontal (hoy: Alumnas, Profesoras y Horarios). La celda de botones lleva `class="acciones"`.
+- **Fichas de personas y correos**: Alumnas y Profesoras se muestran en fichas (`.personas-grid` / `.persona-card`,
+  mismo estilo que Empresas). Los correos van con la macro `correo(mail, quien)` de `_correo.html` (una línea, «…» si no
+  entra y al tocarlo se despliega) más `{% include "_correo_script.html" %}` una vez por página; dentro de una grilla,
+  la columna que lo contiene necesita `minmax(0, 1fr)` para que se recorte. Encabezado de pantalla: `.seccion-encabezado`.
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
 - Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).

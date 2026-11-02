@@ -240,7 +240,7 @@ class Menu(Base):
         self.assertNotIn("También da clases", r.text)
         self.assertIn("<dt>Estado</dt><dd>Activa</dd>", r.text)  # solo el estado, sin explicación
         self.assertNotIn("mailto:", r.text)  # el correo no se repite en el menú de acciones
-        self.assertIn('<button type="button" class="admin-mail" title="profesora@prueba.invalid"', r.text)
+        self.assertIn('<button type="button" class="correo" title="profesora@prueba.invalid"', r.text)
         # única administradora activa: no se le puede quitar el rol (opciones deshabilitadas, con el motivo)
         self.assertIn('<button type="submit" disabled>Pasar a profesora</button>', r.text)
         self.assertIn('<button type="submit" class="accion-peligro" disabled>Dejar inactiva</button>', r.text)
@@ -321,8 +321,9 @@ class ListaPersonas(Base):
         r = self.get("/profesora/profesoras")
         self.assertIn("<h1>Profesoras</h1>", r.text)
         self.assertIn("+ Nueva profesora", r.text)
-        self.assertIn('<td data-label="Roles">Profesora</td>', r.text)
-        self.assertIn('<td data-label="Roles">Administradora</td>', r.text)  # un solo rol
+        self.assertIn('<span class="persona-rol">Profesora</span>', r.text)
+        self.assertIn('<span class="persona-rol">Administradora</span>', r.text)  # un solo rol
+        self.assertIn("solo para consulta: sus permisos los gestiona la superadministradora", r.text)
         self.assertIn('href="/profesora/profesoras/p1">Editar', r.text)
         self.assertIn('href="/profesora/profesoras/ap">Ver', r.text)  # otra administradora: solo consultarla
         self.assertEqual(r.text.count("Reiniciar contraseña"), 1)  # la de la profesora, no la de la administradora
@@ -341,8 +342,9 @@ class ListaPersonas(Base):
         self.rpc([{"id": "a1", "cedula": "12345672", "fecha_nacimiento": None, "fecha_vencimiento_carne_salud": "2027-01-31"}])
         r = self.get("/profesora/alumnas")
         self.assertEqual(self.sb.rpc.call_args.args[0], "datos_personales")
-        self.assertIn('<td data-label="Cédula">1.234.567-2</td>', r.text)
-        self.assertIn('<td data-label="Carné vence">2027-01-31</td>', r.text)
+        self.assertIn("<dt>Cédula</dt><dd>1.234.567-2</dd>", r.text)
+        self.assertIn("<dd>31/01/2027</dd>", r.text)  # fecha legible
+        self.assertIn('class="correo" title="e@x.uy"', r.text)
         self.assertIn("Reiniciar contraseña", r.text)
         self.assertIn('href="/profesora/alumnas/a1">Editar', r.text)
         self.assertEqual(self.sb.table.return_value.select.call_args_list[-1].args[0], main.COLUMNAS_ALUMNA)

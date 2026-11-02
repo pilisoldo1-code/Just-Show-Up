@@ -1,0 +1,7 @@
+{# Correo en una sola línea: si no entra se recorta con «…» y, al tocarlo (o con Enter/Espacio), se despliega completo en
+   su lugar. Incluir una vez por página el script de abajo con {% include "_correo_script.html" %}. #}
+{% macro correo(mail, quien) -%}
+<button type="button" class="correo" title="{{ mail }}" aria-label="Correo de {{ quien }}: {{ mail }}"
+    ><span class="mail-corto">{{ mail }}</span><span class="mail-completo" hidden
+    >{{ mail | e | replace('@', '@<wbr>' | safe) | replace('.', '.<wbr>' | safe) }}</span></button>
+{%- endmacro %}
