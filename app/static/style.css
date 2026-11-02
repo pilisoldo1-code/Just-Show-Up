@@ -2214,21 +2214,10 @@ main.ancho {
 }
 
 /* ---------- superadministración: empresas ---------- */
-.empresas-encabezado {
-    flex-wrap: wrap;
-    row-gap: 12px;
-    margin-bottom: 12px;
-}
-
-.empresas-encabezado h1 {
-    margin: 0;
-}
-
 .empresas-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 16px;
-    margin-top: 20px;
 }
 
 .empresa-card,
@@ -2304,8 +2293,8 @@ main.ancho {
     margin-top: auto;
 }
 
-.empresa-detalle {
-    max-width: 820px;
+main.ancho.empresa-detalle {
+    max-width: 860px;
 }
 
 .empresa-detalle-titulo {
@@ -2337,19 +2326,6 @@ main.ancho {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-}
-
-.empresa-bloque-titulo {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 4px;
-}
-
-.empresa-bloque-titulo h2 {
-    margin: 0;
 }
 
 .admin-items {
@@ -2449,11 +2425,6 @@ main.ancho {
 }
 
 @media (max-width: 600px) {
-    .empresas-encabezado {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
     .empresas-grid {
         grid-template-columns: 1fr;
     }
@@ -2468,9 +2439,72 @@ main.ancho {
     .empresa-acciones form .btn {
         width: 100%;
     }
+}
 
-    .empresa-bloque-titulo .btn {
+/* Encabezado de pantalla (título + botón) y de bloque (título y descripción + botón): en una fila si entra; en
+   celular el botón va debajo, a todo el ancho. La descripción de la pantalla va aparte, debajo del encabezado. */
+.seccion-encabezado,
+.bloque-encabezado {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+}
+
+.seccion-encabezado {
+    margin-bottom: 12px;
+}
+
+.seccion-encabezado h1 {
+    margin: 0;
+}
+
+.seccion-descripcion {
+    max-width: 720px;
+}
+
+.bloque-encabezado {
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.bloque-encabezado-texto {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+
+.bloque-encabezado-texto h2 {
+    margin: 0 0 6px;
+}
+
+.bloque-encabezado-texto .nota {
+    margin: 0;
+}
+
+.seccion-encabezado .btn,
+.bloque-encabezado .btn {
+    flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+    .seccion-encabezado,
+    .bloque-encabezado {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .seccion-encabezado .btn,
+    .bloque-encabezado .btn {
         width: 100%;
         text-align: center;
+    }
+
+    .bloque-encabezado-texto {
+        flex: none;  /* en columna, la base de 320px sería una altura */
+    }
+
+    .seccion-encabezado {
+        margin-bottom: 16px;
     }
 }

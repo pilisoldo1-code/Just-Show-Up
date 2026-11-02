@@ -24,7 +24,7 @@
             <dl class="datos-lectura">
                 <dt>Nombre</dt><dd>{{ e.nombre }}</dd>
                 <dt>Código</dt><dd>{{ e.codigo }}</dd>
-                <dt>Estado</dt><dd>{{ 'Activa: sus usuarias pueden entrar' if e.activa else 'Inactiva: nadie puede entrar; los datos se conservan' }}</dd>
+                <dt>Estado</dt><dd>{{ 'Activa' if e.activa else 'Inactiva' }}</dd>
             </dl>
             <dl class="empresa-cifras">
                 <div><dt>Profesoras</dt><dd>{{ e.profesoras }}</dd></div>
@@ -42,18 +42,21 @@
         </section>
 
         <section class="empresa-bloque">
-            <div class="empresa-bloque-titulo">
-                <h2>Administradoras</h2>
+            <div class="bloque-encabezado">
+                <div class="bloque-encabezado-texto">
+                    <h2>Administradoras</h2>
+                    <p class="nota">Tienen todas las funciones de la empresa y de una profesora (con o sin clases). La empresa
+                        siempre conserva al menos una administradora activa.</p>
+                </div>
                 <button type="button" class="btn" onclick="document.getElementById('asignar-admin').showModal()">Asignar administradora</button>
             </div>
-            <p class="nota">Tienen todas las funciones de la empresa y de una profesora (con o sin clases). La empresa siempre
-                conserva al menos una administradora activa.</p>
             <ul class="admin-items">
                 {% for a in admins %}
                 <li class="admin-item">
                     <div class="admin-info">
                         <strong>{{ a.nombre }} {{ a.apellido }}</strong>
-                        <span class="admin-mail">{{ a.mail }}</span>
+                        {% set partes = a.mail.split('@', 1) %}
+                        <span class="admin-mail">{{ partes[0] }}{% if partes|length > 1 %}@<wbr>{{ partes[1] }}{% endif %}</span>
                         <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
                         {% if a.activa and a.pendientes_txt %}
                         <span class="nota">Para dejarla inactiva, antes hay que resolver que {{ a.pendientes_txt|join('; que ') }}.</span>

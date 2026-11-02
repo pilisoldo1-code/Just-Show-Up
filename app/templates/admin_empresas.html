@@ -13,11 +13,11 @@
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
-        <div class="header-row empresas-encabezado">
+        <div class="seccion-encabezado">
             <h1>Empresas</h1>
             <button type="button" class="btn" onclick="document.getElementById('empresa-nueva').showModal()">+ Nueva empresa</button>
         </div>
-        <p class="subtitle">Cada empresa tiene sus propias profesoras, alumnas, clases y facturas, que maneja su administradora.
+        <p class="subtitle seccion-descripcion">Cada empresa tiene sus propias profesoras, alumnas, clases y facturas, que maneja su administradora.
             Las empresas no se borran: se desactivan y sus datos se conservan.</p>
 
         <div class="empresas-grid">

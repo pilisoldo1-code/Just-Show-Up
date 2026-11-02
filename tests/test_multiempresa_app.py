@@ -233,11 +233,17 @@ class Menu(Base):
         r = self.get("/admin/empresas/1")
         self.assertEqual(r.status_code, 200)
         for texto in ("← Volver a empresas", "Datos generales", "Editar datos", "Desactivar empresa", "Asignar administradora",
-                      "profesora@prueba.invalid", "Pasar a profesora", "Dejar inactiva", "Reiniciar contraseña", "Reactivar",
+                      "profesora@<wbr>prueba.invalid", "Pasar a profesora", "Dejar inactiva", "Reiniciar contraseña", "Reactivar",
                       "tiene horarios activos", 'class="menu-acciones"', "<dt>Administradoras</dt><dd>1</dd>"):
             self.assertIn(texto, r.text)
         self.assertEqual(r.text.count("Pasar a profesora"), 1)  # solo la activa; la inactiva tiene «Reactivar»
         self.assertNotIn("También da clases", r.text)
+        self.assertIn("<dt>Estado</dt><dd>Activa</dd>", r.text)  # solo el estado, sin explicación
+        self.RESUMEN = [{**self.RESUMEN[0], "activa": False}]
+        self.responder()
+        r = self.get("/admin/empresas/1")
+        self.assertIn("<dt>Estado</dt><dd>Inactiva</dd>", r.text)
+        self.assertIn("Reactivar empresa", r.text)
 
     def test_empresa_inexistente_vuelve_al_listado(self):
         self.como(SUPER)
