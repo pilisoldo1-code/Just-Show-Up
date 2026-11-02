@@ -20,7 +20,8 @@
         </div>
         {% if usuario.es_admin %}
         <p class="subtitle">{{ textos.titulo }} de {{ usuario.empresa_nombre or 'tu empresa' }}. Tocá «Editar» para ver o cambiar sus datos,
-            roles y estado. Una persona con varios roles tiene una sola cuenta y aparece en cada sección.</p>
+            su rol y su estado. Cada persona tiene un solo rol en tu empresa.{% if seccion == 'profesoras' %} Las administradoras
+            aparecen acá para consultarlas: a ellas solo las gestiona la administración general.{% endif %}</p>
         {% else %}
         <p class="subtitle">Contacto de las alumnas de {{ usuario.empresa_nombre or 'tu empresa' }}. Las altas y los cambios los hace la administradora.</p>
         {% endif %}
@@ -56,8 +57,9 @@
                     <td data-label="Roles">{{ (a.roles or ['Alumna'])|join(' · ') }}</td>
                     <td data-label="Estado"><span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span></td>
                     <td class="acciones">
-                        <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}">Editar</a>
-                        {% if not a.yo %}
+                        {% set otra_admin = a.es_admin and not a.yo %}
+                        <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}">{{ 'Ver' if otra_admin else 'Editar' }}</a>
+                        {% if not a.yo and not otra_admin %}
                         <form action="/profesora/alumnas/{{ a.id }}/reiniciar-contrasena" method="post"
                               onsubmit="return confirm('¿Generar una contraseña nueva para {{ a.nombre }} {{ a.apellido }}? La anterior dejará de funcionar.')">
                             <input type="hidden" name="desde" value="{{ seccion }}" />

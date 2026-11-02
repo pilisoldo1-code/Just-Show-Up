@@ -111,8 +111,8 @@ ok("las contraseñas quedan solo para las dos profesoras y una alumna", len(r["c
 e = q(su, "select * from empresa where id = %s", (E2,), True)
 ok("Pilates Centro, código PIL, Mercado Pago apagado", (e["nombre"], e["codigo"], e["mp_habilitado"]) == ("Pilates Centro", "PIL", False))
 m = {x["mail"]: x for x in q(su, "select p.mail, m.* from membresia m join profiles p on p.id = m.id_usuario where m.id_empresa = %s", (E2,))}
-ok("roles: administradora y profesora, otra profesora, 6 alumnas (incluida la compartida)",
-   m[empresa_demo.ADMIN[0]]["es_admin"] and m[empresa_demo.ADMIN[0]]["es_profesora"]
+ok("roles: administradora (un solo rol, con sus clases), otra profesora, 6 alumnas (incluida la compartida)",
+   m[empresa_demo.ADMIN[0]]["es_admin"] and not m[empresa_demo.ADMIN[0]]["es_profesora"]
    and m[empresa_demo.PROFESORA[0]]["es_profesora"] and not m[empresa_demo.PROFESORA[0]]["es_admin"]
    and sum(x["es_alumna"] for x in m.values()) == 6 and not any(x["es_alumna"] for x in (m[empresa_demo.ADMIN[0]], m[empresa_demo.PROFESORA[0]])))
 ok("las cuentas nuevas no quedan en la Empresa 1",

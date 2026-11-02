@@ -30,7 +30,7 @@
                     <th>Estado</th>
                     <th>Profesoras</th>
                     <th>Alumnas</th>
-                    <th>Administradora</th>
+                    <th>Administradoras</th>
                     <th></th>
                 </tr>
             </thead>
@@ -42,7 +42,39 @@
                     <td><span class="badge {{ 'badge-on' if e.activa else 'badge-off' }}">{{ 'Activa' if e.activa else 'Desactivada' }}</span></td>
                     <td>{{ e.profesoras }}</td>
                     <td>{{ e.alumnas }}</td>
-                    <td>{{ e.administradoras or 'Sin asignar' }}</td>
+                    <td>
+                        {% if e.admins %}
+                        <ul class="admin-lista">
+                            {% for a in e.admins %}
+                            <li>
+                                <span>{{ a.nombre }} {{ a.apellido }} &lt;{{ a.mail }}&gt;</span>
+                                <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
+                                {% if a.activa %}
+                                <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/quitar" method="post"
+                                      onsubmit="return confirm('¿Quitarle a {{ a.nombre }} {{ a.apellido }} el rol de administradora de {{ e.nombre }}? Pasa a ser profesora y conserva sus clases.')">
+                                    <input type="hidden" name="accion" value="profesora" />
+                                    <button type="submit" class="link-btn">Pasar a profesora</button>
+                                </form>
+                                <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/quitar" method="post"
+                                      onsubmit="return confirm('¿Quitarle a {{ a.nombre }} {{ a.apellido }} el rol de administradora y dejarla inactiva en {{ e.nombre }}? No va a poder entrar; sus datos e historial se conservan.')">
+                                    <input type="hidden" name="accion" value="inactiva" />
+                                    <button type="submit" class="link-btn"{% if a.pendientes_txt %} title="Antes hay que resolver que {{ a.pendientes_txt|join('; que ') }}"{% endif %}>Dejar inactiva</button>
+                                </form>
+                                {% else %}
+                                <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/reactivar" method="post"
+                                      onsubmit="return confirm('¿Reactivar a {{ a.nombre }} {{ a.apellido }} como administradora de {{ e.nombre }}?')">
+                                    <button type="submit" class="link-btn">Reactivar</button>
+                                </form>
+                                {% endif %}
+                                <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/reiniciar-contrasena" method="post"
+                                      onsubmit="return confirm('¿Generar una contraseña nueva para {{ a.nombre }} {{ a.apellido }}? La anterior deja de funcionar en todos los lugares donde usa esa cuenta.')">
+                                    <button type="submit" class="link-btn">Reiniciar contraseña</button>
+                                </form>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}Sin asignar{% endif %}
+                    </td>
                     <td class="acciones">
                         <button type="button" class="link-btn" onclick="document.getElementById('editar-{{ e.id }}').showModal()">Editar</button>
                         <dialog id="editar-{{ e.id }}" class="modal">
@@ -64,9 +96,10 @@
                                 <label>Nombre <input type="text" name="nombre" maxlength="60" required /></label>
                                 <label>Apellido <input type="text" name="apellido" maxlength="60" required /></label>
                                 <label>Mail <input type="email" name="mail" required /></label>
-                                <label class="opcion-check"><input type="checkbox" name="tambien_profesora" value="1" /> También da clases</label>
-                                <p class="nota">Si el mail ya tiene cuenta, se la suma como administradora con su misma contraseña.
-                                    Si no, se crea la cuenta y te mostramos la contraseña temporal una sola vez.</p>
+                                <p class="nota">La administradora tiene todas las funciones de una profesora: puede dar clases o no.
+                                    Si el mail ya tiene cuenta, queda como administradora con su misma contraseña (si era alumna o
+                                    profesora de esta empresa, deja ese rol). Si no, se crea la cuenta y te mostramos la contraseña
+                                    temporal una sola vez.</p>
                                 <div class="modal-botones">
                                     <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
                                     <button type="submit" class="btn">Asignar</button>
@@ -99,8 +132,8 @@
                 <label>Nombre <input type="text" name="admin_nombre" maxlength="60" required /></label>
                 <label>Apellido <input type="text" name="admin_apellido" maxlength="60" required /></label>
                 <label>Mail <input type="email" name="admin_mail" required /></label>
-                <label class="opcion-check"><input type="checkbox" name="tambien_profesora" value="1" /> También da clases</label>
-                <p class="nota">Si el mail ya tiene cuenta, se la suma como administradora con su misma contraseña; si no, se crea
+                <p class="nota">La administradora tiene todas las funciones de una profesora: puede dar clases o no.
+                    Si el mail ya tiene cuenta, se la suma como administradora con su misma contraseña; si no, se crea
                     la cuenta y te mostramos la contraseña temporal una sola vez.</p>
                 <div class="modal-botones">
                     <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>

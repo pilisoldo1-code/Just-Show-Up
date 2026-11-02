@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Just Show Up - Horarios</title>
+    <title>Just Show Up - Reservar clases</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
     {% include "_menu.html" %}
     <main class="ancho">
-        <h1>Horarios semanales</h1>
+        <h1>Reservar clases</h1>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>

@@ -2066,10 +2066,6 @@ main.ancho {
     width: auto;
 }
 
-.menu-links a.menu-otro-rol {
-    color: var(--accent);
-    border: 1px solid #2a2e37;
-}
 
 .panel-numeros {
     display: grid;
@@ -2198,4 +2194,36 @@ main.ancho {
         text-align: center;
         justify-content: center;
     }
+}
+
+/* ---------- tres roles ---------- */
+.datos-lectura {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 16px;
+    margin: 0 0 12px;
+}
+
+.datos-lectura dt {
+    color: var(--muted);
+}
+
+.datos-lectura dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.admin-lista {
+    list-style: none;
+    padding: 0;
+    margin: 6px 0 0;
+    display: grid;
+    gap: 8px;
+}
+
+.admin-lista li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
 }
