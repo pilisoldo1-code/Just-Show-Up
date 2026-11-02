@@ -23,7 +23,8 @@
         <p class="subtitle seccion-descripcion">Contacto de las alumnas de {{ usuario.empresa_nombre or 'tu empresa' }}.</p>
         {% elif seccion == 'profesoras' %}
         <p class="subtitle seccion-descripcion">Profesoras y administradoras de {{ usuario.empresa_nombre or 'tu empresa' }}.
-            Las administradoras aparecen solo para consulta: sus permisos los gestiona la superadministradora.</p>
+            En «Gestionar» ves todos sus datos; las otras administradoras solo se consultan (sus permisos los gestiona la
+            superadministradora).</p>
         {% else %}
         <p class="subtitle seccion-descripcion">Alumnas de {{ usuario.empresa_nombre or 'tu empresa' }}. En «Gestionar alumna» ves
             todos sus datos y podés editarlos.</p>
@@ -45,14 +46,13 @@
             </thead>
             <tbody>
                 {% for a in alumnas %}
-                {% set otra_admin = a.es_admin and not a.yo %}
                 <tr class="{{ '' if a.activa else 'fila-inactiva' }}">
                     <td>{{ a.apellido }}</td>
                     <td>{{ a.nombre }}</td>
                     {% if seccion == 'profesoras' %}<td>{{ (a.roles or ['Profesora'])|join(' · ') }}</td>{% endif %}
                     <td><span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span></td>
                     <td class="personas-accion">
-                        <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}">{{ 'Ver' if otra_admin else 'Gestionar ' ~ textos.singular }}</a>
+                        <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}">{{ 'Gestionar' if seccion == 'profesoras' else 'Gestionar ' ~ textos.singular }}</a>
                     </td>
                 </tr>
                 {% endfor %}
@@ -60,17 +60,14 @@
         </table>
         <ul class="personas-lista">
             {% for a in alumnas %}
-            {% set otra_admin = a.es_admin and not a.yo %}
             <li class="persona-fila {{ '' if a.activa else 'persona-inactiva' }}">
-                <div class="persona-fila-texto">
-                    <strong>{{ a.apellido }}, {{ a.nombre }}</strong>
-                    <span class="persona-fila-sub">
-                        {% if seccion == 'profesoras' %}{{ (a.roles or ['Profesora'])|join(' · ') }} · {% endif %}<span
-                            class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
-                    </span>
-                </div>
-                <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}"
-                   aria-label="{{ 'Ver a' if otra_admin else 'Gestionar a' }} {{ a.nombre }} {{ a.apellido }}">{{ 'Ver' if otra_admin else 'Gestionar' }}</a>
+                <strong class="persona-fila-nombre">{{ a.apellido }}, {{ a.nombre }}</strong>
+                <span class="persona-fila-sub">
+                    <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
+                    {% if seccion == 'profesoras' %}<span>{{ (a.roles or ['Profesora'])|join(' · ') }}</span>{% endif %}
+                </span>
+                <a class="btn btn-chico persona-fila-boton" href="/profesora/{{ seccion }}/{{ a.id }}"
+                   aria-label="Gestionar a {{ a.nombre }} {{ a.apellido }}">Gestionar</a>
             </li>
             {% endfor %}
         </ul>

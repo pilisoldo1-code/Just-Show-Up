@@ -29,12 +29,11 @@
             <li class="historial-item">
                 <div class="historial-cabecera">
                     <span class="historial-fecha">{{ c.dia }} {{ c.fecha_txt }}</span>
-                    <span class="badge {{ c.badge }}"{% if cancelada %} title="La canceló la profesora o la empresa"{% endif %}>{{ c.estado_txt }}</span>
+                    <span class="badge {{ c.badge }}">{{ c.estado_txt }}</span>
                 </div>
                 <div class="historial-detalle">
                     <span>{{ c.hora }} · {{ c.duracion }} min</span>
-                    <span class="historial-precio {{ 'historial-sin-cargo' if cancelada }}"
-                          {% if cancelada %}title="Clase cancelada: no se cobra"{% endif %}>${{ '%g'|format(c.precio) }}</span>
+                    {% if not cancelada %}<span class="historial-precio">${{ '%g'|format(c.precio) }}</span>{% endif %}
                 </div>
             </li>
             {% endfor %}

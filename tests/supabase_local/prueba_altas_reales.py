@@ -336,7 +336,7 @@ foto_b = sql("select p.nombre, p.apellido, p.telefono, m.activa, m.es_admin from
 h = A2.get(f"/profesora/profesoras/{B}").text
 ok("la administradora ve a la otra administradora solo para consultar",
    "solo los cambia la administración general" in h and "Guardar datos" not in h and "Dejar inactiva" not in h
-   and f'href="/profesora/profesoras/{B}">Ver' in A2.get("/profesora/profesoras").text)
+   and f'href="/profesora/profesoras/{B}">Gestionar</a>' in A2.get("/profesora/profesoras").text)
 r1 = A2.post(f"/profesora/profesoras/{B}/datos", data={"nombre": "Intrusa", "apellido": "X"}, follow_redirects=False)
 r2 = A2.post(f"/profesora/profesoras/{B}/estado", data={"activa": "0"}, follow_redirects=False)
 r3 = A2.post(f"/profesora/profesoras/{B}/roles", data={"rol": "profesora"}, follow_redirects=False)

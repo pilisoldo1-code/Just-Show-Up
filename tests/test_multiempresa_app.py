@@ -323,9 +323,11 @@ class ListaPersonas(Base):
         self.assertIn("+ Nueva profesora", r.text)
         self.assertIn("<td>Profesora</td>", r.text)
         self.assertIn("<td>Administradora</td>", r.text)  # un solo rol
-        self.assertIn("solo para consulta: sus permisos los gestiona la superadministradora", r.text)
-        self.assertIn('href="/profesora/profesoras/p1">Gestionar profesora', r.text)
-        self.assertIn('href="/profesora/profesoras/ap">Ver', r.text)  # otra administradora: solo consultarla
+        self.assertIn("las otras administradoras solo se consultan", r.text)
+        # el mismo botón para todas: lo que se puede hacer lo decide la ficha (y el servidor)
+        self.assertIn('href="/profesora/profesoras/p1">Gestionar</a>', r.text)
+        self.assertIn('href="/profesora/profesoras/ap">Gestionar</a>', r.text)
+        self.assertNotIn(">Ver<", r.text)
         self.assertNotIn("Reiniciar contraseña", r.text)  # está en la ficha
         for nombre in ("Eva", "Ines"):
             self.assertNotIn(nombre, r.text)
@@ -849,8 +851,11 @@ class EditarPersona(Base):
         self.assertEqual(r.status_code, 403)
         r = self.post(f"/profesora/profesoras/{self.ID}/roles", {"rol": "profesora"})
         self.assertIn("administraci%C3%B3n+general", r.headers["location"])
+        r = self.post(f"/profesora/profesoras/{self.ID}/estado", {"activa": 0})
+        self.assertIn("ok=0", r.headers["location"])
+        self.assertIn("administraci%C3%B3n+general", r.headers["location"])
         llamadas = [c.args[0] for c in self.sb.rpc.call_args_list]
-        for f in ("editar_datos_persona", "asignar_membresia", "actualizar_cedula"):
+        for f in ("editar_datos_persona", "asignar_membresia", "actualizar_cedula", "cambiar_estado_membresia"):
             self.assertNotIn(f, llamadas)
 
     def test_persona_de_otra_empresa_no_se_ve_ni_se_toca(self):

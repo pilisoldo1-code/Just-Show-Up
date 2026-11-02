@@ -5,10 +5,12 @@ Uso: python -m unittest tests.test_historial -v
 """
 import unittest
 from datetime import datetime
+from types import SimpleNamespace
 from unittest import mock
 from zoneinfo import ZoneInfo
 
-from app import clases
+from app import clases, main
+from app.auth import Usuario
 
 TZ = ZoneInfo("America/Montevideo")
 
@@ -56,6 +58,20 @@ class Historial(unittest.TestCase):
                           ("2026-10-26", "08:00"), ("2026-10-23", "19:00")])
         self.assertEqual([c["estado_txt"] for c in self.historial],
                          ["Presente", "Cancelada", "Ausente", "Cancelada", "Sin registrar"])
+
+    def test_la_tarjeta_cancelada_muestra_solo_estado_fecha_hora_y_duracion(self):
+        html = main.templates.get_template("mi_historial.html").render(
+            request=SimpleNamespace(url=SimpleNamespace(path="/mi-historial")),
+            usuario=Usuario(id="a", mail="a@prueba.invalid", nombre="Ana", apellido="P", rol="alumna", token="t"),
+            historial=self.historial, presentes=1, ausentes=1)
+        tarjetas = html.split('<li class="historial-item">')[1:]
+        cancelada = tarjetas[1]
+        self.assertIn(">Cancelada</span>", cancelada)
+        self.assertIn("19:00 · 60 min", cancelada)
+        self.assertNotIn("$", cancelada)
+        self.assertIn("$800", tarjetas[0])  # las demás conservan su precio
+        for texto in ("por la profesora", "la empresa", "title="):
+            self.assertNotIn(texto, html)
 
 
 if __name__ == "__main__":

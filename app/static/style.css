@@ -2760,12 +2760,6 @@ main.ancho.empresa-detalle {
     font-weight: 600;
 }
 
-.historial-sin-cargo {
-    color: var(--muted);
-    font-weight: 400;
-    text-decoration: line-through;
-}
-
 @media (max-width: 600px) {
     .personas-grid {
         grid-template-columns: 1fr;
@@ -2829,34 +2823,40 @@ main.ancho.empresa-detalle {
 }
 
 .persona-fila {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "nombre nombre" "sub boton";
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    gap: 6px 10px;
     background: var(--card);
     border: 1px solid #2a2e37;
-    border-radius: 12px;
-    padding: 12px 14px;
-    margin-bottom: 8px;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
 }
 
-.persona-fila-texto {
-    display: grid;
-    gap: 4px;
-    min-width: 0;
-}
-
-.persona-fila-texto strong {
+/* el nombre ocupa todo el ancho de la tarjeta (el botón va abajo, junto al estado) */
+.persona-fila-nombre {
+    grid-area: nombre;
+    font-size: 0.98rem;
     overflow-wrap: anywhere;
 }
 
 .persona-fila-sub {
+    grid-area: sub;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
     color: var(--muted);
     font-size: 0.85rem;
+    min-width: 0;
 }
 
-.persona-fila .btn {
-    flex-shrink: 0;
+.persona-fila-boton.btn {
+    grid-area: boton;
+    padding: 5px 12px;
+    font-size: 0.85rem;
 }
 
 .persona-card-nombre {
@@ -2903,6 +2903,12 @@ main.ancho.empresa-detalle {
     .personas-lista {
         display: block;
     }
+}
+
+.ficha-solo-lectura {
+    margin: 16px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid #2a2e37;
 }
 
 .bloque-persona form > .btn {

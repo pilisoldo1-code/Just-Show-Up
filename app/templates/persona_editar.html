@@ -35,8 +35,8 @@
                     <dd>{% if persona.fecha_vencimiento_carne_salud %}{% set f = persona.fecha_vencimiento_carne_salud.split('-') %}{{ f[2] }}/{{ f[1] }}/{{ f[0] }}{% else %}—{% endif %}</dd></div>
             </dl>
             {% if persona.solo_lectura %}
-            <p class="nota">Es administradora de {{ usuario.empresa_nombre or 'tu empresa' }}: podés consultar sus datos, pero
-                sus datos, su contraseña, su estado y su rol solo los cambia la administración general de Just Show Up.</p>
+            <p class="nota ficha-solo-lectura">Es administradora de {{ usuario.empresa_nombre or 'tu empresa' }}: podés consultar su
+                información, pero sus datos, su contraseña, su estado y su rol solo los cambia la administración general de Just Show Up.</p>
             {% endif %}
         </section>
 
