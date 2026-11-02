@@ -774,6 +774,9 @@ Para cada módulo, en este orden:
   `personas.datos_personales(sb, ids)` / `personas.completar(sb, filas)`, que usan la función de la base y, si todavía
   no existe, leen la tabla (por eso el código funciona antes y después del merge). Los nombres de las profesoras para
   las alumnas salen de `personas.nombres_profesoras(sb)`.
+- **Respaldos con multiempresa**: `descargar_datos.py` del respaldo del 02/11 incluye `empresa` y `membresia`, y
+  `scripts/restaurar_datos.py` carga `empresa` antes que los perfiles y `membresia` por (persona, empresa) sin su id:
+  al recrear una cuenta, el trigger de alta ya le crea una membresía. `sesion_empresa` no se respalda.
 - **Restaurar datos con ids originales no se puede por la API**: las tablas tienen `id` «generated always» y
   PostgREST no acepta `OVERRIDING SYSTEM VALUE`. `scripts/restaurar_datos.py` recrea las cuentas por la API (mismo
   id) y genera un SQL para el editor SQL del panel; contra un Supabase local lo ejecuta y compara fila por fila.
