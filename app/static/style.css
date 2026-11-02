@@ -2227,3 +2227,11 @@ main.ancho {
     align-items: center;
     gap: 8px;
 }
+
+/* en celular, la lista de administradoras ocupa todo el ancho de la tarjeta */
+@media (max-width: 720px) {
+    .tabla-tarjetas td.celda-admins {
+        display: block;
+        text-align: left;
+    }
+}

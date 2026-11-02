@@ -22,7 +22,7 @@
             Las empresas no se borran: se desactivan y sus datos se conservan.</p>
 
         <div class="tabla-scroll">
-        <table class="horario-table">
+        <table class="horario-table tabla-tarjetas">
             <thead>
                 <tr>
                     <th>Empresa</th>
@@ -37,12 +37,12 @@
             <tbody>
                 {% for e in empresas %}
                 <tr>
-                    <td>{{ e.nombre }}</td>
-                    <td>{{ e.codigo }}</td>
-                    <td><span class="badge {{ 'badge-on' if e.activa else 'badge-off' }}">{{ 'Activa' if e.activa else 'Desactivada' }}</span></td>
-                    <td>{{ e.profesoras }}</td>
-                    <td>{{ e.alumnas }}</td>
-                    <td>
+                    <td data-label="Empresa">{{ e.nombre }}</td>
+                    <td data-label="Código">{{ e.codigo }}</td>
+                    <td data-label="Estado"><span class="badge {{ 'badge-on' if e.activa else 'badge-off' }}">{{ 'Activa' if e.activa else 'Desactivada' }}</span></td>
+                    <td data-label="Profesoras">{{ e.profesoras }}</td>
+                    <td data-label="Alumnas">{{ e.alumnas }}</td>
+                    <td class="celda-admins">
                         {% if e.admins %}
                         <ul class="admin-lista">
                             {% for a in e.admins %}
