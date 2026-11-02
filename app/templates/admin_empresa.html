@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+    {% from "_correo.html" import correo %}
     {% include "_menu.html" %}
     <main class="ancho empresa-detalle">
         <p class="subtitle"><a href="/admin/empresas">← Volver a empresas</a></p>
@@ -60,9 +61,7 @@
                             <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
                         </div>
                         {# una sola línea; si no entra se recorta con «…» y, al tocarlo, se despliega completo en su lugar #}
-                        <button type="button" class="admin-mail" title="{{ a.mail }}" aria-label="Correo de {{ quien }}: {{ a.mail }}"
-                                ><span class="mail-corto">{{ a.mail }}</span><span class="mail-completo" hidden
-                                >{{ a.mail | e | replace('@', '@<wbr>' | safe) | replace('.', '.<wbr>' | safe) }}</span></button>
+                        {{ correo(a.mail, quien) }}
                         {% if a.activa and a.pendientes_txt %}
                         <span class="admin-aviso">Para dejarla inactiva, antes hay que resolver que {{ a.pendientes_txt|join('; que ') }}.</span>
                         {% endif %}
@@ -142,31 +141,6 @@
                 if (!confirm(f.dataset.confirmar)) ev.preventDefault();
             });
         });
-        // Correo: si está recortado con «…», tocarlo (o Enter/Espacio) lo despliega completo en su lugar.
-        (function () {
-            var correos = document.querySelectorAll("button.admin-mail");
-            function marcar() {
-                correos.forEach(function (c) {
-                    if (c.classList.contains("abierto")) return;
-                    var t = c.querySelector(".mail-corto");  // el botón no informa el desborde: se mide el texto
-                    var recortado = t.scrollWidth > t.clientWidth + 1;
-                    c.toggleAttribute("data-recortado", recortado);
-                    c.tabIndex = recortado ? 0 : -1;
-                    if (recortado) c.setAttribute("aria-expanded", "false"); else c.removeAttribute("aria-expanded");
-                });
-            }
-            correos.forEach(function (c) {
-                c.addEventListener("click", function () {
-                    if (!c.hasAttribute("data-recortado") && !c.classList.contains("abierto")) return;
-                    var abierto = c.classList.toggle("abierto");
-                    c.querySelector(".mail-corto").hidden = abierto;
-                    c.querySelector(".mail-completo").hidden = !abierto;
-                    c.setAttribute("aria-expanded", abierto ? "true" : "false");
-                });
-            });
-            marcar();
-            window.addEventListener("resize", marcar);
-        })();
         // Un solo menú de acciones abierto a la vez; se cierra tocando afuera o con Escape.
         (function () {
             var menus = document.querySelectorAll("details.menu-acciones");
@@ -183,5 +157,6 @@
             });
         })();
     </script>
+    {% include "_correo_script.html" %}
 </body>
 </html>

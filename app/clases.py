@@ -250,9 +250,9 @@ def _asistencia_de(reserva: dict) -> str | None:
 
 
 def _estado_historial(reserva: dict) -> tuple[str, str]:
+    # en Mi historial solo quedan las canceladas por la profesora o la empresa (con id_bloqueo): se muestran como
+    # «Cancelada» (el motivo va en el detalle de la tarjeta, sin agrandar la etiqueta)
     if reserva["estado"] == "cancelada":
-        if reserva.get("id_bloqueo") is not None:
-            return "Cancelada por la profesora", "badge-espera"
         return "Cancelada", "badge-off"
     return {
         "presente": ("Presente", "badge-on"),
@@ -284,7 +284,10 @@ def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
         else:
             if r["estado"] == "cancelada" and r["id_bloqueo"] is not None and item["inicio"] > ahora_dt:
                 canceladas_profesora.append(item)
+            if r["estado"] == "cancelada" and r["id_bloqueo"] is None:
+                continue  # la canceló la alumna: no va a Mi historial (la reserva sigue guardada en la base)
             item["estado_txt"], item["badge"] = _estado_historial(r)
+            item["cancelada_por_profesora"] = r["estado"] == "cancelada"
             historial.append(item)
     for e in espera:
         c = datos_clase.get(e["id_clase"])

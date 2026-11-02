@@ -1039,10 +1039,9 @@ def _personas_empresa(usuario: Usuario, seccion: str = "alumnas") -> list[dict]:
     membresias = {m["id_usuario"]: m for m in consulta.execute().data if en_seccion(m)}
     if not membresias:
         return []
+    # la lista muestra solo nombre, rol y estado (y contacto, a una profesora): los datos personales van en la ficha
     filas = [f for f in sb.table("profiles").select(COLUMNAS_ALUMNA if usuario.es_admin else COLUMNAS_PERSONA_PROFESORA)
              .in_("id", list(membresias)).execute().data if f["id"] in membresias]
-    if usuario.es_admin:
-        personas.completar(sb, filas)
     for f in filas:
         m = membresias[f["id"]]
         f["roles"] = _roles_txt(m)
@@ -1926,8 +1925,12 @@ def persona_roles(seccion: str, persona_id: str, rol: str = Form(""), usuario: U
 @app.post("/profesora/{seccion}/{persona_id}/estado")
 def persona_estado(seccion: str, persona_id: str, activa: int = Form(...), usuario: Usuario = Depends(requiere_admin)):
     seccion = seccion if seccion in SECCIONES_PERSONAS else "alumnas"
-    if _persona_de_empresa(usuario, persona_id) is None:
+    persona = _persona_de_empresa(usuario, persona_id)
+    if persona is None:
         return _volver_seccion(seccion, False, "No encontramos a esa persona en tu empresa.")
+    if persona["solo_lectura"]:  # otra administradora (la base también lo rechaza)
+        return RedirectResponse(url=f"/profesora/{seccion}/{persona_id}?" + urlencode({"ok": 0, "aviso": MSG_OTRA_ADMIN}),
+                                status_code=303)
     try:
         r = _sb(usuario).rpc("cambiar_estado_membresia", {"p_id_usuario": persona_id, "p_activa": bool(activa)}).execute().data
     except Exception:

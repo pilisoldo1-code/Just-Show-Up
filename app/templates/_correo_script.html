@@ -1,0 +1,27 @@
+<script>
+    // Correos recortados con «…»: tocarlos los despliega completos en su lugar (ver _correo.html).
+    (function () {
+        var correos = document.querySelectorAll("button.correo");
+        function marcar() {
+            correos.forEach(function (c) {
+                if (c.classList.contains("abierto")) return;
+                var t = c.querySelector(".mail-corto");  // el botón no informa el desborde: se mide el texto
+                var recortado = t.scrollWidth > t.clientWidth + 1;
+                c.toggleAttribute("data-recortado", recortado);
+                c.tabIndex = recortado ? 0 : -1;
+                if (recortado) c.setAttribute("aria-expanded", "false"); else c.removeAttribute("aria-expanded");
+            });
+        }
+        correos.forEach(function (c) {
+            c.addEventListener("click", function () {
+                if (!c.hasAttribute("data-recortado") && !c.classList.contains("abierto")) return;
+                var abierto = c.classList.toggle("abierto");
+                c.querySelector(".mail-corto").hidden = abierto;
+                c.querySelector(".mail-completo").hidden = !abierto;
+                c.setAttribute("aria-expanded", abierto ? "true" : "false");
+            });
+        });
+        marcar();
+        window.addEventListener("resize", marcar);
+    })();
+</script>

@@ -2359,7 +2359,7 @@ main.ancho.empresa-detalle {
     white-space: nowrap;
 }
 
-.admin-mail {
+.correo {
     display: block;
     width: 100%;
     padding: 0;
@@ -2372,27 +2372,27 @@ main.ancho.empresa-detalle {
 }
 
 /* sin <wbr>: Chrome corta en ellos aunque haya nowrap */
-.admin-mail .mail-corto {
+.correo .mail-corto {
     display: block;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.admin-mail .mail-completo {
+.correo .mail-completo {
     display: block;
     overflow-wrap: anywhere;
 }
 
-.admin-mail [hidden] {
+.correo [hidden] {
     display: none;
 }
 
-.admin-mail[data-recortado] {
+.correo[data-recortado] {
     cursor: pointer;
 }
 
-.admin-mail:focus-visible {
+.correo:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
     border-radius: 4px;
@@ -2575,7 +2575,7 @@ main.ancho.empresa-detalle {
         text-align: center;
     }
 
-    .admin-mail {
+    .correo {
         font-size: 0.9rem;
     }
 
@@ -2599,4 +2599,318 @@ main.ancho.empresa-detalle {
     .seccion-encabezado {
         margin-bottom: 16px;
     }
+}
+
+/* ---------- fichas de personas y Mi historial ---------- */
+.personas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.persona-card {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.persona-inactiva {
+    opacity: 0.65;
+}
+
+.persona-cabecera h2 {
+    margin: 0 0 6px;
+    font-size: 1.1rem;
+    overflow-wrap: anywhere;
+}
+
+.persona-insignias {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+}
+
+.persona-rol {
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.persona-contacto {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);  /* si no, la columna toma el ancho del correo y no se recorta */
+    gap: 2px;
+    min-width: 0;
+}
+
+.persona-telefono {
+    color: var(--muted);
+}
+
+.persona-datos {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 0;
+}
+
+.persona-datos div {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 8px 10px;
+    min-width: 0;
+}
+
+.persona-datos dt {
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.persona-datos dd {
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+}
+
+.persona-acciones {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-top: auto;
+    padding-top: 4px;
+}
+
+.persona-acciones form {
+    margin: 0;
+}
+
+.historial-resumen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 16px;
+}
+
+.historial-cifra {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 999px;
+    padding: 6px 14px;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.historial-cifra strong {
+    color: var(--text);
+}
+
+.historial {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+}
+
+.historial-item {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: grid;
+    gap: 6px;
+}
+
+.historial-cabecera,
+.historial-detalle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.historial-cabecera .badge {
+    flex-shrink: 0;
+    text-align: center;
+}
+
+.historial-fecha {
+    font-weight: 700;
+    font-size: 1.05rem;
+    white-space: nowrap;
+}
+
+.historial-cabecera {
+    flex-wrap: wrap;
+    row-gap: 6px;
+}
+
+.historial-detalle {
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.historial-precio {
+    color: var(--text);
+    font-weight: 600;
+}
+
+@media (max-width: 600px) {
+    .personas-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .persona-card {
+        padding: 16px;
+    }
+}
+
+/* listado de personas: tabla corta en escritorio, filas compactas en celular; el detalle va en la ficha */
+.personas-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.personas-tabla th,
+.personas-tabla td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid #2a2e37;
+    white-space: nowrap;
+}
+
+.personas-tabla th {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.personas-tabla tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.personas-tabla .personas-accion {
+    text-align: right;
+    width: 1%;
+}
+
+.visualmente-oculto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.personas-lista {
+    display: none;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.persona-fila {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "nombre nombre" "sub boton";
+    align-items: center;
+    gap: 6px 10px;
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+}
+
+/* el nombre ocupa todo el ancho de la tarjeta (el botón va abajo, junto al estado) */
+.persona-fila-nombre {
+    grid-area: nombre;
+    font-size: 0.98rem;
+    overflow-wrap: anywhere;
+}
+
+.persona-fila-sub {
+    grid-area: sub;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    min-width: 0;
+}
+
+.persona-fila-boton.btn {
+    grid-area: boton;
+    padding: 5px 12px;
+    font-size: 0.85rem;
+}
+
+.persona-card-nombre {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.ficha-datos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+    margin: 0;
+}
+
+.ficha-datos dt {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.ficha-datos dd {
+    margin: 2px 0 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.ficha-datos .ficha-ancho {
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+
+.ficha-datos .correo {
+    color: var(--text);
+}
+
+.ficha-resumen .nota {
+    margin-bottom: 0;
+}
+
+@media (max-width: 720px) {
+    .personas-tabla {
+        display: none;
+    }
+
+    .personas-lista {
+        display: block;
+    }
+}
+
+.ficha-solo-lectura {
+    margin: 16px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid #2a2e37;
+}
+
+.bloque-persona form > .btn {
+    margin-top: 8px;
 }

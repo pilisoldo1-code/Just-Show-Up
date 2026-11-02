@@ -7,12 +7,11 @@
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+    {% from "_correo.html" import correo %}
     {% include "_menu.html" %}
     <main>
         <p class="subtitle"><a href="/profesora/{{ seccion }}">← Volver a {{ textos.titulo|lower }}</a></p>
         <h1>{{ persona.nombre }} {{ persona.apellido }}</h1>
-        <p class="subtitle">{{ persona.roles|join(' · ') }} ·
-            <span class="badge {{ 'badge-on' if persona.membresia.activa else 'badge-off' }}">{{ 'Activa' if persona.membresia.activa else 'Inactiva' }}</span></p>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
@@ -24,19 +23,26 @@
         </div>
         {% endif %}
 
-        {% if persona.solo_lectura %}
-        <section class="bloque-persona">
-            <h2>Datos</h2>
-            <dl class="datos-lectura">
-                <dt>Mail</dt><dd>{{ persona.mail }}</dd>
-                <dt>Teléfono</dt><dd>{{ persona.telefono or '—' }}</dd>
+        {# resumen: toda su información de un vistazo #}
+        <section class="bloque-persona ficha-resumen">
+            <dl class="ficha-datos">
+                <div><dt>Rol</dt><dd>{{ persona.roles|join(' · ') }}</dd></div>
+                <div><dt>Estado</dt><dd><span class="badge {{ 'badge-on' if persona.membresia.activa else 'badge-off' }}">{{ 'Activa' if persona.membresia.activa else 'Inactiva' }}</span></dd></div>
+                <div class="ficha-ancho"><dt>Correo</dt><dd>{{ correo(persona.mail, persona.nombre ~ ' ' ~ persona.apellido) }}</dd></div>
+                <div><dt>Teléfono</dt><dd>{{ persona.telefono or '—' }}</dd></div>
+                <div><dt>Cédula</dt><dd>{{ persona.cedula_txt or 'No registrada' }}</dd></div>
+                <div><dt>Carné de salud vence</dt>
+                    <dd>{% if persona.fecha_vencimiento_carne_salud %}{% set f = persona.fecha_vencimiento_carne_salud.split('-') %}{{ f[2] }}/{{ f[1] }}/{{ f[0] }}{% else %}—{% endif %}</dd></div>
             </dl>
-            <p class="nota">Es administradora de {{ usuario.empresa_nombre or 'tu empresa' }}: podés consultar sus datos, pero
-                sus datos, su contraseña, su estado y su rol solo los cambia la administración general de Just Show Up.</p>
+            {% if persona.solo_lectura %}
+            <p class="nota ficha-solo-lectura">Es administradora de {{ usuario.empresa_nombre or 'tu empresa' }}: podés consultar su
+                información, pero sus datos, su contraseña, su estado y su rol solo los cambia la administración general de Just Show Up.</p>
+            {% endif %}
         </section>
-        {% else %}
+
+        {% if not persona.solo_lectura %}
         <section class="bloque-persona">
-            <h2>Datos</h2>
+            <h2>Editar datos</h2>
             <form action="/profesora/{{ seccion }}/{{ persona.id }}/datos" method="post" class="horario-form">
                 <label>Nombre * <input type="text" name="nombre" value="{{ datos.nombre }}" maxlength="60" required /></label>
                 <label>Apellido * <input type="text" name="apellido" value="{{ datos.apellido }}" maxlength="60" required /></label>
@@ -75,7 +81,7 @@
             </div>
             {% else %}
             <form action="/profesora/{{ seccion }}/{{ persona.id }}/roles" method="post"
-                  onsubmit="return confirm('¿Cambiar el rol de {{ persona.nombre }} {{ persona.apellido }} a {{ otro }}? Su historial se conserva.')">
+                  data-confirmar="¿Cambiar el rol de {{ persona.nombre }} {{ persona.apellido }} a {{ otro }}? Su historial se conserva.">
                 <input type="hidden" name="rol" value="{{ otro }}" />
                 <p class="nota">{{ 'Va a dejar de reservar clases y va a poder dar clases.' if otro == 'profesora' else
                     'Va a dejar de dar clases y va a poder reservar clases.' }} Sus reservas, asistencias, facturas y clases
@@ -92,7 +98,7 @@
             {% if persona.membresia.activa %}
             <p class="nota">Activa: puede iniciar sesión en {{ usuario.empresa_nombre or 'tu empresa' }}.</p>
             <form action="/profesora/{{ seccion }}/{{ persona.id }}/estado" method="post"
-                  onsubmit="return confirm('¿Dejar inactiva a {{ persona.nombre }} {{ persona.apellido }}? No va a poder entrar a tu empresa; sus datos e historial se conservan.')">
+                  data-confirmar="¿Dejar inactiva a {{ persona.nombre }} {{ persona.apellido }}? No va a poder entrar a tu empresa; sus datos e historial se conservan.">
                 <input type="hidden" name="activa" value="0" />
                 <button type="submit" class="btn btn-secundario">Dejar inactiva</button>
             </form>
@@ -104,8 +110,25 @@
             </form>
             {% endif %}
         </section>
+
+        <section class="bloque-persona">
+            <h2>Contraseña</h2>
+            <p class="nota">Genera una contraseña temporal nueva, que se muestra una sola vez. La actual deja de funcionar en su
+                cuenta, en todas las empresas donde usa Just Show Up.</p>
+            <form action="/profesora/alumnas/{{ persona.id }}/reiniciar-contrasena" method="post"
+                  data-confirmar="¿Generar una contraseña nueva para {{ persona.nombre }} {{ persona.apellido }}? La anterior deja de funcionar en su cuenta, en todas las empresas donde usa Just Show Up.">
+                <input type="hidden" name="desde" value="{{ seccion }}" />
+                <button type="submit" class="btn btn-secundario">Reiniciar contraseña</button>
+            </form>
+        </section>
         {% endif %}
         {% endif %}
     </main>
+    {% include "_correo_script.html" %}
+    <script>
+        document.querySelectorAll("form[data-confirmar]").forEach(function (f) {
+            f.addEventListener("submit", function (ev) { if (!confirm(f.dataset.confirmar)) ev.preventDefault(); });
+        });
+    </script>
 </body>
 </html>
