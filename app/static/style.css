@@ -3208,3 +3208,16 @@ main.baja-pagina h1 {
     vertical-align: middle;
     white-space: nowrap;
 }
+
+.baja-aviso-pronto p,
+.baja-aviso-reactivar p {
+    margin: 4px 0 0;
+}
+
+.baja-aviso-neutro {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    color: var(--muted);
+    line-height: 1.5;
+    margin: 20px 0 0;
+}

@@ -284,12 +284,16 @@ begin
     )
     select coalesce(array_agg(id order by id), '{}') into v_horarios from h;
 
-    insert into public.bloqueo (tipo, fecha_desde, fecha_hasta, id_horario, motivo, id_profesora, id_empresa)
-    values ('baja', v_hoy,
-            greatest(v_hoy + 60, coalesce((select max(fecha) from public.clase
-                                           where id_profesora = p_usuario and id_empresa = p_empresa), v_hoy)),
-            null, btrim(p_motivo), p_usuario, p_empresa)
-    returning id into v_bloqueo;
+    -- el bloqueo marca sus reservas canceladas y cubre sus clases futuras (también las que ya canceló una licencia):
+    -- si no tiene ninguna clase futura, no hace falta (y no aparece una desactivación vacía en Planificación)
+    if exists (select 1 from public.clase where id_profesora = p_usuario and id_empresa = p_empresa and fecha >= v_hoy) then
+        insert into public.bloqueo (tipo, fecha_desde, fecha_hasta, id_horario, motivo, id_profesora, id_empresa)
+        values ('baja', v_hoy,
+                greatest(v_hoy + 60, coalesce((select max(fecha) from public.clase
+                                               where id_profesora = p_usuario and id_empresa = p_empresa), v_hoy)),
+                null, btrim(p_motivo), p_usuario, p_empresa)
+        returning id into v_bloqueo;
+    end if;
 
     -- primero la membresía: desde acá ningún horario ni clase de ella puede volver a quedar activo
     update public.membresia

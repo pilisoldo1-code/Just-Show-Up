@@ -22,11 +22,10 @@
         {% if previa.pronto %}
         {% set n = previa.pronto|length %}
         <div class="aviso baja-aviso-pronto" role="note">
-            <strong>{{ 'Una clase empieza' if n == 1 else n ~ ' clases empiezan' }} en las próximas 24 horas:</strong>
-            {% for c in previa.pronto %}{{ c.dia_txt }} {{ c.hora_inicio }}{{ ', ' if not loop.last }}{% endfor %}.
-            Las alumnas podrían no enterarse a tiempo de la cancelación, porque la plataforma todavía no envía avisos
-            automáticos. Podés avisarles por otro medio o esperar a que {{ 'pase esa clase' if n == 1 else 'pasen esas clases' }}
-            para desactivarla. Es solo un aviso: podés confirmar igual.
+            <strong>{{ 'Una clase comienza' if n == 1 else n ~ ' clases comienzan' }} en menos de 24 horas.</strong>
+            <p>{% for c in previa.pronto %}{{ c.dia_txt }} a las {{ c.hora_inicio }}{{ ', ' if not loop.last }}{% endfor %}.
+                La plataforma todavía no envía notificaciones automáticas, por lo que las alumnas podrían no enterarse a tiempo.
+                Te recomendamos avisarles antes de desactivar. Podés continuar igualmente.</p>
         </div>
         {% endif %}
         <dl class="baja-cifras">
@@ -74,14 +73,23 @@
                 las asistencias, las facturas y los pagos se conservan tal cual.</p>
         </section>
 
+        {% set n_horarios = previa.horarios|length %}
+        {% if n_horarios or n_clases %}
         <div class="aviso baja-aviso-reactivar" role="note">
-            <strong>Si después se la reactiva, nada de esto se recupera automáticamente.</strong>
-            Vuelve a poder iniciar sesión, pero las clases y reservas canceladas no vuelven: las alumnas tienen que reservar
-            de nuevo y sus horarios se activan a mano en Horarios.
+            <strong>Si después se la reactiva, esto no se recupera automáticamente.</strong>
+            <p>Vuelve a poder iniciar sesión, pero{% if n_clases %} {{ 'la clase cancelada no vuelve' if n_clases == 1 else 'las ' ~ n_clases ~ ' clases canceladas no vuelven' }}{% if previa.reservas %}
+                y {{ 'la alumna afectada tiene' if previa.alumnas == 1 else 'las alumnas afectadas tienen' }} que reservar de nuevo{% endif %}{% endif %}{% if n_clases and n_horarios %};{% endif %}{% if n_horarios %}
+                {{ 'su horario queda inactivo y se activa' if n_horarios == 1 else 'sus ' ~ n_horarios ~ ' horarios quedan inactivos y se activan' }} a mano en Horarios{% endif %}.</p>
         </div>
+        {% else %}
+        <div class="aviso baja-aviso-neutro" role="note">
+            No tiene horarios, clases ni reservas próximas. Si después se la reactiva, recupera el acceso sin nada más que
+            restablecer.
+        </div>
+        {% endif %}
 
         <form action="{{ accion }}" method="post" class="horario-form baja-form"
-              data-confirmar="¿Desactivar a {{ persona.nombre }} {{ persona.apellido }}? Se {{ 'cancela' if n_clases == 1 else 'cancelan' }} {{ n_clases }} {{ 'clase' if n_clases == 1 else 'clases' }} y {{ previa.reservas }} {{ 'reserva' if previa.reservas == 1 else 'reservas' }}. Aunque después se la reactive, esas clases y reservas no vuelven.">
+              data-confirmar="¿Desactivar a {{ persona.nombre }} {{ persona.apellido }}?{% if n_clases %} Se {{ 'cancela' if n_clases == 1 else 'cancelan' }} {{ n_clases }} {{ 'clase' if n_clases == 1 else 'clases' }} y {{ previa.reservas }} {{ 'reserva' if previa.reservas == 1 else 'reservas' }}, que no vuelven aunque después se la reactive.{% else %} No tiene clases próximas: no se cancela ninguna.{% endif %}">
             <input type="hidden" name="firma" value="{{ previa.firma }}" />
             <label>Motivo de la desactivación (solo lo ve la administración)
                 <input type="text" name="motivo" value="{{ motivo }}" maxlength="200" required

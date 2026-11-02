@@ -130,11 +130,11 @@ ok("vista previa: horario, clase, 2 reservas y los nombres de las alumnas",
    v.status_code == 200 and "Pilates mat" in v.text and "Ana Prueba, Eva Prueba" in v.text
    and "<dt>Reservas a cancelar</dt><dd>2</dd>" in v.text)
 ok("vista previa: aclara que reactivarla no recupera clases ni reservas",
-   "nada de esto se recupera automáticamente" in v.text)
+   "esto no se recupera automáticamente" in v.text and "que reservar de nuevo" in v.text)
 from datetime import datetime  # noqa: E402
 empieza = datetime.combine(manana, datetime.strptime("10:00", "%H:%M").time(), tzinfo=clases.TZ)
 ok("vista previa: avisa si la clase empieza en menos de 24 horas (y solo entonces)",
-   ("próximas 24 horas" in v.text) == (empieza - clases.ahora() <= timedelta(hours=24)))
+   ("menos de 24 horas" in v.text) == (empieza - clases.ahora() <= timedelta(hours=24)))
 P = entrar("Pilates Centro", "otra.pil@prueba.invalid")
 ok("una profesora común no abre la baja de otra", P.get(f"/profesora/profesoras/{PROF}/baja", follow_redirects=False).status_code == 303)
 ok("otra empresa: la administradora de Just Show Up no la ve",
@@ -208,6 +208,19 @@ ok("pasa a profesora inactiva y su clase queda cancelada",
    sql("select es_admin, es_profesora, activa from membresia where id_usuario = %s and id_empresa = %s", (ADMIN2, PIL), True)
    == {"es_admin": False, "es_profesora": True, "activa": False}
    and sql("select estado from clase where id = %s", (C[ADMIN2],), True)["estado"] == "cancelada")
+# una administradora sin clases (como Bea Sinclases): el aviso no habla de clases ni reservas y no cambia nada de nadie
+SIN, _ = auth.crear_cuenta("sinclases.pil@prueba.invalid", "Bea", "Sinclases", contrasena=CLAVE, id_empresa=PIL, rol_empresa="admin")
+PIL_antes = {t: v for t, v in huella_empresa(PIL).items() if t != "membresia"}
+v = SA.get(f"/admin/empresas/{PIL}/administradoras/{SIN}/baja")
+ok("administradora sin clases: el aviso solo dice que reactivarla devuelve el acceso",
+   "No tiene horarios, clases ni reservas próximas" in v.text and "reservar de nuevo" not in v.text
+   and "a mano en Horarios" not in v.text and "Clases que se cancelan" not in v.text)
+firma = re.search(r'name="firma" value="([0-9a-f]+)"', v.text).group(1)
+r = SA.post(f"/admin/empresas/{PIL}/administradoras/{SIN}/baja", data={"motivo": "PRUEBA sin clases", "firma": firma},
+            follow_redirects=False)
+ok("…se desactiva sin tocar horarios, clases, reservas ni listas de espera de nadie",
+   "ok=1" in r.headers["location"] and {t: v for t, v in huella_empresa(PIL).items() if t != "membresia"} == PIL_antes
+   and huella_empresa(JSU) == JSU_antes)
 r = SA.get(f"/admin/empresas/{PIL}/administradoras/{ADMIN}/baja", follow_redirects=False)
 ok("la última administradora activa no se puede dar de baja", "ninguna+administradora" in r.headers["location"])
 ok("Just Show Up sigue idéntica", huella_empresa(JSU) == JSU_antes)

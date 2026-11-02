@@ -41,7 +41,7 @@ class BajaProfesora(Base):
         for texto in ("Desactivar a Pia Dos", "Sábado · 10:00", "Sábado 7/11 · 10:00", "Pilates · 2 reservas · 1 en espera",
                       "<strong>2 alumnas afectadas</strong>:", "Ana Uno, Eva Dos",
                       "la clase que está en curso", 'name="firma" value="f1"', "Confirmar desactivación", "Motivo de la desactivación",
-                      "esas clases y reservas no vuelven"):
+                      "que no vuelven aunque después se la reactive"):
             self.assertIn(texto, r.text)
         self.assertNotIn("dar_de_baja_docente", self.llamadas())
         main_html = r.text[r.text.index("<main"):r.text.index("</main>")]
@@ -55,12 +55,12 @@ class BajaProfesora(Base):
         self.como(ADMIN)
         self.preparar(previsualizar_baja_docente={**PREVIA, "clases": clases})
         r = self.get(f"/profesora/profesoras/{ID}/baja")
-        self.assertIn("Una clase empieza en las próximas 24 horas:</strong>", r.text)
-        self.assertIn("Martes 3/11 09:00.", r.text)
-        self.assertNotIn("Martes 3/11 11:00.", r.text)
+        self.assertIn("<strong>Una clase comienza en menos de 24 horas.</strong>", r.text)
+        self.assertIn("Martes 3/11 a las 09:00.", r.text)
+        self.assertNotIn("Martes 3/11 a las 11:00", r.text)
         self.assertEqual(r.text.count("Empieza pronto"), 1)
-        self.assertIn("todavía no envía avisos", r.text)
-        self.assertIn("Es solo un aviso: podés confirmar igual.", r.text)
+        self.assertIn("todavía no envía notificaciones automáticas", r.text)
+        self.assertIn("Te recomendamos avisarles antes de desactivar. Podés continuar igualmente.", r.text)
         self.assertIn("Confirmar desactivación</button>", r.text)  # no impide confirmar
         self.assertNotIn("disabled", r.text.split("<form", 1)[1])
 
@@ -68,10 +68,24 @@ class BajaProfesora(Base):
         self.como(ADMIN)
         self.preparar()  # su clase es el sábado 7/11: más de 24 horas
         r = self.get(f"/profesora/profesoras/{ID}/baja")
-        self.assertNotIn("próximas 24 horas", r.text)
+        self.assertNotIn("menos de 24 horas", r.text)
         self.assertNotIn("Empieza pronto", r.text)
-        self.assertIn("Si después se la reactiva, nada de esto se recupera automáticamente.", r.text)
-        self.assertIn("las clases y reservas canceladas no vuelven", r.text)
+        self.assertIn("Si después se la reactiva, esto no se recupera automáticamente.", r.text)
+        self.assertIn("la clase cancelada no vuelve", r.text)
+        self.assertIn("las alumnas afectadas tienen que reservar de nuevo", r.text)
+        self.assertIn("su horario queda inactivo y se activa a mano en Horarios", r.text)
+
+    def test_sin_nada_afectado_el_aviso_solo_dice_que_recupera_el_acceso(self):
+        self.como(ADMIN)
+        self.preparar(previsualizar_baja_docente={**PREVIA, "horarios": [], "clases": [], "reservas": 0, "alumnas": 0,
+                                                  "nombres": [], "espera": 0, "en_curso": 0})
+        r = self.get(f"/profesora/profesoras/{ID}/baja")
+        self.assertIn("No tiene horarios, clases ni reservas próximas", r.text)
+        self.assertIn("recupera el acceso sin nada más que", r.text)
+        for texto in ("reservar de nuevo", "a mano en Horarios", "no se recupera automáticamente", "Clases que se cancelan",
+                      "Horarios que se desactivan"):
+            self.assertNotIn(texto, r.text)
+        self.assertIn("No tiene clases próximas: no se cancela ninguna.", r.text)
 
     def test_confirmar(self):
         self.como(ADMIN)

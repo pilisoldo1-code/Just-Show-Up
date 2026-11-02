@@ -365,6 +365,38 @@ ok("la última administradora activa no se puede dar de baja",
    and rpc(SUP, "dar_de_baja_administradora", p_id_empresa=E2, p_id_usuario=ADMIN2B, p_motivo="x", p_firma="x")["resultado"]
    == "ultima_administradora" and membresia(ADMIN2B, E2)[3])
 
+# una administradora sin clases: no cambia nada de nadie (ni crea una «desactivación» vacía en Planificación)
+ADMIN2E = m("admin5.pil@prueba.invalid", "admin")
+CLASES_E2 = ("horario", "clase", "reserva", "listadeespera", "asistencia", "bloqueo")
+foto = lambda: {t: q(su, f"select * from {t} where id_empresa = %s order by id", (E2,)) for t in CLASES_E2}
+antes_e2, E1_antes = foto(), de_empresa(E1)
+V = rpc(SUP, "previsualizar_baja_administradora", p_id_empresa=E2, p_id_usuario=ADMIN2E)
+ok("administradora sin clases: la vista previa no muestra nada que cancelar",
+   V["resultado"] == "ok" and V["horarios"] == [] and V["clases"] == [] and V["reservas"] == 0 and V["espera"] == 0, V)
+r = rpc(SUP, "dar_de_baja_administradora", p_id_empresa=E2, p_id_usuario=ADMIN2E, p_motivo="PRUEBA sin clases", p_firma=V["firma"])
+ok("…se desactiva", r == {"resultado": "ok", "horarios": 0, "clases": 0, "reservas": 0, "espera": 0}, r)
+ok("…y no cambia ningún horario, clase, reserva, lista de espera, asistencia ni bloqueo de nadie (ni crea un bloqueo)",
+   foto() == antes_e2 and de_empresa(E1) == E1_antes)
+ok("…queda como profesora inactiva, registrada sin bloqueo",
+   membresia(ADMIN2E, E2) == (False, True, False, False)
+   and q(su, "select id_bloqueo from baja_docente where id_usuario = %s", (ADMIN2E,), True)["id_bloqueo"] is None)
+
+# permisos y aislamiento también al confirmar (no solo en la vista previa)
+ok("la administradora de otra empresa no puede confirmar la desactivación de una profesora de esta",
+   rpc(C(ADMIN1), "dar_de_baja_docente", p_id_usuario=PROF3, p_motivo="x", p_firma="x")["resultado"] == "no_existe"
+   and membresia(PROF3, E2)[3])
+ok("la superadministradora no puede desactivar a una administradora indicando otra empresa",
+   rpc(SUP, "previsualizar_baja_administradora", p_id_empresa=E1, p_id_usuario=ADMIN2B)["resultado"] == "no_es_administradora"
+   and rpc(SUP, "dar_de_baja_administradora", p_id_empresa=E1, p_id_usuario=ADMIN2B, p_motivo="x", p_firma="x")["resultado"]
+   == "no_es_administradora" and membresia(ADMIN2B, E2)[3])
+ok("tampoco a la última administradora activa de la Empresa 1",
+   rpc(SUP, "dar_de_baja_administradora", p_id_empresa=E1, p_id_usuario=ADMIN1, p_motivo="x", p_firma="x")["resultado"]
+   == "ultima_administradora" and membresia(ADMIN1, E1)[3])
+ok("una profesora común no puede usar ninguna de las dos desactivaciones",
+   rpc(P3, "dar_de_baja_docente", p_id_usuario=PROF3, p_motivo="x", p_firma="x")["resultado"] == "no_autorizada"
+   and rpc(P3, "dar_de_baja_administradora", p_id_empresa=E2, p_id_usuario=ADMIN2B, p_motivo="x", p_firma="x")["resultado"]
+   == "no_autorizada")
+
 # dos bajas simultáneas de las dos únicas administradoras activas: solo una puede salir
 ADMIN2C = m("admin3.pil@prueba.invalid", "admin")
 firmas = {a: rpc(SUP, "previsualizar_baja_administradora", p_id_empresa=E2, p_id_usuario=a)["firma"] for a in (ADMIN2B, ADMIN2C)}
