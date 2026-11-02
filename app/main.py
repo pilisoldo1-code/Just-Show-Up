@@ -1039,10 +1039,9 @@ def _personas_empresa(usuario: Usuario, seccion: str = "alumnas") -> list[dict]:
     membresias = {m["id_usuario"]: m for m in consulta.execute().data if en_seccion(m)}
     if not membresias:
         return []
+    # la lista muestra solo nombre, rol y estado (y contacto, a una profesora): los datos personales van en la ficha
     filas = [f for f in sb.table("profiles").select(COLUMNAS_ALUMNA if usuario.es_admin else COLUMNAS_PERSONA_PROFESORA)
              .in_("id", list(membresias)).execute().data if f["id"] in membresias]
-    if usuario.es_admin:
-        personas.completar(sb, filas)
     for f in filas:
         m = membresias[f["id"]]
         f["roles"] = _roles_txt(m)

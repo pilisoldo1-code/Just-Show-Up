@@ -251,16 +251,19 @@ A1, _ = entrar("Just Show Up", "profesora@prueba.invalid", CLAVE)
 PIL = sql("select id from empresa where codigo = 'PIL'", uno=True)["id"]
 mails_pil = {f["mail"] for f in sql("select p.mail from membresia m join profiles p on p.id = m.id_usuario where m.id_empresa = %s", (PIL,))}
 h_alumnas, h_profes = A2.get("/profesora/alumnas").text, A2.get("/profesora/profesoras").text
+# la lista muestra nombre, rol y estado; cada persona se reconoce por el enlace a su ficha (el correo está en la ficha)
+pid = lambda mail: (sql("select id::text from profiles where mail = %s", (mail,), uno=True) or {}).get("id", "sin-cuenta")
+en = lambda html, seccion, mail: f'href="/profesora/{seccion}/{pid(mail)}"' in html
 ok("Alumnas (Pilates Centro): título, botón y solo personas con rol alumna de su empresa",
-   "<h1>Alumnas</h1>" in h_alumnas and "+ Nueva alumna" in h_alumnas and "nueva.alumna.pil@prueba.invalid" in h_alumnas
-   and "alumna@prueba.invalid" in h_alumnas and "nueva.admin.pil@prueba.invalid" not in h_alumnas
-   and "sofia@demo.invalid" not in h_alumnas)
+   "<h1>Alumnas</h1>" in h_alumnas and "+ Nueva alumna" in h_alumnas and en(h_alumnas, "alumnas", "nueva.alumna.pil@prueba.invalid")
+   and en(h_alumnas, "alumnas", "alumna@prueba.invalid") and pid("admin.pil@prueba.invalid") not in h_alumnas
+   and pid("sofia@demo.invalid") not in h_alumnas)
 ok("Profesoras (Pilates Centro): profesoras y administradoras de su empresa, sin alumnas ni otras empresas",
-   "<h1>Profesoras</h1>" in h_profes and "+ Nueva profesora" in h_profes and "nueva.profesora.pil@prueba.invalid" in h_profes
-   and "admin.pil@prueba.invalid" in h_profes and "nueva.alumna.pil@prueba.invalid" not in h_profes
-   and "profesora@prueba.invalid" not in h_profes)
+   "<h1>Profesoras</h1>" in h_profes and "+ Nueva profesora" in h_profes and en(h_profes, "profesoras", "nueva.profesora.pil@prueba.invalid")
+   and en(h_profes, "profesoras", "admin.pil@prueba.invalid") and pid("nueva.alumna.pil@prueba.invalid") not in h_profes
+   and pid("profesora@prueba.invalid") not in h_profes)
 ok("cada persona aparece solo en la sección de su rol",
-   "nueva.profesora.pil@prueba.invalid" not in h_alumnas and "nueva.profesora.pil@prueba.invalid" in h_profes)
+   pid("nueva.profesora.pil@prueba.invalid") not in h_alumnas and en(h_profes, "profesoras", "nueva.profesora.pil@prueba.invalid"))
 ALU = sql("select id::text from profiles where mail = 'nueva.alumna.pil@prueba.invalid'", uno=True)["id"]
 r = A2.post(f"/profesora/alumnas/{ALU}/datos", data={"nombre": "Nueva", "apellido": "Repetida", "telefono": "099 555 444",
                                                       "cedula": "1.234.567-2"}, follow_redirects=False)

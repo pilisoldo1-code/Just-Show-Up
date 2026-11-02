@@ -321,12 +321,12 @@ class ListaPersonas(Base):
         r = self.get("/profesora/profesoras")
         self.assertIn("<h1>Profesoras</h1>", r.text)
         self.assertIn("+ Nueva profesora", r.text)
-        self.assertIn('<span class="persona-rol">Profesora</span>', r.text)
-        self.assertIn('<span class="persona-rol">Administradora</span>', r.text)  # un solo rol
+        self.assertIn("<td>Profesora</td>", r.text)
+        self.assertIn("<td>Administradora</td>", r.text)  # un solo rol
         self.assertIn("solo para consulta: sus permisos los gestiona la superadministradora", r.text)
-        self.assertIn('href="/profesora/profesoras/p1">Editar', r.text)
+        self.assertIn('href="/profesora/profesoras/p1">Gestionar profesora', r.text)
         self.assertIn('href="/profesora/profesoras/ap">Ver', r.text)  # otra administradora: solo consultarla
-        self.assertEqual(r.text.count("Reiniciar contraseña"), 1)  # la de la profesora, no la de la administradora
+        self.assertNotIn("Reiniciar contraseña", r.text)  # está en la ficha
         for nombre in ("Eva", "Ines"):
             self.assertNotIn(nombre, r.text)
         self.assertNotIn("Cédula", r.text)  # la cédula se ve en la ficha, no en la lista de profesoras
@@ -336,17 +336,17 @@ class ListaPersonas(Base):
         self.assertEqual(self.get("/profesora/profesoras").status_code, 303)
         self.assertEqual(self.get("/profesora/profesoras/nueva").status_code, 303)
 
-    def test_admin_ve_cedula_y_acciones(self):
+    def test_lista_de_alumnas_corta_y_ficha_aparte(self):
         self.como(ADMIN)
         self.preparar(self.MEMB, self.PERFILES)
-        self.rpc([{"id": "a1", "cedula": "12345672", "fecha_nacimiento": None, "fecha_vencimiento_carne_salud": "2027-01-31"}])
         r = self.get("/profesora/alumnas")
-        self.assertEqual(self.sb.rpc.call_args.args[0], "datos_personales")
-        self.assertIn("<dt>Cédula</dt><dd>1.234.567-2</dd>", r.text)
-        self.assertIn("<dd>31/01/2027</dd>", r.text)  # fecha legible
-        self.assertIn('class="correo" title="e@x.uy"', r.text)
-        self.assertIn("Reiniciar contraseña", r.text)
-        self.assertIn('href="/profesora/alumnas/a1">Editar', r.text)
+        # escritorio: apellido, nombre, estado y «Gestionar alumna»; celular: filas compactas con «Gestionar»
+        self.assertIn("<th>Apellido</th>", r.text)
+        self.assertIn('href="/profesora/alumnas/a1">Gestionar alumna', r.text)
+        self.assertIn('aria-label="Gestionar a Eva Uno">Gestionar</a>', r.text)
+        for texto in ("Cédula", "Carné", "e@x.uy", "Reiniciar contraseña", "<th>Rol</th>"):
+            self.assertNotIn(texto, r.text)  # todo eso está en la ficha
+        self.sb.rpc.assert_not_called()  # la lista ya no pide datos personales
         self.assertEqual(self.sb.table.return_value.select.call_args_list[-1].args[0], main.COLUMNAS_ALUMNA)
 
     def test_profesora_no_pide_ni_ve_la_cedula(self):
@@ -818,7 +818,8 @@ class EditarPersona(Base):
         r = self.get(f"/profesora/profesoras/{self.ID}")
         self.assertEqual(r.status_code, 200)
         for texto in ("Pia Dos", "Guardar datos", "Rol actual: <strong>Profesora</strong>", "Cambiar a alumna",
-                      "Dejar inactiva", "p@x.uy"):
+                      "Dejar inactiva", "p@x.uy", "<dt>Teléfono</dt><dd>099123456</dd>", "<dt>Cédula</dt><dd>No registrada</dd>",
+                      "<dt>Carné de salud vence</dt>", "Reiniciar contraseña"):
             self.assertIn(texto, r.text)
         for texto in ("es_admin", "Administradora</label>", "Guardar roles"):
             self.assertNotIn(texto, r.text)  # nunca se ofrece el rol de administradora
@@ -842,7 +843,7 @@ class EditarPersona(Base):
         self.preparar()
         r = self.get(f"/profesora/profesoras/{self.ID}")
         self.assertIn("solo los cambia la administración general", r.text)
-        for texto in ("Guardar datos", "Cambiar a", "Dejar inactiva", "name=\"nombre\""):
+        for texto in ("Guardar datos", "Cambiar a", "Dejar inactiva", "name=\"nombre\"", "Reiniciar contraseña"):
             self.assertNotIn(texto, r.text)
         r = self.post(f"/profesora/profesoras/{self.ID}/datos", {"nombre": "X", "apellido": "Y"})
         self.assertEqual(r.status_code, 403)

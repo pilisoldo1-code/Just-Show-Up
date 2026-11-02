@@ -10,7 +10,7 @@
     {% include "_menu.html" %}
     <main>
         <h1>Mi historial</h1>
-        <p class="subtitle">Tus clases pasadas con tu asistencia y las reservas que cancelaste.</p>
+        <p class="subtitle">Tus clases pasadas con tu asistencia, de la más reciente a la más antigua.</p>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
@@ -25,11 +25,11 @@
         {% endif %}
         <ul class="historial">
             {% for c in historial %}
-            {% set cancelada = c.estado_txt.startswith('Cancelada') %}
+            {% set cancelada = c.cancelada_por_profesora %}
             <li class="historial-item">
                 <div class="historial-cabecera">
                     <span class="historial-fecha">{{ c.dia }} {{ c.fecha_txt }}</span>
-                    <span class="badge {{ c.badge }}">{{ c.estado_txt }}</span>
+                    <span class="badge {{ c.badge }}"{% if cancelada %} title="La canceló la profesora o la empresa"{% endif %}>{{ c.estado_txt }}</span>
                 </div>
                 <div class="historial-detalle">
                     <span>{{ c.hora }} · {{ c.duracion }} min</span>

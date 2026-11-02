@@ -2776,3 +2776,135 @@ main.ancho.empresa-detalle {
         padding: 16px;
     }
 }
+
+/* listado de personas: tabla corta en escritorio, filas compactas en celular; el detalle va en la ficha */
+.personas-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.personas-tabla th,
+.personas-tabla td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid #2a2e37;
+    white-space: nowrap;
+}
+
+.personas-tabla th {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.personas-tabla tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.personas-tabla .personas-accion {
+    text-align: right;
+    width: 1%;
+}
+
+.visualmente-oculto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.personas-lista {
+    display: none;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.persona-fila {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+}
+
+.persona-fila-texto {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.persona-fila-texto strong {
+    overflow-wrap: anywhere;
+}
+
+.persona-fila-sub {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.persona-fila .btn {
+    flex-shrink: 0;
+}
+
+.persona-card-nombre {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.ficha-datos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+    margin: 0;
+}
+
+.ficha-datos dt {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.ficha-datos dd {
+    margin: 2px 0 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.ficha-datos .ficha-ancho {
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+
+.ficha-datos .correo {
+    color: var(--text);
+}
+
+.ficha-resumen .nota {
+    margin-bottom: 0;
+}
+
+@media (max-width: 720px) {
+    .personas-tabla {
+        display: none;
+    }
+
+    .personas-lista {
+        display: block;
+    }
+}
+
+.bloque-persona form > .btn {
+    margin-top: 8px;
+}

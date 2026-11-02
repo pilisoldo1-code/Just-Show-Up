@@ -25,58 +25,70 @@
         <p class="subtitle seccion-descripcion">Profesoras y administradoras de {{ usuario.empresa_nombre or 'tu empresa' }}.
             Las administradoras aparecen solo para consulta: sus permisos los gestiona la superadministradora.</p>
         {% else %}
-        <p class="subtitle seccion-descripcion">Alumnas de {{ usuario.empresa_nombre or 'tu empresa' }}. Con «Editar» cambiás sus
-            datos, su rol o su estado.</p>
+        <p class="subtitle seccion-descripcion">Alumnas de {{ usuario.empresa_nombre or 'tu empresa' }}. En «Gestionar alumna» ves
+            todos sus datos y podés editarlos.</p>
         {% endif %}
 
+        {% if not alumnas %}
+        <p class="empty personas-vacio">{{ textos.vacia }}</p>
+        {% elif usuario.es_admin %}
+        {# escritorio: tabla corta; celular: tarjetas compactas (todo lo demás está en la ficha de cada persona) #}
+        <table class="personas-tabla">
+            <thead>
+                <tr>
+                    <th>Apellido</th>
+                    <th>Nombre</th>
+                    {% if seccion == 'profesoras' %}<th>Rol</th>{% endif %}
+                    <th>Estado</th>
+                    <th><span class="visualmente-oculto">Acción</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in alumnas %}
+                {% set otra_admin = a.es_admin and not a.yo %}
+                <tr class="{{ '' if a.activa else 'fila-inactiva' }}">
+                    <td>{{ a.apellido }}</td>
+                    <td>{{ a.nombre }}</td>
+                    {% if seccion == 'profesoras' %}<td>{{ (a.roles or ['Profesora'])|join(' · ') }}</td>{% endif %}
+                    <td><span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span></td>
+                    <td class="personas-accion">
+                        <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}">{{ 'Ver' if otra_admin else 'Gestionar ' ~ textos.singular }}</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <ul class="personas-lista">
+            {% for a in alumnas %}
+            {% set otra_admin = a.es_admin and not a.yo %}
+            <li class="persona-fila {{ '' if a.activa else 'persona-inactiva' }}">
+                <div class="persona-fila-texto">
+                    <strong>{{ a.apellido }}, {{ a.nombre }}</strong>
+                    <span class="persona-fila-sub">
+                        {% if seccion == 'profesoras' %}{{ (a.roles or ['Profesora'])|join(' · ') }} · {% endif %}<span
+                            class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
+                    </span>
+                </div>
+                <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}"
+                   aria-label="{{ 'Ver a' if otra_admin else 'Gestionar a' }} {{ a.nombre }} {{ a.apellido }}">{{ 'Ver' if otra_admin else 'Gestionar' }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        {# profesora: solo el contacto #}
         <div class="personas-grid">
             {% for a in alumnas %}
-            {% set quien = a.nombre ~ ' ' ~ a.apellido %}
-            {% set otra_admin = a.es_admin and not a.yo %}
-            <article class="persona-card {{ '' if a.activa else 'persona-inactiva' }}">
-                <div class="persona-cabecera">
-                    <h2>{{ quien }}</h2>
-                    {% if usuario.es_admin %}
-                    <div class="persona-insignias">
-                        <span class="persona-rol">{{ (a.roles or ['Alumna'])|join(' · ') }}</span>
-                        <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
-                    </div>
-                    {% endif %}
-                </div>
+            <article class="persona-card">
+                <h2 class="persona-card-nombre">{{ a.nombre }} {{ a.apellido }}</h2>
                 <div class="persona-contacto">
-                    {{ correo(a.mail, quien) }}
+                    {{ correo(a.mail, a.nombre ~ ' ' ~ a.apellido) }}
                     <span class="persona-telefono">{{ a.telefono or 'Sin teléfono' }}</span>
                 </div>
-                {% if usuario.es_admin and seccion == 'alumnas' %}
-                <dl class="persona-datos">
-                    <div><dt>Cédula</dt><dd>{{ a.cedula_txt or 'No registrada' }}</dd></div>
-                    <div><dt>Carné vence</dt>
-                        <dd>{% if a.fecha_vencimiento_carne_salud %}{% set f = a.fecha_vencimiento_carne_salud.split('-') %}{{ f[2] }}/{{ f[1] }}/{{ f[0] }}{% else %}—{% endif %}</dd></div>
-                </dl>
-                {% endif %}
-                {% if usuario.es_admin %}
-                <div class="persona-acciones">
-                    <a class="btn btn-chico" href="/profesora/{{ seccion }}/{{ a.id }}">{{ 'Ver' if otra_admin else 'Editar' }}</a>
-                    {% if not a.yo and not otra_admin %}
-                    <form action="/profesora/alumnas/{{ a.id }}/reiniciar-contrasena" method="post"
-                          data-confirmar="¿Generar una contraseña nueva para {{ quien }}? La anterior deja de funcionar en su cuenta, en todas las empresas donde usa Just Show Up.">
-                        <input type="hidden" name="desde" value="{{ seccion }}" />
-                        <button type="submit" class="link-btn">Reiniciar contraseña</button>
-                    </form>
-                    {% endif %}
-                </div>
-                {% endif %}
             </article>
-            {% else %}
-            <p class="empty">{{ textos.vacia }}</p>
             {% endfor %}
         </div>
+        {% endif %}
     </main>
     {% include "_correo_script.html" %}
-    <script>
-        document.querySelectorAll("form[data-confirmar]").forEach(function (f) {
-            f.addEventListener("submit", function (ev) { if (!confirm(f.dataset.confirmar)) ev.preventDefault(); });
-        });
-    </script>
 </body>
 </html>
