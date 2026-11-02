@@ -1072,6 +1072,10 @@ Para cada módulo, en este orden:
   mismo estilo que Empresas). Los correos van con la macro `correo(mail, quien)` de `_correo.html` (una línea, «…» si no
   entra y al tocarlo se despliega) más `{% include "_correo_script.html" %}` una vez por página; dentro de una grilla,
   la columna que lo contiene necesita `minmax(0, 1fr)` para que se recorte. Encabezado de pantalla: `.seccion-encabezado`.
+- **Navegación de semanas** (`.semana-nav` en la grilla): una sola fila; hasta 600 px solo flechas de 44 px y el
+  rango abreviado (`_formato_rango_corto`, «26 oct – 1 nov»). Encabezados con botón al lado del título (Horarios,
+  Tipos de clase, Alumnas, Profesoras, Empresas): `.seccion-encabezado`, título a la izquierda y botón a la derecha
+  en la misma fila también en celular (hasta 400 px se achican título y botón).
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
 - Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).

@@ -93,6 +93,11 @@ def _formato_rango(inicio: date, fin: date) -> str:
     return f"{inicio.day} de {MESES[inicio.month]} al {fin.day} de {MESES[fin.month]}"
 
 
+def _formato_rango_corto(inicio: date, fin: date) -> str:
+    """Para celular: «26 oct – 1 nov»."""
+    return f"{inicio.day} {clases.MESES_CORTOS[inicio.month]} – {fin.day} {clases.MESES_CORTOS[fin.month]}"
+
+
 def _orden_horario(row: dict) -> tuple:
     return (DIAS_ORDEN.index(row["dia_semana"]), row["hora_inicio"])
 
@@ -346,6 +351,7 @@ def home(request: Request, semana: int = 0, ok: int = 0, aviso: str = "", usuari
         dias=dias,
         semana=semana,
         rango_semana=_formato_rango(inicio, fin),
+        rango_semana_corto=_formato_rango_corto(inicio, fin),
         hay_semana_anterior=semana > 0,
         hay_semana_siguiente=semana < SEMANAS_HACIA_ADELANTE,
         fecha="",

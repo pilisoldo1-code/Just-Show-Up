@@ -2914,3 +2914,85 @@ main.ancho.empresa-detalle {
 .bloque-persona form > .btn {
     margin-top: 8px;
 }
+
+/* ---------- horarios en celular ---------- */
+/* Horarios semanales: una sola fila (‹ rango ›); en celular solo flechas y el rango abreviado */
+.semana-nav {
+    flex-wrap: nowrap;
+}
+
+.semana-rango {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+}
+
+.rango-corto {
+    display: none;
+}
+
+.semana-flecha {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .semana-nav {
+        gap: 8px;
+        margin: 8px 0 16px;
+    }
+
+    .semana-texto,
+    .rango-largo {
+        display: none;
+    }
+
+    .rango-corto {
+        display: inline;
+        color: var(--text);
+        font-size: 1.05rem;
+        white-space: nowrap;
+    }
+
+    .semana-flecha {
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.6rem;
+        line-height: 1;
+    }
+}
+
+/* Grilla de la semana en celular: tarjetas más compactas */
+@media (max-width: 440px) {
+    .cards-semana {
+        gap: 12px;
+    }
+
+    .cards-semana .card {
+        padding: 16px;
+    }
+
+    .cards-semana .hora-chip {
+        font-size: 1.3rem;
+        padding: 8px 16px;
+    }
+}
+
+/* Encabezado de pantalla en celulares chicos: título y botón siguen en la misma fila sin desbordar (Horarios, Tipos
+   de clase, Alumnas, Profesoras, Empresas) */
+@media (max-width: 400px) {
+    .seccion-encabezado h1 {
+        font-size: 1.45rem;
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .seccion-encabezado .btn {
+        padding: 7px 10px;
+        font-size: 0.85rem;
+    }
+}
