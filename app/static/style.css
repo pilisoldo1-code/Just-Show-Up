@@ -2066,10 +2066,6 @@ main.ancho {
     width: auto;
 }
 
-.menu-links a.menu-otro-rol {
-    color: var(--accent);
-    border: 1px solid #2a2e37;
-}
 
 .panel-numeros {
     display: grid;
@@ -2197,5 +2193,410 @@ main.ancho {
     .tabla-tarjetas td.empty {
         text-align: center;
         justify-content: center;
+    }
+}
+
+/* ---------- tres roles ---------- */
+.datos-lectura {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 16px;
+    margin: 0 0 12px;
+}
+
+.datos-lectura dt {
+    color: var(--muted);
+}
+
+.datos-lectura dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+/* ---------- superadministración: empresas ---------- */
+.empresas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.empresa-card,
+.empresa-bloque {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 20px;
+    min-width: 0;
+}
+
+.empresa-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.empresa-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.empresa-card-titulo {
+    min-width: 0;
+}
+
+.empresa-card-titulo h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    overflow-wrap: anywhere;
+}
+
+.empresa-codigo {
+    color: var(--muted);
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+}
+
+.empresa-cifras {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+}
+
+.empresa-cifras div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+.empresa-cifras dt {
+    color: var(--muted);
+}
+
+.empresa-cifras dd {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.empresa-bloque .empresa-cifras {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.empresa-gestionar {
+    text-align: center;
+    margin-top: auto;
+}
+
+main.ancho.empresa-detalle {
+    max-width: 860px;
+}
+
+.empresa-detalle-titulo {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.empresa-detalle-titulo h1 {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.empresa-bloque {
+    margin: 20px 0;
+}
+
+.empresa-bloque h2 {
+    margin: 0 0 12px;
+    font-size: 1.1rem;
+}
+
+.empresa-bloque .empresa-cifras {
+    margin-bottom: 16px;
+}
+
+.empresa-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.admin-items {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+}
+
+.admin-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 0;
+    border-top: 1px solid #2a2e37;
+}
+
+.admin-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+/* el estado va a continuación del nombre, en el mismo renglón (con un nombre largo, junto a su última palabra) */
+.admin-nombre .badge {
+    display: inline-block;
+    margin-left: 8px;
+    vertical-align: 1px;
+    white-space: nowrap;
+}
+
+.admin-mail {
+    display: block;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font: inherit;
+    text-align: left;
+    cursor: default;
+}
+
+/* sin <wbr>: Chrome corta en ellos aunque haya nowrap */
+.admin-mail .mail-corto {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-mail .mail-completo {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.admin-mail [hidden] {
+    display: none;
+}
+
+.admin-mail[data-recortado] {
+    cursor: pointer;
+}
+
+.admin-mail:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+.admin-aviso {
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    margin-top: 6px;
+    opacity: 0.85;
+}
+
+.menu-acciones-lista button:disabled,
+.menu-acciones-lista button:disabled:hover {
+    color: var(--muted);
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: none;
+}
+
+.menu-acciones-motivo {
+    margin: 2px 12px 8px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.menu-acciones {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.menu-acciones summary {
+    list-style: none;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    font-size: 1.4rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.menu-acciones summary::-webkit-details-marker {
+    display: none;
+}
+
+.menu-acciones[open] summary {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.menu-acciones-lista {
+    position: absolute;
+    right: 0;
+    top: 50px;
+    z-index: 20;
+    width: 260px;
+    max-width: calc(100vw - 48px);
+    display: grid;
+    padding: 6px;
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.menu-acciones-lista form {
+    margin: 0;
+}
+
+.menu-acciones-lista button {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    text-align: left;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.menu-acciones-lista button:hover,
+.menu-acciones-lista button:focus-visible {
+    background: #22262f;
+}
+
+.menu-acciones-lista .accion-peligro {
+    color: #f87171;
+}
+
+@media (max-width: 600px) {
+    .empresas-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .empresa-card,
+    .empresa-bloque {
+        padding: 16px;
+    }
+
+    .empresa-acciones .btn,
+    .empresa-acciones form,
+    .empresa-acciones form .btn {
+        width: 100%;
+    }
+}
+
+/* Encabezado de pantalla (título + botón) y de bloque (título y descripción + botón): en una fila si entra; en
+   celular el botón va debajo, a todo el ancho. La descripción de la pantalla va aparte, debajo del encabezado. */
+.seccion-encabezado,
+.bloque-encabezado {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+}
+
+.seccion-encabezado {
+    margin-bottom: 12px;
+}
+
+.seccion-encabezado h1 {
+    margin: 0;
+}
+
+.seccion-descripcion {
+    max-width: 720px;
+}
+
+.bloque-encabezado {
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.bloque-encabezado-texto {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+
+.bloque-encabezado-texto h2 {
+    margin: 0 0 6px;
+}
+
+.bloque-encabezado-texto .nota {
+    margin: 0;
+}
+
+.seccion-encabezado .btn,
+.bloque-encabezado .btn {
+    flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+    .seccion-encabezado {
+        flex-wrap: nowrap;
+        gap: 12px;
+    }
+
+    .seccion-encabezado .btn {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
+    .bloque-encabezado {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .bloque-encabezado .btn {
+        width: 100%;
+        text-align: center;
+    }
+
+    .admin-mail {
+        font-size: 0.9rem;
+    }
+
+    .admin-item {
+        gap: 8px;
+    }
+
+    .menu-acciones summary {
+        width: 40px;
+        height: 40px;
+    }
+
+    .menu-acciones-lista {
+        top: 46px;
+    }
+
+    .bloque-encabezado-texto {
+        flex: none;  /* en columna, la base de 320px sería una altura */
+    }
+
+    .seccion-encabezado {
+        margin-bottom: 16px;
     }
 }

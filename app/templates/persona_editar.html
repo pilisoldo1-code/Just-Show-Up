@@ -24,6 +24,17 @@
         </div>
         {% endif %}
 
+        {% if persona.solo_lectura %}
+        <section class="bloque-persona">
+            <h2>Datos</h2>
+            <dl class="datos-lectura">
+                <dt>Mail</dt><dd>{{ persona.mail }}</dd>
+                <dt>Teléfono</dt><dd>{{ persona.telefono or '—' }}</dd>
+            </dl>
+            <p class="nota">Es administradora de {{ usuario.empresa_nombre or 'tu empresa' }}: podés consultar sus datos, pero
+                sus datos, su contraseña, su estado y su rol solo los cambia la administración general de Just Show Up.</p>
+        </section>
+        {% else %}
         <section class="bloque-persona">
             <h2>Datos</h2>
             <form action="/profesora/{{ seccion }}/{{ persona.id }}/datos" method="post" class="horario-form">
@@ -49,17 +60,30 @@
         </section>
 
         <section class="bloque-persona">
-            <h2>Roles en {{ usuario.empresa_nombre or 'tu empresa' }}</h2>
-            <form action="/profesora/{{ seccion }}/{{ persona.id }}/roles" method="post" class="horario-form">
-                <label class="opcion-check"><input type="checkbox" name="es_alumna" value="1" {{ 'checked' if persona.membresia.es_alumna }} /> Alumna</label>
-                <label class="opcion-check"><input type="checkbox" name="es_profesora" value="1" {{ 'checked' if persona.membresia.es_profesora }} /> Profesora</label>
-                <label class="opcion-check"><input type="checkbox" name="es_admin" value="1" {{ 'checked' if persona.membresia.es_admin }}
-                       {{ 'disabled' if persona.yo }} /> Administradora</label>
-                {% if persona.yo %}<input type="hidden" name="es_admin" value="1" />
-                <p class="nota">No podés quitarte a vos misma el rol de administradora.</p>{% endif %}
-                <p class="nota">Una misma cuenta puede tener varios roles. Tiene que tener al menos uno.</p>
-                <button type="submit" class="btn">Guardar roles</button>
+            <h2>Rol en {{ usuario.empresa_nombre or 'tu empresa' }}</h2>
+            {% if persona.rol == 'admin' %}
+            <p class="nota">Sos la administradora. Las administradoras tienen todas las funciones de una profesora (con o sin
+                clases asignadas). El rol de administradora solo lo da o lo quita la administración general.</p>
+            {% else %}
+            {% set otro = 'profesora' if persona.rol == 'alumna' else 'alumna' %}
+            <p>Rol actual: <strong>{{ 'Alumna' if persona.rol == 'alumna' else 'Profesora' }}</strong>. Cada persona tiene un solo
+                rol en tu empresa.</p>
+            {% if persona.pendientes %}
+            <div class="aviso aviso-error">
+                <strong>Para que pase a ser {{ otro }}, antes hay que resolver que:</strong>
+                <ul class="lista-errores">{% for p in persona.pendientes %}<li>{{ p }}</li>{% endfor %}</ul>
+            </div>
+            {% else %}
+            <form action="/profesora/{{ seccion }}/{{ persona.id }}/roles" method="post"
+                  onsubmit="return confirm('¿Cambiar el rol de {{ persona.nombre }} {{ persona.apellido }} a {{ otro }}? Su historial se conserva.')">
+                <input type="hidden" name="rol" value="{{ otro }}" />
+                <p class="nota">{{ 'Va a dejar de reservar clases y va a poder dar clases.' if otro == 'profesora' else
+                    'Va a dejar de dar clases y va a poder reservar clases.' }} Sus reservas, asistencias, facturas y clases
+                    pasadas se conservan.</p>
+                <button type="submit" class="btn btn-secundario">Cambiar a {{ otro }}</button>
             </form>
+            {% endif %}
+            {% endif %}
         </section>
 
         {% if not persona.yo %}
@@ -80,6 +104,7 @@
             </form>
             {% endif %}
         </section>
+        {% endif %}
         {% endif %}
     </main>
 </body>

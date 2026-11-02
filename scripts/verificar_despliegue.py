@@ -62,7 +62,8 @@ por_usuario = {m["id_usuario"]: m for m in membresias}
 roles_ok = all(
     p["id"] in por_usuario and por_usuario[p["id"]]["id_empresa"] == jsu and por_usuario[p["id"]]["activa"]
     and (por_usuario[p["id"]]["es_admin"], por_usuario[p["id"]]["es_profesora"], por_usuario[p["id"]]["es_alumna"])
-    == ((True, True, False) if p["rol"] == "profesora" else (False, False, True))
+    # la administradora es «administradora y profesora» antes de la migración de tres roles y solo «administradora» después
+    in (((True, True, False), (True, False, False)) if p["rol"] == "profesora" else ((False, False, True),))
     for p in respaldo["profiles"])
 ok(f"una membresía por persona según su rol ({len(membresias)} de {len(respaldo['profiles'])})",
    roles_ok and len(membresias) == len(respaldo["profiles"]))

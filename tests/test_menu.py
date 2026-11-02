@@ -23,7 +23,7 @@ SECCIONES_PROFESORA = [
     ("/profesora/profesoras", "Profesoras"), ("/profesora/resumenes", "Facturación"), ("/profesora/estadisticas", "Estadísticas"),
 ]
 SECCIONES_ALUMNA = [
-    ("/", "Clases"), ("/mis-inscripciones", "Mis inscripciones"),
+    ("/", "Reservar clases"), ("/mis-inscripciones", "Mis inscripciones"),
     ("/mi-historial", "Mi historial"), ("/mis-facturas", "Mis facturas"),
 ]
 

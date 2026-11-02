@@ -83,7 +83,7 @@ auth.cliente_admin().table("profiles").update({"es_superadmin": True}).eq("id", 
 auth.crear_cuenta("profesora@prueba.invalid", "Profe", "Prueba", rol="profesora", contrasena=CLAVE,
                   id_empresa=JSU, rol_empresa="admin_profesora")
 ok("altas iniciales: superadministradora sin lugar y administradora de Just Show Up",
-   membresias("superadmin@prueba.invalid") == {} and membresias("profesora@prueba.invalid") == {"JSU": (True, True, False)})
+   membresias("superadmin@prueba.invalid") == {} and membresias("profesora@prueba.invalid") == {"JSU": (True, False, False)})
 
 # ---------- superadministradora: acceso propio y alta de empresa ----------
 SA = navegador()
@@ -95,53 +95,72 @@ r = SA.post("/admin/empresas", data={"nombre": "Pilates Centro", "codigo": "pil"
                                      "admin_apellido": "Bentancor", "admin_mail": "admin.pil@prueba.invalid",
                                      "tambien_profesora": "1"})
 CLAVE_ADMIN2 = clave_temporal(r.text)
-ok("superadmin: crea Pilates Centro con su administradora (y profesora)",
-   r.status_code == 200 and CLAVE_ADMIN2 and membresias("admin.pil@prueba.invalid") == {"PIL": (True, True, False)})
+ok("superadmin: crea Pilates Centro con su administradora (un solo rol, aunque llegue la casilla vieja «también da clases»)",
+   r.status_code == 200 and CLAVE_ADMIN2 and membresias("admin.pil@prueba.invalid") == {"PIL": (True, False, False)})
 r = SA.post("/admin/empresas", data={"nombre": "PILATES  centro!", "codigo": "PIX", "admin_nombre": "X", "admin_apellido": "Y",
                                      "admin_mail": "x.y@prueba.invalid"}, follow_redirects=False)
 ok("superadmin: un nombre que se escribe igual se rechaza", "ok=0" in r.headers.get("location", "")
    and not sql("select 1 from empresa where codigo = 'PIX'"))
 r = SA.get("/admin/empresas")
-ok("superadmin: ve cantidades y administradora, sin datos operativos",
-   "Pilates Centro" in r.text and "admin.pil@prueba.invalid" in r.text and "Facturación" not in r.text)
+PIL_ID = sql("select id from empresa where codigo = 'PIL'", uno=True)["id"]
+ok("superadmin: Empresas en tarjetas con cantidades, sin administradoras ni datos operativos",
+   "Pilates Centro" in r.text and "Gestionar empresa" in r.text and "admin.pil@prueba.invalid" not in r.text
+   and "<dt>Administradoras</dt><dd>1</dd>" in r.text and "Facturación" not in r.text)
+r = SA.get(f"/admin/empresas/{PIL_ID}")
+ok("superadmin: «Gestionar empresa» muestra la administradora y sus acciones",
+   r.status_code == 200 and "admin.pil@prueba.invalid" in r.text and "Pasar a profesora" in r.text
+   and "Asignar administradora" in r.text)
 for url in ("/", "/profesora/horarios", "/profesora/resumenes", "/administracion"):
     ok(f"superadmin: no entra a {url}", SA.get(url, follow_redirects=False).status_code == 303)
 
 # ---------- administradora de Pilates Centro: altas por rol ----------
 A2, r = entrar("pilates centro", "admin.pil@prueba.invalid", CLAVE_ADMIN2)
 ok("administradora: entra escribiendo el lugar en minúsculas y va al panel", r.headers.get("location") == "/administracion")
-claves, esperado = {}, {"alumna": (False, False, True), "profesora": (False, True, False),
-                        "admin": (True, False, False), "admin_profesora": (True, True, False)}
+claves, esperado = {}, {"alumna": (False, False, True), "profesora": (False, True, False)}
+for rol in ("admin", "admin_profesora"):
+    mail = f"nueva.{rol.replace('_', '.')}.pil@prueba.invalid"
+    r = A2.post("/profesora/alumnas", data={"nombre": "Nueva", "apellido": "Persona", "mail": mail, "rol": rol},
+                follow_redirects=False)
+    ok(f"alta «{rol}» por la administradora: se rechaza (solo la superadministradora designa administradoras)",
+       r.status_code == 303 and "ok=0" in r.headers["location"] and membresias(mail) == {}
+       and sql("select count(*) n from auth.users where email = %s", (mail,), uno=True)["n"] == 0)
 for rol, flags in esperado.items():
     mail = f"nueva.{rol.replace('_', '.')}.pil@prueba.invalid"
     r = A2.post("/profesora/alumnas", data={"nombre": "Nueva", "apellido": "Persona", "mail": mail, "rol": rol})
     claves[rol] = clave_temporal(r.text)
     ok(f"alta «{rol}»: cuenta real creada con exactamente esos permisos, solo en Pilates Centro",
        claves[rol] and membresias(mail) == {"PIL": flags}, membresias(mail))
-inicio = {"alumna": "/", "profesora": "/profesora/horarios", "admin": "/administracion", "admin_profesora": "/administracion"}
+inicio = {"alumna": "/", "profesora": "/profesora/horarios"}
 for rol in esperado:
     mail = f"nueva.{rol.replace('_', '.')}.pil@prueba.invalid"
     c, r = entrar("Pilates Centro", mail, claves[rol])
     ok(f"«{rol}»: entra con su contraseña temporal y va a {inicio[rol]}", r.headers.get("location") == inicio[rol], r.status_code)
     prohibidas = {"alumna": ["/profesora/horarios", "/administracion", "/profesora/resumenes"],
-                  "profesora": ["/administracion", "/profesora/resumenes", "/profesora/tipos-clase", "/profesora/alumnas/nueva"],
-                  "admin": [], "admin_profesora": []}[rol]
+                  "profesora": ["/administracion", "/profesora/resumenes", "/profesora/tipos-clase", "/profesora/alumnas/nueva",
+                                "/", "/mis-inscripciones", "/mis-facturas"]}[rol]
     for url in prohibidas + ["/admin/empresas"]:
         ok(f"«{rol}»: no entra a {url}", c.get(url, follow_redirects=False).status_code == 303)
     c2, r2 = entrar("Just Show Up", mail, claves[rol])
     ok(f"«{rol}»: no entra a Just Show Up (mismo mensaje genérico)", r2.status_code == 401 and auth.MSG_INGRESO in r2.text)
 
-# ---------- roles combinados ----------
+# ---------- un solo rol por empresa ----------
 PROF_ID = sql("select id::text from profiles where mail = 'nueva.profesora.pil@prueba.invalid'", uno=True)["id"]
 r = A2.post("/profesora/alumnas", data={"nombre": "Nueva", "apellido": "Persona", "mail": "nueva.profesora.pil@prueba.invalid",
                                         "rol": "alumna"}, follow_redirects=False)
-ok("la profesora también pasa a ser alumna (misma cuenta)", membresias("nueva.profesora.pil@prueba.invalid") == {"PIL": (False, True, True)},
-   membresias("nueva.profesora.pil@prueba.invalid"))
+ok("dar de alta como alumna a quien ya es profesora: se avisa y no se suma el rol",
+   r.status_code == 400 and "ya es profesora" in r.text
+   and membresias("nueva.profesora.pil@prueba.invalid") == {"PIL": (False, True, False)}, membresias("nueva.profesora.pil@prueba.invalid"))
 c, r = entrar("Pilates Centro", "nueva.profesora.pil@prueba.invalid", claves["profesora"])
-ok("profesora y alumna: entra al panel de profesora y tiene «Mis clases»", r.headers.get("location") == "/profesora/horarios"
-   and 'class="menu-otro-rol">Mis clases' in c.get("/profesora/horarios").text)
-ok("profesora y alumna: puede ver sus clases de alumna sin cerrar sesión", c.get("/mis-inscripciones", follow_redirects=False).status_code == 200)
-ok("profesora y alumna: sigue sin facturación", c.get("/profesora/resumenes", follow_redirects=False).status_code == 303)
+h = c.get("/profesora/horarios").text
+ok("profesora: entra a «Mis horarios», con su menú docente y sin enlaces a otro panel",
+   r.headers.get("location") == "/profesora/horarios" and ">Mis horarios</a>" in h and "<h1>Mis horarios</h1>" in h
+   and "menu-otro-rol" not in h and "Reservar clases" not in h)
+ca, _ = entrar("Pilates Centro", "nueva.alumna.pil@prueba.invalid", claves["alumna"])
+h = ca.get("/mis-inscripciones").text
+ok("alumna: menú de alumna (Reservar clases primero), sin enlaces a otro panel",
+   re.findall(r'<a href="([^"]+)" class="[^"]*"[^>]*>([^<]+)</a>', h.split('class="menu-links"')[1].split("</nav>")[0])
+   == [("/", "Reservar clases"), ("/mis-inscripciones", "Mis inscripciones"), ("/mi-historial", "Mi historial"),
+       ("/mis-facturas", "Mis facturas")] and "Panel de" not in h)
 
 # ---------- cuenta compartida y dos dispositivos ----------
 A1, r = entrar("Just Show Up", "profesora@prueba.invalid", CLAVE)
@@ -212,7 +231,7 @@ for rol in ("alumna", "profesora"):
     # Supabase Auth deja que cada persona edite sus propios metadatos: eso no da permisos
     cli.auth.update_user({"data": {"rol_empresa": "admin", "id_empresa": JSU, "sin_empresa": True}})
     ok(f"{rol}: editar sus metadatos (rol_empresa=admin, otra empresa) no cambia nada",
-       membresias(mail) == ({"PIL": (False, False, True)} if rol == "alumna" else {"PIL": (False, True, True)})
+       membresias(mail) == ({"PIL": (False, False, True)} if rol == "alumna" else {"PIL": (False, True, False)})
        and not sql("select es_superadmin from profiles where id = %s", (yo,), uno=True)["es_superadmin"])
     c, r = entrar("Just Show Up", mail, claves[rol])
     ok(f"{rol}: después de editar sus metadatos sigue sin poder entrar a Just Show Up", r.status_code == 401)
@@ -240,9 +259,8 @@ ok("Profesoras (Pilates Centro): profesoras y administradoras de su empresa, sin
    "<h1>Profesoras</h1>" in h_profes and "+ Nueva profesora" in h_profes and "nueva.profesora.pil@prueba.invalid" in h_profes
    and "admin.pil@prueba.invalid" in h_profes and "nueva.alumna.pil@prueba.invalid" not in h_profes
    and "profesora@prueba.invalid" not in h_profes)
-ok("la profesora que también es alumna aparece en las dos secciones (una sola cuenta)",
-   "nueva.profesora.pil@prueba.invalid" in h_alumnas and "nueva.profesora.pil@prueba.invalid" in h_profes
-   and sql("select count(*) n from auth.users where email = 'nueva.profesora.pil@prueba.invalid'", uno=True)["n"] == 1)
+ok("cada persona aparece solo en la sección de su rol",
+   "nueva.profesora.pil@prueba.invalid" not in h_alumnas and "nueva.profesora.pil@prueba.invalid" in h_profes)
 ALU = sql("select id::text from profiles where mail = 'nueva.alumna.pil@prueba.invalid'", uno=True)["id"]
 r = A2.post(f"/profesora/alumnas/{ALU}/datos", data={"nombre": "Nueva", "apellido": "Repetida", "telefono": "099 555 444",
                                                       "cedula": "1.234.567-2"}, follow_redirects=False)
@@ -255,17 +273,27 @@ fila = sql("select p.apellido, p.telefono, m.cedula from profiles p join membres
            "where p.id = %s", (PIL, ALU), uno=True)
 ok("editar datos de una alumna: perfil y cédula de la empresa guardados", r.status_code == 303
    and fila == {"apellido": "Editada", "telefono": "099555444", "cedula": "11111111"}, fila)
-r = A2.post(f"/profesora/alumnas/{ALU}/roles", data={"es_alumna": "1", "es_profesora": "1"}, follow_redirects=False)
-ok("roles: la alumna pasa a ser también profesora (misma cuenta)", membresias("nueva.alumna.pil@prueba.invalid") == {"PIL": (False, True, True)})
-A2.post(f"/profesora/alumnas/{ALU}/roles", data={"es_alumna": "1"})
+ok("su ficha ofrece cambiar a profesora (nunca a administradora)",
+   "Cambiar a profesora" in (f := A2.get(f"/profesora/alumnas/{ALU}").text) and "Administradora</label>" not in f)
+r = A2.post(f"/profesora/alumnas/{ALU}/roles", data={"rol": "profesora"}, follow_redirects=False)
+ok("rol: la alumna sin nada pendiente pasa a profesora (misma cuenta) y su ficha pasa a Profesoras",
+   membresias("nueva.alumna.pil@prueba.invalid") == {"PIL": (False, True, False)}
+   and r.headers["location"].startswith(f"/profesora/profesoras/{ALU}?ok=1"))
+r = A2.post(f"/profesora/profesoras/{ALU}/roles", data={"rol": "admin"}, follow_redirects=False)
+ok("rol: la administradora no puede darle el rol de administradora",
+   "ok=0" in r.headers["location"] and membresias("nueva.alumna.pil@prueba.invalid") == {"PIL": (False, True, False)})
+A2.post(f"/profesora/profesoras/{ALU}/roles", data={"rol": "alumna"})
+ok("rol: vuelve a ser alumna", membresias("nueva.alumna.pil@prueba.invalid") == {"PIL": (False, False, True)})
 r = A2.post(f"/profesora/alumnas/{ALU}/estado", data={"activa": "0"}, follow_redirects=False)
 ok("estado: queda inactiva y no puede entrar (mensaje genérico)",
    sql("select activa from membresia where id_usuario = %s and id_empresa = %s", (ALU, PIL), uno=True)["activa"] is False
    and entrar("Pilates Centro", "nueva.alumna.pil@prueba.invalid", claves["alumna"])[1].status_code == 401)
 ok("la inactiva sigue en la lista, marcada como Inactiva", "Inactiva" in A2.get("/profesora/alumnas").text)
-A2.post(f"/profesora/alumnas/{ALU}/roles", data={"es_alumna": "1"})
-ok("cambiar roles de una inactiva no la reactiva",
-   sql("select activa from membresia where id_usuario = %s and id_empresa = %s", (ALU, PIL), uno=True)["activa"] is False)
+A2.post(f"/profesora/alumnas/{ALU}/roles", data={"rol": "profesora"})
+ok("cambiar el rol de una inactiva no la reactiva",
+   sql("select activa, es_profesora from membresia where id_usuario = %s and id_empresa = %s", (ALU, PIL), uno=True)
+   == {"activa": False, "es_profesora": True})
+A2.post(f"/profesora/profesoras/{ALU}/roles", data={"rol": "alumna"})
 A2.post(f"/profesora/alumnas/{ALU}/estado", data={"activa": "1"})
 ok("reactivada: vuelve a entrar", entrar("Pilates Centro", "nueva.alumna.pil@prueba.invalid", claves["alumna"])[1].status_code == 303)
 r = A1.get(f"/profesora/alumnas/{ALU}", follow_redirects=False)
@@ -294,6 +322,50 @@ ok("una profesora no administradora no ve Profesoras ni el inicio de administrac
    P2.get("/profesora/profesoras", follow_redirects=False).status_code == 303
    and P2.get("/administracion", follow_redirects=False).status_code == 303
    and "Editar" not in P2.get("/profesora/alumnas").text)
+
+# ---------- otra administradora: solo se consulta; la gestiona la superadministradora ----------
+r = SA.post(f"/admin/empresas/{PIL}/administradora", data={"nombre": "Bea", "apellido": "Segunda", "mail": "segunda.pil@prueba.invalid"})
+CLAVE_B = clave_temporal(r.text)
+B = sql("select id::text from profiles where mail = 'segunda.pil@prueba.invalid'", uno=True)["id"]
+ok("superadmin: designa una segunda administradora (solo administradora)", CLAVE_B and membresias("segunda.pil@prueba.invalid") == {"PIL": (True, False, False)})
+foto_b = sql("select p.nombre, p.apellido, p.telefono, m.activa, m.es_admin from profiles p join membresia m on m.id_usuario = p.id "
+             "where p.id = %s and m.id_empresa = %s", (B, PIL), uno=True)
+h = A2.get(f"/profesora/profesoras/{B}").text
+ok("la administradora ve a la otra administradora solo para consultar",
+   "solo los cambia la administración general" in h and "Guardar datos" not in h and "Dejar inactiva" not in h
+   and f'href="/profesora/profesoras/{B}">Ver' in A2.get("/profesora/profesoras").text)
+r1 = A2.post(f"/profesora/profesoras/{B}/datos", data={"nombre": "Intrusa", "apellido": "X"}, follow_redirects=False)
+r2 = A2.post(f"/profesora/profesoras/{B}/estado", data={"activa": "0"}, follow_redirects=False)
+r3 = A2.post(f"/profesora/profesoras/{B}/roles", data={"rol": "profesora"}, follow_redirects=False)
+r4 = A2.post(f"/profesora/alumnas/{B}/reiniciar-contrasena", data={"desde": "profesoras"}, follow_redirects=False)
+ok("…y no puede editar sus datos, desactivarla, cambiarle el rol ni reiniciar su contraseña",
+   r1.status_code == 403 and all("ok=0" in r.headers["location"] for r in (r2, r3, r4))
+   and sql("select p.nombre, p.apellido, p.telefono, m.activa, m.es_admin from profiles p join membresia m on m.id_usuario = p.id "
+           "where p.id = %s and m.id_empresa = %s", (B, PIL), uno=True) == foto_b
+   and entrar("Pilates Centro", "segunda.pil@prueba.invalid", CLAVE_B)[1].status_code == 303)
+h = SA.get(f"/admin/empresas/{PIL}").text
+ok("superadmin: ve las administradoras de la empresa con sus acciones", "segunda.pil@prueba.invalid" in h and "Pasar a profesora" in h
+   and "<dt>Administradoras</dt><dd>2</dd>" in h)
+r = SA.post(f"/admin/empresas/{PIL}/administradoras/{B}/quitar", data={"accion": "profesora"}, follow_redirects=False)
+ok("superadmin: pasa a la segunda administradora a profesora (y vuelve a la ficha)", "ok=1" in r.headers["location"]
+   and r.headers["location"].startswith(f"/admin/empresas/{PIL}?")
+   and membresias("segunda.pil@prueba.invalid") == {"PIL": (False, True, False)})
+r = SA.post(f"/admin/empresas/{PIL}/administradoras/{A2_ID}/quitar", data={"accion": "inactiva"}, follow_redirects=False)
+ok("superadmin: no puede dejar la empresa sin administradora activa", "ok=0" in r.headers["location"]
+   and "ninguna+administradora" in r.headers["location"] and membresias("admin.pil@prueba.invalid") == {"PIL": (True, False, False)})
+r = SA.post(f"/admin/empresas/{PIL}/administradora", data={"nombre": "Bea", "apellido": "Segunda", "mail": "segunda.pil@prueba.invalid"},
+            follow_redirects=False)
+ok("superadmin: vuelve a designarla (misma cuenta)", membresias("segunda.pil@prueba.invalid") == {"PIL": (True, False, False)})
+r = SA.post(f"/admin/empresas/{PIL}/administradoras/{B}/quitar", data={"accion": "inactiva"}, follow_redirects=False)
+ok("superadmin: deja inactiva a una administradora sin clases (queda profesora inactiva) y ya no entra",
+   "ok=1" in r.headers["location"] and membresias("segunda.pil@prueba.invalid") == {"PIL": (False, True, False)}
+   and sql("select activa from membresia where id_usuario = %s and id_empresa = %s", (B, PIL), uno=True)["activa"] is False
+   and entrar("Pilates Centro", "segunda.pil@prueba.invalid", CLAVE_B)[1].status_code == 401)
+ok("una administradora no puede usar las acciones de la superadministradora",
+   A2.post(f"/admin/empresas/{PIL}/administradoras/{A2_ID}/quitar", data={"accion": "profesora"}, follow_redirects=False).status_code == 303
+   and membresias("admin.pil@prueba.invalid") == {"PIL": (True, False, False)})
+ok("cada membresía tiene exactamente un rol", sql("select count(*) n from membresia where (es_admin::int + es_profesora::int "
+                                                  "+ es_alumna::int) <> 1", uno=True)["n"] == 0)
 
 print(f"\n{total - fallas}/{total} casos OK")
 sys.exit(1 if fallas else 0)

@@ -220,7 +220,8 @@ def usuario_de_acceso(acceso: str) -> Optional[Usuario]:
     usuario.empresa_id, usuario.empresa_nombre, usuario.empresa_codigo = e["id"], e["nombre"], e["codigo"]
     usuario.es_admin = bool(m["es_admin"])
     usuario.es_docente = bool(m["es_admin"] or m["es_profesora"])
-    usuario.es_alumna = bool(m["es_alumna"])
+    # un solo rol por empresa (lo garantiza la base): nadie es alumna y docente a la vez en el mismo lugar
+    usuario.es_alumna = bool(m["es_alumna"]) and not usuario.es_docente
     return usuario
 
 
@@ -375,7 +376,7 @@ def crear_cuenta(
     sin_empresa: bool = False,
 ) -> tuple[str, str]:
     """Crea la cuenta (ya confirmada). Con id_empresa y rol_empresa la base crea la membresía en esa
-    empresa (alumna, profesora, admin o admin_profesora); sin_empresa=True es para la superadministradora."""
+    empresa (alumna, profesora o admin: un solo rol por empresa); sin_empresa=True es para la superadministradora."""
     contrasena = contrasena or generar_contrasena_temporal()
     admin = cliente_admin()
     meta = {"nombre": nombre, "apellido": apellido}

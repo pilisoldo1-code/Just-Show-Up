@@ -189,14 +189,19 @@ ok("panel: crea la empresa y la administradora inicial (solo administradora, no 
    r.status_code == 200 and membresias("lia.pil@prueba.invalid") == {E2: (True, False, False)}, membresias("lia.pil@prueba.invalid"))
 r = post(SUPER["id"], None, f"/admin/empresas/{E2}/administradora",
          {"nombre": "Ana", "apellido": "Rey", "mail": "ana.pil@prueba.invalid", "tambien_profesora": "1"})
-ok("panel: segunda administradora que también da clases", membresias("ana.pil@prueba.invalid") == {E2: (True, True, False)})
+ok("panel: segunda administradora (un solo rol: la casilla vieja «también da clases» no suma profesora)",
+   membresias("ana.pil@prueba.invalid") == {E2: (True, False, False)})
 ok("las cuentas creadas por el panel no son superadministradoras ni tocan profiles.rol",
    not perfil("lia.pil@prueba.invalid")["es_superadmin"] and perfil("lia.pil@prueba.invalid")["rol"] == "alumna")
 ADMIN2 = perfil("lia.pil@prueba.invalid")["id"]
 
 # ---------- 3. alta de personas por la administradora (ruta real) ----------
-ESPERADO = {"alumna": (False, False, True), "profesora": (False, True, False),
-            "admin": (True, False, False), "admin_profesora": (True, True, False)}
+ESPERADO = {"alumna": (False, False, True), "profesora": (False, True, False)}
+for rol in ("admin", "admin_profesora"):  # las administradoras solo las designa la superadministradora
+    mail = f"{rol.replace('_', '.')}.nueva@prueba.invalid"
+    r = post(ADMIN2, "Pilates Centro", "/profesora/alumnas", {"nombre": "Nueva", "apellido": "Persona", "mail": mail, "rol": rol})
+    ok(f"alta «{rol}» desde la administradora: se rechaza y no se crea la cuenta",
+       r.status_code == 303 and "ok=0" in r.headers["location"] and perfil(mail) is None, (r.status_code, membresias(mail)))
 for rol, flags in ESPERADO.items():
     mail = f"{rol.replace('_', '.')}.nueva@prueba.invalid"
     r = post(ADMIN2, "Pilates Centro", "/profesora/alumnas", {"nombre": "Nueva", "apellido": "Persona", "mail": mail, "rol": rol})
@@ -232,7 +237,7 @@ ok("mail existente: se suma como alumna de Pilates Centro con la misma cuenta, s
    and membresias("alumna@prueba.invalid")[E1] == (False, False, True)
    and q(su, "select count(*) n from auth.users where email = 'alumna@prueba.invalid'", uno=True)["n"] == 1)
 r = post(ADMIN2, "Pilates Centro", "/profesora/alumnas",
-         {"nombre": "Sara", "apellido": "Admin", "mail": "superadmin@prueba.invalid", "rol": "admin"})
+         {"nombre": "Sara", "apellido": "Admin", "mail": "superadmin@prueba.invalid", "rol": "profesora"})
 ok("no se puede sumar la cuenta de la superadministradora a un lugar", r.status_code == 400 and membresias("superadmin@prueba.invalid") == {})
 
 # ---------- 4. rutas de alta con roles sin permiso ----------
@@ -272,10 +277,10 @@ ok("profesora: asignar_membresia para hacerse administradora → no_autorizada",
    P.rpc("asignar_membresia", {"p_id_usuario": PROF2, "p_es_admin": True, "p_es_profesora": True, "p_es_alumna": False}).execute().data == "no_autorizada")
 ok("administradora: asignar_administradora (solo superadmin) → no_autorizada",
    ClienteFalso(uri, ADMIN2).rpc("asignar_administradora", {"p_id_empresa": E1, "p_id_usuario": ADMIN2, "p_es_profesora": False}).execute().data == "no_autorizada")
-ok("administradora de Pilates Centro: no puede darse rol en la Empresa 1",
+ok("administradora de Pilates Centro: no puede darse rol en la Empresa 1 ni el de administradora",
    ClienteFalso(uri, ADMIN2).rpc("asignar_membresia", {"p_id_usuario": ADMIN2, "p_es_admin": True, "p_es_profesora": False,
-                                                       "p_es_alumna": False}).execute().data == "no_puede_quitarse_admin"
-   or E1 not in membresias("lia.pil@prueba.invalid"))
+                                                       "p_es_alumna": False}).execute().data == "solo_superadmin"
+   and E1 not in membresias("lia.pil@prueba.invalid"))
 ok("después de los intentos, nadie ganó permisos",
    membresias("profesora.nueva@prueba.invalid") == {E2: (False, True, False)}
    and membresias("alumna.nueva@prueba.invalid") == {E2: (False, False, True)} and E1 not in membresias("lia.pil@prueba.invalid"))
@@ -295,8 +300,8 @@ entradas = iter(["legado.prof@prueba.invalid", "Leti", "Gomez"])
 with mock.patch("builtins.input", lambda *_: next(entradas)), mock.patch("getpass.getpass", lambda *_: "ClaveLarga123"), \
         mock.patch.object(crear_profesora.auth, "cliente_admin", lambda: AdminLocal()):
     crear_profesora.main()
-ok("script crear_profesora (alta original de la profesora): administradora y profesora de la Empresa 1, como antes",
-   membresias("legado.prof@prueba.invalid") == {E1: (True, True, False)})
+ok("script crear_profesora (alta original de la profesora): administradora de la Empresa 1 (un solo rol)",
+   membresias("legado.prof@prueba.invalid") == {E1: (True, False, False)})
 
 
 class BaseLocal(empresa_demo.BaseSupabase):
@@ -333,8 +338,8 @@ q(su, "update empresa set nombre = 'Pilates Norte', codigo = 'PIN' where id = %s
 import datetime  # noqa: E402
 empresa_demo.crear(BaseLocal(), datetime.date(2026, 11, 4), guardar_contrasenas=False)
 E3 = q(su, "select id from empresa where codigo = 'PIL'", uno=True)["id"]
-ok("script empresa_demo: administradora y profesora / profesora / alumnas con sus permisos exactos",
-   membresias(empresa_demo.ADMIN[0]) == {E3: (True, True, False)} and membresias(empresa_demo.PROFESORA[0]) == {E3: (False, True, False)}
+ok("script empresa_demo: administradora / profesora / alumnas con sus permisos exactos (un solo rol cada una)",
+   membresias(empresa_demo.ADMIN[0]) == {E3: (True, False, False)} and membresias(empresa_demo.PROFESORA[0]) == {E3: (False, True, False)}
    and all(membresias(m) == {E3: (False, False, True)} for m, *_ in empresa_demo.ALUMNAS))
 ok("ninguna cuenta creada en toda la prueba quedó como superadministradora salvo la del script",
    [r["mail"] for r in q(su, "select mail from profiles where es_superadmin")] == ["superadmin@prueba.invalid"])
