@@ -54,17 +54,23 @@
                 {% for a in admins %}
                 <li class="admin-item">
                     <div class="admin-info">
-                        <strong>{{ a.nombre }} {{ a.apellido }}</strong>
-                        {% set partes = a.mail.split('@', 1) %}
-                        <span class="admin-mail">{{ partes[0] }}{% if partes|length > 1 %}@<wbr>{{ partes[1] }}{% endif %}</span>
-                        <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
+                        <div class="admin-nombre">
+                            <strong>{{ a.nombre }} {{ a.apellido }}</strong>
+                            <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
+                        </div>
+                        {# una sola línea; si no entra, se recorta con «…» (el correo completo está en el menú ⋮) #}
+                        <span class="admin-mail" title="{{ a.mail }}">{{ a.mail }}</span>
                         {% if a.activa and a.pendientes_txt %}
-                        <span class="nota">Para dejarla inactiva, antes hay que resolver que {{ a.pendientes_txt|join('; que ') }}.</span>
+                        <span class="admin-aviso">Para dejarla inactiva, antes hay que resolver que {{ a.pendientes_txt|join('; que ') }}.</span>
                         {% endif %}
                     </div>
                     <details class="menu-acciones">
                         <summary aria-label="Acciones para {{ a.nombre }} {{ a.apellido }}">⋮</summary>
                         <div class="menu-acciones-lista">
+                            <div class="menu-acciones-correo">
+                                <span>Correo</span>
+                                <a href="mailto:{{ a.mail }}">{{ a.mail | e | replace('@', '@<wbr>' | safe) | replace('.', '.<wbr>' | safe) }}</a>
+                            </div>
                             {% if a.activa %}
                             <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/quitar" method="post"
                                   onsubmit="return confirm('¿Quitarle a {{ a.nombre }} {{ a.apellido }} el rol de administradora? Pasa a ser profesora de {{ e.nombre }} y conserva sus clases.')">

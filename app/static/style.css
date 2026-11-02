@@ -2346,13 +2346,50 @@ main.ancho.empresa-detalle {
 .admin-info {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
     gap: 4px;
+    flex: 1;
     min-width: 0;
+}
+
+/* el estado va a continuación del nombre, en el mismo renglón (con un nombre largo, junto a su última palabra) */
+.admin-nombre .badge {
+    display: inline-block;
+    margin-left: 8px;
+    vertical-align: 1px;
+    white-space: nowrap;
 }
 
 .admin-mail {
     color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-aviso {
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    margin-top: 6px;
+    opacity: 0.85;
+}
+
+.menu-acciones-correo {
+    display: grid;
+    gap: 2px;
+    padding: 8px 12px 10px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid #2a2e37;
+    font-size: 0.85rem;
+}
+
+.menu-acciones-correo span {
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.menu-acciones-correo a {
+    color: var(--text);
     overflow-wrap: anywhere;
 }
 
@@ -2488,16 +2525,42 @@ main.ancho.empresa-detalle {
 }
 
 @media (max-width: 600px) {
-    .seccion-encabezado,
+    .seccion-encabezado {
+        flex-wrap: nowrap;
+        gap: 12px;
+    }
+
+    .seccion-encabezado .btn {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+        white-space: nowrap;
+    }
+
     .bloque-encabezado {
         flex-direction: column;
         align-items: stretch;
     }
 
-    .seccion-encabezado .btn,
     .bloque-encabezado .btn {
         width: 100%;
         text-align: center;
+    }
+
+    .admin-mail {
+        font-size: 0.9rem;
+    }
+
+    .admin-item {
+        gap: 8px;
+    }
+
+    .menu-acciones summary {
+        width: 40px;
+        height: 40px;
+    }
+
+    .menu-acciones-lista {
+        top: 46px;
     }
 
     .bloque-encabezado-texto {
