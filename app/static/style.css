@@ -2360,10 +2360,42 @@ main.ancho.empresa-detalle {
 }
 
 .admin-mail {
+    display: block;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
     color: var(--muted);
+    font: inherit;
+    text-align: left;
+    cursor: default;
+}
+
+/* sin <wbr>: Chrome corta en ellos aunque haya nowrap */
+.admin-mail .mail-corto {
+    display: block;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.admin-mail .mail-completo {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.admin-mail [hidden] {
+    display: none;
+}
+
+.admin-mail[data-recortado] {
+    cursor: pointer;
+}
+
+.admin-mail:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
 }
 
 .admin-aviso {
@@ -2374,23 +2406,19 @@ main.ancho.empresa-detalle {
     opacity: 0.85;
 }
 
-.menu-acciones-correo {
-    display: grid;
-    gap: 2px;
-    padding: 8px 12px 10px;
-    margin-bottom: 4px;
-    border-bottom: 1px solid #2a2e37;
-    font-size: 0.85rem;
-}
-
-.menu-acciones-correo span {
+.menu-acciones-lista button:disabled,
+.menu-acciones-lista button:disabled:hover {
     color: var(--muted);
-    font-size: 0.75rem;
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: none;
 }
 
-.menu-acciones-correo a {
-    color: var(--text);
-    overflow-wrap: anywhere;
+.menu-acciones-motivo {
+    margin: 2px 12px 8px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    line-height: 1.4;
 }
 
 .menu-acciones {
@@ -2426,7 +2454,8 @@ main.ancho.empresa-detalle {
     right: 0;
     top: 50px;
     z-index: 20;
-    min-width: 220px;
+    width: 260px;
+    max-width: calc(100vw - 48px);
     display: grid;
     padding: 6px;
     background: var(--card);

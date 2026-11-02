@@ -52,44 +52,48 @@
             </div>
             <ul class="admin-items">
                 {% for a in admins %}
+                {% set quien = a.nombre ~ ' ' ~ a.apellido %}
                 <li class="admin-item">
                     <div class="admin-info">
                         <div class="admin-nombre">
-                            <strong>{{ a.nombre }} {{ a.apellido }}</strong>
+                            <strong>{{ quien }}</strong>
                             <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
                         </div>
-                        {# una sola línea; si no entra, se recorta con «…» (el correo completo está en el menú ⋮) #}
-                        <span class="admin-mail" title="{{ a.mail }}">{{ a.mail }}</span>
+                        {# una sola línea; si no entra se recorta con «…» y, al tocarlo, se despliega completo en su lugar #}
+                        <button type="button" class="admin-mail" title="{{ a.mail }}" aria-label="Correo de {{ quien }}: {{ a.mail }}"
+                                ><span class="mail-corto">{{ a.mail }}</span><span class="mail-completo" hidden
+                                >{{ a.mail | e | replace('@', '@<wbr>' | safe) | replace('.', '.<wbr>' | safe) }}</span></button>
                         {% if a.activa and a.pendientes_txt %}
                         <span class="admin-aviso">Para dejarla inactiva, antes hay que resolver que {{ a.pendientes_txt|join('; que ') }}.</span>
                         {% endif %}
                     </div>
                     <details class="menu-acciones">
-                        <summary aria-label="Acciones para {{ a.nombre }} {{ a.apellido }}">⋮</summary>
+                        <summary aria-label="Acciones para {{ quien }}">⋮</summary>
                         <div class="menu-acciones-lista">
-                            <div class="menu-acciones-correo">
-                                <span>Correo</span>
-                                <a href="mailto:{{ a.mail }}">{{ a.mail | e | replace('@', '@<wbr>' | safe) | replace('.', '.<wbr>' | safe) }}</a>
-                            </div>
                             {% if a.activa %}
                             <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/quitar" method="post"
-                                  onsubmit="return confirm('¿Quitarle a {{ a.nombre }} {{ a.apellido }} el rol de administradora? Pasa a ser profesora de {{ e.nombre }} y conserva sus clases.')">
+                                  data-confirmar="¿Pasar a {{ quien }} a profesora? Pierde el rol de administradora de {{ e.nombre }}, pero conserva sus clases, sus horarios y todo su historial.">
                                 <input type="hidden" name="accion" value="profesora" />
-                                <button type="submit">Pasar a profesora</button>
+                                <button type="submit" {{ 'disabled' if a.ultima }}>Pasar a profesora</button>
                             </form>
                             <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/quitar" method="post"
-                                  onsubmit="return confirm('¿Quitarle a {{ a.nombre }} {{ a.apellido }} el rol de administradora y dejarla inactiva? No va a poder entrar a {{ e.nombre }}; sus datos e historial se conservan.')">
+                                  data-confirmar="¿Dejar inactiva a {{ quien }}? Pasa a ser profesora inactiva: pierde el acceso a {{ e.nombre }} y deja de figurar como administradora. Sus datos e historial se conservan.">
                                 <input type="hidden" name="accion" value="inactiva" />
-                                <button type="submit" class="accion-peligro">Dejar inactiva</button>
+                                <button type="submit" class="accion-peligro" {{ 'disabled' if a.ultima or a.pendientes_txt }}>Dejar inactiva</button>
                             </form>
+                            {% if a.ultima %}
+                            <p class="menu-acciones-motivo">Es la única administradora activa de la empresa: para quitarle el rol, primero asigná otra.</p>
+                            {% elif a.pendientes_txt %}
+                            <p class="menu-acciones-motivo">Para dejarla inactiva, primero hay que resolver sus horarios activos o clases futuras (ver el aviso debajo del correo).</p>
+                            {% endif %}
                             {% else %}
                             <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/reactivar" method="post"
-                                  onsubmit="return confirm('¿Reactivar a {{ a.nombre }} {{ a.apellido }} como administradora de {{ e.nombre }}?')">
+                                  data-confirmar="¿Reactivar a {{ quien }} como administradora de {{ e.nombre }}? Vuelve a tener acceso y todas las funciones de administración.">
                                 <button type="submit">Reactivar</button>
                             </form>
                             {% endif %}
                             <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/reiniciar-contrasena" method="post"
-                                  onsubmit="return confirm('¿Generar una contraseña nueva para {{ a.nombre }} {{ a.apellido }}? La anterior deja de funcionar en todos los lugares donde usa esa cuenta.')">
+                                  data-confirmar="¿Reiniciar la contraseña de {{ quien }}? Se genera una contraseña temporal nueva y la actual deja de funcionar en su cuenta, en todas las empresas donde usa Just Show Up.">
                                 <button type="submit">Reiniciar contraseña</button>
                             </form>
                         </div>
@@ -132,6 +136,37 @@
         </dialog>
     </main>
     <script>
+        // Confirmación antes de cada acción (el texto viene escapado en data-confirmar).
+        document.querySelectorAll("form[data-confirmar]").forEach(function (f) {
+            f.addEventListener("submit", function (ev) {
+                if (!confirm(f.dataset.confirmar)) ev.preventDefault();
+            });
+        });
+        // Correo: si está recortado con «…», tocarlo (o Enter/Espacio) lo despliega completo en su lugar.
+        (function () {
+            var correos = document.querySelectorAll("button.admin-mail");
+            function marcar() {
+                correos.forEach(function (c) {
+                    if (c.classList.contains("abierto")) return;
+                    var t = c.querySelector(".mail-corto");  // el botón no informa el desborde: se mide el texto
+                    var recortado = t.scrollWidth > t.clientWidth + 1;
+                    c.toggleAttribute("data-recortado", recortado);
+                    c.tabIndex = recortado ? 0 : -1;
+                    if (recortado) c.setAttribute("aria-expanded", "false"); else c.removeAttribute("aria-expanded");
+                });
+            }
+            correos.forEach(function (c) {
+                c.addEventListener("click", function () {
+                    if (!c.hasAttribute("data-recortado") && !c.classList.contains("abierto")) return;
+                    var abierto = c.classList.toggle("abierto");
+                    c.querySelector(".mail-corto").hidden = abierto;
+                    c.querySelector(".mail-completo").hidden = !abierto;
+                    c.setAttribute("aria-expanded", abierto ? "true" : "false");
+                });
+            });
+            marcar();
+            window.addEventListener("resize", marcar);
+        })();
         // Un solo menú de acciones abierto a la vez; se cierra tocando afuera o con Escape.
         (function () {
             var menus = document.querySelectorAll("details.menu-acciones");

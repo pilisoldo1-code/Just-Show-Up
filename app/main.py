@@ -1613,6 +1613,8 @@ def admin_empresa_gestionar(request: Request, empresa_id: int, ok: int = 0, avis
     if empresa is None:
         return _volver_empresas(False, MSG_EMPRESA["no_existe"])
     empresa["cant_admins"] = sum(1 for a in admins if a["activa"])
+    for a in admins:  # solo para mostrar la opción deshabilitada: la base lo vuelve a comprobar al confirmar
+        a["ultima"] = a["activa"] and empresa["cant_admins"] == 1
     return _render(request, "admin_empresa.html", usuario, e=empresa, admins=admins, aviso=aviso, aviso_ok=bool(ok))
 
 

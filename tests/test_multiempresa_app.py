@@ -239,12 +239,31 @@ class Menu(Base):
         self.assertEqual(r.text.count("Pasar a profesora"), 1)  # solo la activa; la inactiva tiene «Reactivar»
         self.assertNotIn("También da clases", r.text)
         self.assertIn("<dt>Estado</dt><dd>Activa</dd>", r.text)  # solo el estado, sin explicación
-        self.assertIn('href="mailto:profesora@prueba.invalid"', r.text)  # el correo completo, en el menú de acciones
+        self.assertNotIn("mailto:", r.text)  # el correo no se repite en el menú de acciones
+        self.assertIn('<button type="button" class="admin-mail" title="profesora@prueba.invalid"', r.text)
+        # única administradora activa: no se le puede quitar el rol (opciones deshabilitadas, con el motivo)
+        self.assertIn('<button type="submit" disabled>Pasar a profesora</button>', r.text)
+        self.assertIn('<button type="submit" class="accion-peligro" disabled>Dejar inactiva</button>', r.text)
+        self.assertIn("Es la única administradora activa", r.text)
+        self.assertIn("pierde el acceso a Just Show Up y deja de figurar como administradora", r.text)
+        self.assertIn("en todas las empresas donde usa Just Show Up", r.text)
         self.RESUMEN = [{**self.RESUMEN[0], "activa": False}]
         self.responder()
         r = self.get("/admin/empresas/1")
         self.assertIn("<dt>Estado</dt><dd>Inactiva</dd>", r.text)
         self.assertIn("Reactivar empresa", r.text)
+
+    def test_acciones_deshabilitadas_segun_el_caso(self):
+        self.como(SUPER)
+        self.ADMINS = [{**self.ADMINS[0]}, {**self.ADMINS[1], "activa": True, "pendientes": []}]
+        self.responder()
+        r = self.get("/admin/empresas/1")
+        # dos activas: la que tiene horarios puede pasar a profesora, pero no quedar inactiva; la otra, las dos
+        self.assertEqual(r.text.count('<button type="submit" >Pasar a profesora</button>'), 2)
+        self.assertEqual(r.text.count('class="accion-peligro" disabled>Dejar inactiva'), 1)
+        self.assertEqual(r.text.count('class="accion-peligro" >Dejar inactiva'), 1)
+        self.assertIn("primero hay que resolver sus horarios activos o clases futuras", r.text)
+        self.assertNotIn("Es la única administradora activa", r.text)
 
     def test_empresa_inexistente_vuelve_al_listado(self):
         self.como(SUPER)
