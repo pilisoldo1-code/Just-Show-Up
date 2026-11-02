@@ -102,8 +102,14 @@ r = SA.post("/admin/empresas", data={"nombre": "PILATES  centro!", "codigo": "PI
 ok("superadmin: un nombre que se escribe igual se rechaza", "ok=0" in r.headers.get("location", "")
    and not sql("select 1 from empresa where codigo = 'PIX'"))
 r = SA.get("/admin/empresas")
-ok("superadmin: ve cantidades y administradora, sin datos operativos",
-   "Pilates Centro" in r.text and "admin.pil@prueba.invalid" in r.text and "Facturación" not in r.text)
+PIL_ID = sql("select id from empresa where codigo = 'PIL'", uno=True)["id"]
+ok("superadmin: Empresas en tarjetas con cantidades, sin administradoras ni datos operativos",
+   "Pilates Centro" in r.text and "Gestionar empresa" in r.text and "admin.pil@prueba.invalid" not in r.text
+   and "<dt>Administradoras</dt><dd>1</dd>" in r.text and "Facturación" not in r.text)
+r = SA.get(f"/admin/empresas/{PIL_ID}")
+ok("superadmin: «Gestionar empresa» muestra la administradora y sus acciones",
+   r.status_code == 200 and "admin.pil@prueba.invalid" in r.text and "Pasar a profesora" in r.text
+   and "Asignar administradora" in r.text)
 for url in ("/", "/profesora/horarios", "/profesora/resumenes", "/administracion"):
     ok(f"superadmin: no entra a {url}", SA.get(url, follow_redirects=False).status_code == 303)
 
@@ -337,10 +343,12 @@ ok("…y no puede editar sus datos, desactivarla, cambiarle el rol ni reiniciar 
    and sql("select p.nombre, p.apellido, p.telefono, m.activa, m.es_admin from profiles p join membresia m on m.id_usuario = p.id "
            "where p.id = %s and m.id_empresa = %s", (B, PIL), uno=True) == foto_b
    and entrar("Pilates Centro", "segunda.pil@prueba.invalid", CLAVE_B)[1].status_code == 303)
-h = SA.get("/admin/empresas").text
-ok("superadmin: ve las administradoras con sus acciones", "segunda.pil@prueba.invalid" in h and "Pasar a profesora" in h)
+h = SA.get(f"/admin/empresas/{PIL}").text
+ok("superadmin: ve las administradoras de la empresa con sus acciones", "segunda.pil@prueba.invalid" in h and "Pasar a profesora" in h
+   and "<dt>Administradoras</dt><dd>2</dd>" in h)
 r = SA.post(f"/admin/empresas/{PIL}/administradoras/{B}/quitar", data={"accion": "profesora"}, follow_redirects=False)
-ok("superadmin: pasa a la segunda administradora a profesora", "ok=1" in r.headers["location"]
+ok("superadmin: pasa a la segunda administradora a profesora (y vuelve a la ficha)", "ok=1" in r.headers["location"]
+   and r.headers["location"].startswith(f"/admin/empresas/{PIL}?")
    and membresias("segunda.pil@prueba.invalid") == {"PIL": (False, True, False)})
 r = SA.post(f"/admin/empresas/{PIL}/administradoras/{A2_ID}/quitar", data={"accion": "inactiva"}, follow_redirects=False)
 ok("superadmin: no puede dejar la empresa sin administradora activa", "ok=0" in r.headers["location"]

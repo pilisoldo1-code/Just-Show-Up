@@ -2213,25 +2213,264 @@ main.ancho {
     overflow-wrap: anywhere;
 }
 
-.admin-lista {
-    list-style: none;
-    padding: 0;
-    margin: 6px 0 0;
-    display: grid;
-    gap: 8px;
+/* ---------- superadministración: empresas ---------- */
+.empresas-encabezado {
+    flex-wrap: wrap;
+    row-gap: 12px;
+    margin-bottom: 12px;
 }
 
-.admin-lista li {
+.empresas-encabezado h1 {
+    margin: 0;
+}
+
+.empresas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.empresa-card,
+.empresa-bloque {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 20px;
+    min-width: 0;
+}
+
+.empresa-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.empresa-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.empresa-card-titulo {
+    min-width: 0;
+}
+
+.empresa-card-titulo h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    overflow-wrap: anywhere;
+}
+
+.empresa-codigo {
+    color: var(--muted);
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+}
+
+.empresa-cifras {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+}
+
+.empresa-cifras div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+.empresa-cifras dt {
+    color: var(--muted);
+}
+
+.empresa-cifras dd {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.empresa-bloque .empresa-cifras {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.empresa-gestionar {
+    text-align: center;
+    margin-top: auto;
+}
+
+.empresa-detalle {
+    max-width: 820px;
+}
+
+.empresa-detalle-titulo {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.empresa-detalle-titulo h1 {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.empresa-bloque {
+    margin: 20px 0;
+}
+
+.empresa-bloque h2 {
+    margin: 0 0 12px;
+    font-size: 1.1rem;
+}
+
+.empresa-bloque .empresa-cifras {
+    margin-bottom: 16px;
+}
+
+.empresa-acciones {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
+    gap: 10px;
 }
 
-/* en celular, la lista de administradoras ocupa todo el ancho de la tarjeta */
-@media (max-width: 720px) {
-    .tabla-tarjetas td.celda-admins {
-        display: block;
-        text-align: left;
+.empresa-bloque-titulo {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.empresa-bloque-titulo h2 {
+    margin: 0;
+}
+
+.admin-items {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+}
+
+.admin-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 0;
+    border-top: 1px solid #2a2e37;
+}
+
+.admin-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 0;
+}
+
+.admin-mail {
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.menu-acciones {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.menu-acciones summary {
+    list-style: none;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    font-size: 1.4rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.menu-acciones summary::-webkit-details-marker {
+    display: none;
+}
+
+.menu-acciones[open] summary {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.menu-acciones-lista {
+    position: absolute;
+    right: 0;
+    top: 50px;
+    z-index: 20;
+    min-width: 220px;
+    display: grid;
+    padding: 6px;
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.menu-acciones-lista form {
+    margin: 0;
+}
+
+.menu-acciones-lista button {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    text-align: left;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.menu-acciones-lista button:hover,
+.menu-acciones-lista button:focus-visible {
+    background: #22262f;
+}
+
+.menu-acciones-lista .accion-peligro {
+    color: #f87171;
+}
+
+@media (max-width: 600px) {
+    .empresas-encabezado {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .empresas-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .empresa-card,
+    .empresa-bloque {
+        padding: 16px;
+    }
+
+    .empresa-acciones .btn,
+    .empresa-acciones form,
+    .empresa-acciones form .btn {
+        width: 100%;
+    }
+
+    .empresa-bloque-titulo .btn {
+        width: 100%;
+        text-align: center;
     }
 }

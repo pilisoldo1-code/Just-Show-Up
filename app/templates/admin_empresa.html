@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - {{ e.nombre }}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    {% include "_menu.html" %}
+    <main class="ancho empresa-detalle">
+        <p class="subtitle"><a href="/admin/empresas">← Volver a empresas</a></p>
+        <div class="empresa-detalle-titulo">
+            <h1>{{ e.nombre }}</h1>
+            <span class="badge {{ 'badge-on' if e.activa else 'badge-off' }}">{{ 'Activa' if e.activa else 'Inactiva' }}</span>
+        </div>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        <section class="empresa-bloque">
+            <h2>Datos generales</h2>
+            <dl class="datos-lectura">
+                <dt>Nombre</dt><dd>{{ e.nombre }}</dd>
+                <dt>Código</dt><dd>{{ e.codigo }}</dd>
+                <dt>Estado</dt><dd>{{ 'Activa: sus usuarias pueden entrar' if e.activa else 'Inactiva: nadie puede entrar; los datos se conservan' }}</dd>
+            </dl>
+            <dl class="empresa-cifras">
+                <div><dt>Profesoras</dt><dd>{{ e.profesoras }}</dd></div>
+                <div><dt>Alumnas</dt><dd>{{ e.alumnas }}</dd></div>
+                <div><dt>Administradoras</dt><dd>{{ e.cant_admins }}</dd></div>
+            </dl>
+            <div class="empresa-acciones">
+                <button type="button" class="btn" onclick="document.getElementById('editar-empresa').showModal()">Editar datos</button>
+                <form action="/admin/empresas/{{ e.id }}/estado" method="post"
+                      onsubmit="return confirm('{{ ('¿Reactivar ' ~ e.nombre ~ '? Sus usuarias vuelven a poder entrar.') if not e.activa else ('¿Desactivar ' ~ e.nombre ~ '? Sus usuarias no podrán entrar a ella; los datos se conservan.') }}')">
+                    <input type="hidden" name="activa" value="{{ 0 if e.activa else 1 }}" />
+                    <button type="submit" class="btn btn-secundario-claro">{{ 'Desactivar empresa' if e.activa else 'Reactivar empresa' }}</button>
+                </form>
+            </div>
+        </section>
+
+        <section class="empresa-bloque">
+            <div class="empresa-bloque-titulo">
+                <h2>Administradoras</h2>
+                <button type="button" class="btn" onclick="document.getElementById('asignar-admin').showModal()">Asignar administradora</button>
+            </div>
+            <p class="nota">Tienen todas las funciones de la empresa y de una profesora (con o sin clases). La empresa siempre
+                conserva al menos una administradora activa.</p>
+            <ul class="admin-items">
+                {% for a in admins %}
+                <li class="admin-item">
+                    <div class="admin-info">
+                        <strong>{{ a.nombre }} {{ a.apellido }}</strong>
+                        <span class="admin-mail">{{ a.mail }}</span>
+                        <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
+                        {% if a.activa and a.pendientes_txt %}
+                        <span class="nota">Para dejarla inactiva, antes hay que resolver que {{ a.pendientes_txt|join('; que ') }}.</span>
+                        {% endif %}
+                    </div>
+                    <details class="menu-acciones">
+                        <summary aria-label="Acciones para {{ a.nombre }} {{ a.apellido }}">⋮</summary>
+                        <div class="menu-acciones-lista">
+                            {% if a.activa %}
+                            <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/quitar" method="post"
+                                  onsubmit="return confirm('¿Quitarle a {{ a.nombre }} {{ a.apellido }} el rol de administradora? Pasa a ser profesora de {{ e.nombre }} y conserva sus clases.')">
+                                <input type="hidden" name="accion" value="profesora" />
+                                <button type="submit">Pasar a profesora</button>
+                            </form>
+                            <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/quitar" method="post"
+                                  onsubmit="return confirm('¿Quitarle a {{ a.nombre }} {{ a.apellido }} el rol de administradora y dejarla inactiva? No va a poder entrar a {{ e.nombre }}; sus datos e historial se conservan.')">
+                                <input type="hidden" name="accion" value="inactiva" />
+                                <button type="submit" class="accion-peligro">Dejar inactiva</button>
+                            </form>
+                            {% else %}
+                            <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/reactivar" method="post"
+                                  onsubmit="return confirm('¿Reactivar a {{ a.nombre }} {{ a.apellido }} como administradora de {{ e.nombre }}?')">
+                                <button type="submit">Reactivar</button>
+                            </form>
+                            {% endif %}
+                            <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/reiniciar-contrasena" method="post"
+                                  onsubmit="return confirm('¿Generar una contraseña nueva para {{ a.nombre }} {{ a.apellido }}? La anterior deja de funcionar en todos los lugares donde usa esa cuenta.')">
+                                <button type="submit">Reiniciar contraseña</button>
+                            </form>
+                        </div>
+                    </details>
+                </li>
+                {% else %}
+                <li class="empty">Esta empresa todavía no tiene administradora.</li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        <dialog id="editar-empresa" class="modal">
+            <form action="/admin/empresas/{{ e.id }}/editar" method="post" class="horario-form">
+                <h2>Editar {{ e.nombre }}</h2>
+                <label>Nombre <input type="text" name="nombre" value="{{ e.nombre }}" minlength="2" maxlength="80" required /></label>
+                <label>Código (2 a 6 letras) <input type="text" name="codigo" value="{{ e.codigo }}" pattern="[A-Za-z]{2,6}" required /></label>
+                <p class="nota">El nombre es lo que escriben las personas para iniciar sesión. El código va al principio del número de
+                    cada factura y no se puede cambiar después de la primera.</p>
+                <div class="modal-botones">
+                    <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                    <button type="submit" class="btn">Guardar</button>
+                </div>
+            </form>
+        </dialog>
+
+        <dialog id="asignar-admin" class="modal">
+            <form action="/admin/empresas/{{ e.id }}/administradora" method="post" class="horario-form">
+                <h2>Asignar administradora</h2>
+                <label>Nombre <input type="text" name="nombre" maxlength="60" required /></label>
+                <label>Apellido <input type="text" name="apellido" maxlength="60" required /></label>
+                <label>Mail <input type="email" name="mail" required /></label>
+                <p class="nota">La administradora tiene todas las funciones de una profesora: puede dar clases o no.
+                    Si el mail ya tiene cuenta, queda como administradora con su misma contraseña (si era alumna o profesora de
+                    esta empresa, deja ese rol). Si no, se crea la cuenta y te mostramos la contraseña temporal una sola vez.</p>
+                <div class="modal-botones">
+                    <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
+                    <button type="submit" class="btn">Asignar</button>
+                </div>
+            </form>
+        </dialog>
+    </main>
+    <script>
+        // Un solo menú de acciones abierto a la vez; se cierra tocando afuera o con Escape.
+        (function () {
+            var menus = document.querySelectorAll("details.menu-acciones");
+            menus.forEach(function (m) {
+                m.addEventListener("toggle", function () {
+                    if (m.open) menus.forEach(function (o) { if (o !== m) o.removeAttribute("open"); });
+                });
+            });
+            document.addEventListener("click", function (ev) {
+                menus.forEach(function (m) { if (m.open && !m.contains(ev.target)) m.removeAttribute("open"); });
+            });
+            document.addEventListener("keydown", function (ev) {
+                if (ev.key === "Escape") menus.forEach(function (m) { m.removeAttribute("open"); });
+            });
+        })();
+    </script>
+</body>
+</html>

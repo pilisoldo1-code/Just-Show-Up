@@ -1569,27 +1569,51 @@ MSG_EMPRESA = {
 }
 
 
-def _volver_empresas(ok: bool, aviso: str):
-    return RedirectResponse(url="/admin/empresas?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303)
+def _volver_empresas(ok: bool, aviso: str, empresa_id: int | None = None):
+    """Al listado de empresas o, si es una acción sobre una empresa, a su pantalla «Gestionar empresa»."""
+    destino = f"/admin/empresas/{empresa_id}" if empresa_id else "/admin/empresas"
+    return RedirectResponse(url=destino + "?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303)
 
 
 def _codigo(codigo: str) -> str:
     return (codigo or "").strip().upper()
 
 
+def _admins_de_empresa(sb, empresa_id: int) -> list[dict]:
+    admins = sb.rpc("administradoras_empresa", {"p_id_empresa": empresa_id}).execute().data or []
+    for a in admins:
+        a["pendientes_txt"] = [PENDIENTES.get(c, c) for c in a.get("pendientes") or []]
+    return admins
+
+
 @app.get("/admin/empresas")
 def admin_empresas(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_superadmin)):
+    """Listado en tarjetas: solo datos generales y cantidades (las administradoras se gestionan dentro de cada empresa)."""
     try:
         sb = _sb(usuario)
         empresas = sb.rpc("resumen_empresas", {}).execute().data or []
         for e in empresas:
-            e["admins"] = sb.rpc("administradoras_empresa", {"p_id_empresa": e["id"]}).execute().data or []
-            for a in e["admins"]:
-                a["pendientes_txt"] = [PENDIENTES.get(c, c) for c in a.get("pendientes") or []]
+            e["cant_admins"] = sum(1 for a in _admins_de_empresa(sb, e["id"]) if a["activa"])
     except Exception:
         logging.exception("No se pudieron listar las empresas")
         empresas, aviso, ok = [], "No pudimos cargar las empresas. Probá de nuevo.", 0
     return _render(request, "admin_empresas.html", usuario, empresas=empresas, aviso=aviso, aviso_ok=bool(ok))
+
+
+@app.get("/admin/empresas/{empresa_id}")
+def admin_empresa_gestionar(request: Request, empresa_id: int, ok: int = 0, aviso: str = "",
+                            usuario: Usuario = Depends(requiere_superadmin)):
+    try:
+        sb = _sb(usuario)
+        empresa = next((e for e in sb.rpc("resumen_empresas", {}).execute().data or [] if e["id"] == empresa_id), None)
+        admins = _admins_de_empresa(sb, empresa_id) if empresa else []
+    except Exception:
+        logging.exception("No se pudo cargar la empresa")
+        return _volver_empresas(False, "No pudimos cargar la empresa. Probá de nuevo.")
+    if empresa is None:
+        return _volver_empresas(False, MSG_EMPRESA["no_existe"])
+    empresa["cant_admins"] = sum(1 for a in admins if a["activa"])
+    return _render(request, "admin_empresa.html", usuario, e=empresa, admins=admins, aviso=aviso, aviso_ok=bool(ok))
 
 
 @app.post("/admin/empresas")
@@ -1623,8 +1647,8 @@ def admin_empresa_editar(empresa_id: int, nombre: str = Form(""), codigo: str = 
         logging.exception("No se pudo editar la empresa")
         r = None
     if r == "ok":
-        return _volver_empresas(True, "Empresa actualizada.")
-    return _volver_empresas(False, MSG_EMPRESA.get(r, auth.MSG_GENERICO))
+        return _volver_empresas(True, "Empresa actualizada.", empresa_id)
+    return _volver_empresas(False, MSG_EMPRESA.get(r, auth.MSG_GENERICO), empresa_id)
 
 
 @app.post("/admin/empresas/{empresa_id}/estado")
@@ -1636,8 +1660,8 @@ def admin_empresa_estado(empresa_id: int, activa: int = Form(...), usuario: Usua
         r = None
     if r == "ok":
         return _volver_empresas(True, "Empresa reactivada." if activa else
-                                "Empresa desactivada: sus usuarias ya no pueden entrar a ella. Sus datos se conservan.")
-    return _volver_empresas(False, MSG_EMPRESA.get(r, auth.MSG_GENERICO))
+                                "Empresa desactivada: sus usuarias ya no pueden entrar a ella. Sus datos se conservan.", empresa_id)
+    return _volver_empresas(False, MSG_EMPRESA.get(r, auth.MSG_GENERICO), empresa_id)
 
 
 @app.post("/admin/empresas/{empresa_id}/administradora")
@@ -1647,7 +1671,7 @@ def admin_empresa_administradora(
 ):
     datos, errores = validaciones.validar_alumna({"nombre": nombre, "apellido": apellido, "mail": mail}, clases.ahora().date())
     if errores:
-        return _volver_empresas(False, " ".join(errores))
+        return _volver_empresas(False, " ".join(errores), empresa_id)
     return _asignar_administradora(request, usuario, empresa_id, datos)
 
 
@@ -1657,25 +1681,25 @@ def _asignar_administradora(request: Request, usuario: Usuario, empresa_id: int,
         existente = _cuenta_existente(datos["mail"])
         if existente:
             if existente.get("es_superadmin"):
-                return _volver_empresas(False, "Esa cuenta es de la administración general.")
+                return _volver_empresas(False, "Esa cuenta es de la administración general.", empresa_id)
             r = _sb(usuario).rpc("asignar_administradora", {"p_id_empresa": empresa_id, "p_id_usuario": existente["id"],
                                                            "p_es_profesora": False}).execute().data
             if r == "ok":
                 return _volver_empresas(True, prefijo + f"{existente['nombre']} {existente['apellido']} ya tenía cuenta: "
-                                              "ahora administra la empresa con su misma contraseña.")
-            return _volver_empresas(False, prefijo + (MSG_EMPRESA.get(r) or _mensaje_rol(r) or auth.MSG_GENERICO))
+                                              "ahora administra la empresa con su misma contraseña.", empresa_id)
+            return _volver_empresas(False, prefijo + (MSG_EMPRESA.get(r) or _mensaje_rol(r) or auth.MSG_GENERICO), empresa_id)
         _, contrasena = auth.crear_cuenta(
             datos["mail"], datos["nombre"], datos["apellido"], rol="profesora",
             id_empresa=empresa_id, rol_empresa="admin",
         )
     except ErrorAuth as e:
-        return _volver_empresas(False, prefijo + "No se pudo crear la administradora: " + str(e))
+        return _volver_empresas(False, prefijo + "No se pudo crear la administradora: " + str(e), empresa_id)
     except Exception:
         logging.exception("No se pudo asignar la administradora")
-        return _volver_empresas(False, prefijo + "No se pudo crear la administradora: " + auth.MSG_GENERICO)
+        return _volver_empresas(False, prefijo + "No se pudo crear la administradora: " + auth.MSG_GENERICO, empresa_id)
     return _render(request, "alumna_credenciales.html", usuario, titulo=prefijo + "Administradora: cuenta creada",
                    nombre=f"{datos['nombre']} {datos['apellido']}", mail=datos["mail"], contrasena=contrasena,
-                   volver=("/admin/empresas", "Volver a empresas"))
+                   volver=(f"/admin/empresas/{empresa_id}", "Ir a la empresa"))
 
 
 def _administradora_de(usuario: Usuario, empresa_id: int, persona_id: str) -> dict | None:
@@ -1693,7 +1717,7 @@ def admin_quitar_administradora(empresa_id: int, persona_id: str, accion: str = 
                                 usuario: Usuario = Depends(requiere_superadmin)):
     a = _administradora_de(usuario, empresa_id, persona_id)
     if a is None:
-        return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"])
+        return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"], empresa_id)
     try:
         r = _sb(usuario).rpc("quitar_administradora", {"p_id_empresa": empresa_id, "p_id_usuario": persona_id,
                                                         "p_accion": accion}).execute().data
@@ -1703,18 +1727,18 @@ def admin_quitar_administradora(empresa_id: int, persona_id: str, accion: str = 
     if r == "ok":
         return _volver_empresas(True, f"{a['nombre']} {a['apellido']} " + (
             "ya no administra la empresa: ahora es profesora y conserva sus clases." if accion == "profesora" else
-            "ya no administra la empresa y quedó inactiva (sus datos e historial se conservan)."))
+            "ya no administra la empresa y quedó inactiva (sus datos e historial se conservan)."), empresa_id)
     if isinstance(r, str) and r.startswith("pendientes:"):
         return _volver_empresas(False, f"Para dejar inactiva a {a['nombre']} {a['apellido']}: " + _mensaje_rol(r)
-                                + " También podés pasarla a profesora.")
-    return _volver_empresas(False, MSG_EMPRESA.get(r, auth.MSG_GENERICO))
+                                + " También podés pasarla a profesora.", empresa_id)
+    return _volver_empresas(False, MSG_EMPRESA.get(r, auth.MSG_GENERICO), empresa_id)
 
 
 @app.post("/admin/empresas/{empresa_id}/administradoras/{persona_id}/reactivar")
 def admin_reactivar_administradora(empresa_id: int, persona_id: str, usuario: Usuario = Depends(requiere_superadmin)):
     a = _administradora_de(usuario, empresa_id, persona_id)
     if a is None:
-        return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"])
+        return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"], empresa_id)
     try:
         r = _sb(usuario).rpc("asignar_administradora", {"p_id_empresa": empresa_id, "p_id_usuario": persona_id,
                                                          "p_es_profesora": False}).execute().data
@@ -1722,8 +1746,8 @@ def admin_reactivar_administradora(empresa_id: int, persona_id: str, usuario: Us
         logging.exception("No se pudo reactivar la administradora")
         r = None
     if r == "ok":
-        return _volver_empresas(True, f"{a['nombre']} {a['apellido']} vuelve a administrar la empresa.")
-    return _volver_empresas(False, MSG_EMPRESA.get(r) or _mensaje_rol(r) or auth.MSG_GENERICO)
+        return _volver_empresas(True, f"{a['nombre']} {a['apellido']} vuelve a administrar la empresa.", empresa_id)
+    return _volver_empresas(False, MSG_EMPRESA.get(r) or _mensaje_rol(r) or auth.MSG_GENERICO, empresa_id)
 
 
 @app.post("/admin/empresas/{empresa_id}/administradoras/{persona_id}/reiniciar-contrasena")
@@ -1731,14 +1755,14 @@ def admin_reiniciar_administradora(request: Request, empresa_id: int, persona_id
                                    usuario: Usuario = Depends(requiere_superadmin)):
     a = _administradora_de(usuario, empresa_id, persona_id)
     if a is None:
-        return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"])
+        return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"], empresa_id)
     try:
         contrasena = auth.reiniciar_contrasena(persona_id)
     except ErrorAuth as e:
-        return _volver_empresas(False, str(e))
+        return _volver_empresas(False, str(e), empresa_id)
     return _render(request, "alumna_credenciales.html", usuario, titulo="Contraseña reiniciada",
                    nombre=f"{a['nombre']} {a['apellido']}", mail=a["mail"], contrasena=contrasena,
-                   volver=("/admin/empresas", "Volver a empresas"))
+                   volver=(f"/admin/empresas/{empresa_id}", "Volver a la empresa"))
 
 
 # ---------- multiempresa: panel de la administradora ----------

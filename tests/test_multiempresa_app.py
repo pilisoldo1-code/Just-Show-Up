@@ -204,23 +204,60 @@ class Menu(Base):
         for texto in ("Pilates", "Cambiar de empresa", "/empresa/elegir"):
             self.assertNotIn(texto, r.text)
 
+    RESUMEN = [{"id": 1, "nombre": "Just Show Up", "codigo": "JSU", "activa": True, "profesoras": 1, "alumnas": 9,
+                "administradoras": "Profe Prueba <profesora@prueba.invalid>"}]
+    ADMINS = [{"id": "u1", "nombre": "Profe", "apellido": "Prueba", "mail": "profesora@prueba.invalid", "activa": True,
+               "pendientes": ["horarios"]},
+              {"id": "u2", "nombre": "Vieja", "apellido": "Admin", "mail": "vieja@prueba.invalid", "activa": False, "pendientes": []}]
+
+    def responder(self):
+        r = {"resumen_empresas": self.RESUMEN, "administradoras_empresa": self.ADMINS}
+        self.sb.rpc.side_effect = lambda nombre, params: mock.MagicMock(**{"execute.return_value.data": r[nombre]})
+
     def test_superadmin_solo_ve_empresas(self):
         self.como(SUPER)
-        respuestas = {"resumen_empresas": [{"id": 1, "nombre": "Just Show Up", "codigo": "JSU", "activa": True, "profesoras": 1,
-                                            "alumnas": 9, "administradoras": "Profe Prueba <profesora@prueba.invalid>"}],
-                      "administradoras_empresa": [{"id": "u1", "nombre": "Profe", "apellido": "Prueba",
-                                                   "mail": "profesora@prueba.invalid", "activa": True,
-                                                   "pendientes": ["horarios"]}]}
-        self.sb.rpc.side_effect = lambda nombre, params: mock.MagicMock(**{"execute.return_value.data": respuestas[nombre]})
+        self.responder()
         r = self.get("/admin/empresas")
         self.assertEqual(r.status_code, 200)
-        self.assertIn("Profe Prueba", r.text)
-        for texto in ("Pasar a profesora", "Dejar inactiva", "Reiniciar contraseña", "tiene horarios activos"):
+        # tarjetas con datos generales y cantidades; nada de las administradoras ni sus acciones
+        for texto in ("Just Show Up", "JSU", "Gestionar empresa", 'href="/admin/empresas/1"', "+ Nueva empresa",
+                      "<dt>Profesoras</dt><dd>1</dd>", "<dt>Alumnas</dt><dd>9</dd>", "<dt>Administradoras</dt><dd>1</dd>"):
             self.assertIn(texto, r.text)
-        self.assertNotIn("También da clases", r.text)
-        for texto in (">Horarios</a>", "Facturación", "Mis facturas"):
+        for texto in ("profesora@prueba.invalid", "Pasar a profesora", "Reiniciar contraseña", "También da clases",
+                      ">Horarios</a>", "Facturación", "Mis facturas", "<table"):
             self.assertNotIn(texto, r.text)
 
+    def test_gestionar_empresa(self):
+        self.como(SUPER)
+        self.responder()
+        r = self.get("/admin/empresas/1")
+        self.assertEqual(r.status_code, 200)
+        for texto in ("← Volver a empresas", "Datos generales", "Editar datos", "Desactivar empresa", "Asignar administradora",
+                      "profesora@prueba.invalid", "Pasar a profesora", "Dejar inactiva", "Reiniciar contraseña", "Reactivar",
+                      "tiene horarios activos", 'class="menu-acciones"', "<dt>Administradoras</dt><dd>1</dd>"):
+            self.assertIn(texto, r.text)
+        self.assertEqual(r.text.count("Pasar a profesora"), 1)  # solo la activa; la inactiva tiene «Reactivar»
+        self.assertNotIn("También da clases", r.text)
+
+    def test_empresa_inexistente_vuelve_al_listado(self):
+        self.como(SUPER)
+        self.responder()
+        r = self.get("/admin/empresas/99")
+        self.assertEqual(r.headers["location"].split("?")[0], "/admin/empresas")
+        self.assertIn("ok=0", r.headers["location"])
+
+    def test_acciones_de_una_empresa_vuelven_a_su_ficha(self):
+        self.como(SUPER)
+        self.rpc("ok")
+        self.assertTrue(self.post("/admin/empresas/2/editar", {"nombre": "Pilates", "codigo": "PIL"})
+                        .headers["location"].startswith("/admin/empresas/2?ok=1"))
+        self.assertTrue(self.post("/admin/empresas/2/estado", {"activa": 0}).headers["location"].startswith("/admin/empresas/2?"))
+
+    def test_otros_roles_no_entran_a_la_ficha(self):
+        for u in (ADMIN, PROFE, ALUMNA_DOS):
+            self.como(u)
+            self.assertEqual(self.get("/admin/empresas/1").status_code, 303)
+        self.sb.rpc.assert_not_called()
 
 class ListaPersonas(Base):
     def preparar(self, membresias, perfiles):
@@ -859,7 +896,7 @@ class SuperadminAdministradoras(Base):
         r = self.post(self.url("quitar"), {"accion": "profesora"})
         self.sb.rpc.assert_any_call("quitar_administradora", {"p_id_empresa": 2, "p_id_usuario": self.ADM["id"],
                                                               "p_accion": "profesora"})
-        self.assertIn("ok=1", r.headers["location"])
+        self.assertTrue(r.headers["location"].startswith("/admin/empresas/2?ok=1"))  # vuelve a la ficha de la empresa
 
     def test_nunca_sin_administradora_ni_clases_sin_docente(self):
         self.como(SUPER)

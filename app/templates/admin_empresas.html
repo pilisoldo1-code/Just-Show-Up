@@ -13,111 +13,33 @@
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
-        <div class="header-row">
+        <div class="header-row empresas-encabezado">
             <h1>Empresas</h1>
             <button type="button" class="btn" onclick="document.getElementById('empresa-nueva').showModal()">+ Nueva empresa</button>
         </div>
-        <p class="subtitle">Cada empresa tiene sus propias profesoras, alumnas, clases y facturas. Desde acá solo ves
-            cuántas personas tiene y quién la administra; los datos de cada empresa los maneja su administradora.
+        <p class="subtitle">Cada empresa tiene sus propias profesoras, alumnas, clases y facturas, que maneja su administradora.
             Las empresas no se borran: se desactivan y sus datos se conservan.</p>
 
-        <div class="tabla-scroll">
-        <table class="horario-table tabla-tarjetas">
-            <thead>
-                <tr>
-                    <th>Empresa</th>
-                    <th>Código</th>
-                    <th>Estado</th>
-                    <th>Profesoras</th>
-                    <th>Alumnas</th>
-                    <th>Administradoras</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for e in empresas %}
-                <tr>
-                    <td data-label="Empresa">{{ e.nombre }}</td>
-                    <td data-label="Código">{{ e.codigo }}</td>
-                    <td data-label="Estado"><span class="badge {{ 'badge-on' if e.activa else 'badge-off' }}">{{ 'Activa' if e.activa else 'Desactivada' }}</span></td>
-                    <td data-label="Profesoras">{{ e.profesoras }}</td>
-                    <td data-label="Alumnas">{{ e.alumnas }}</td>
-                    <td class="celda-admins">
-                        {% if e.admins %}
-                        <ul class="admin-lista">
-                            {% for a in e.admins %}
-                            <li>
-                                <span>{{ a.nombre }} {{ a.apellido }} &lt;{{ a.mail }}&gt;</span>
-                                <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
-                                {% if a.activa %}
-                                <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/quitar" method="post"
-                                      onsubmit="return confirm('¿Quitarle a {{ a.nombre }} {{ a.apellido }} el rol de administradora de {{ e.nombre }}? Pasa a ser profesora y conserva sus clases.')">
-                                    <input type="hidden" name="accion" value="profesora" />
-                                    <button type="submit" class="link-btn">Pasar a profesora</button>
-                                </form>
-                                <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/quitar" method="post"
-                                      onsubmit="return confirm('¿Quitarle a {{ a.nombre }} {{ a.apellido }} el rol de administradora y dejarla inactiva en {{ e.nombre }}? No va a poder entrar; sus datos e historial se conservan.')">
-                                    <input type="hidden" name="accion" value="inactiva" />
-                                    <button type="submit" class="link-btn"{% if a.pendientes_txt %} title="Antes hay que resolver que {{ a.pendientes_txt|join('; que ') }}"{% endif %}>Dejar inactiva</button>
-                                </form>
-                                {% else %}
-                                <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/reactivar" method="post"
-                                      onsubmit="return confirm('¿Reactivar a {{ a.nombre }} {{ a.apellido }} como administradora de {{ e.nombre }}?')">
-                                    <button type="submit" class="link-btn">Reactivar</button>
-                                </form>
-                                {% endif %}
-                                <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/reiniciar-contrasena" method="post"
-                                      onsubmit="return confirm('¿Generar una contraseña nueva para {{ a.nombre }} {{ a.apellido }}? La anterior deja de funcionar en todos los lugares donde usa esa cuenta.')">
-                                    <button type="submit" class="link-btn">Reiniciar contraseña</button>
-                                </form>
-                            </li>
-                            {% endfor %}
-                        </ul>
-                        {% else %}Sin asignar{% endif %}
-                    </td>
-                    <td class="acciones">
-                        <button type="button" class="link-btn" onclick="document.getElementById('editar-{{ e.id }}').showModal()">Editar</button>
-                        <dialog id="editar-{{ e.id }}" class="modal">
-                            <form action="/admin/empresas/{{ e.id }}/editar" method="post" class="horario-form">
-                                <h2>Editar {{ e.nombre }}</h2>
-                                <label>Nombre <input type="text" name="nombre" value="{{ e.nombre }}" minlength="2" maxlength="80" required /></label>
-                                <label>Código (2 a 6 letras) <input type="text" name="codigo" value="{{ e.codigo }}" pattern="[A-Za-z]{2,6}" required /></label>
-                                <p class="nota">El código va al principio del número de cada factura y no se puede cambiar después de la primera.</p>
-                                <div class="modal-botones">
-                                    <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
-                                    <button type="submit" class="btn">Guardar</button>
-                                </div>
-                            </form>
-                        </dialog>
-                        <button type="button" class="link-btn" onclick="document.getElementById('admin-{{ e.id }}').showModal()">Asignar administradora</button>
-                        <dialog id="admin-{{ e.id }}" class="modal">
-                            <form action="/admin/empresas/{{ e.id }}/administradora" method="post" class="horario-form">
-                                <h2>Administradora de {{ e.nombre }}</h2>
-                                <label>Nombre <input type="text" name="nombre" maxlength="60" required /></label>
-                                <label>Apellido <input type="text" name="apellido" maxlength="60" required /></label>
-                                <label>Mail <input type="email" name="mail" required /></label>
-                                <p class="nota">La administradora tiene todas las funciones de una profesora: puede dar clases o no.
-                                    Si el mail ya tiene cuenta, queda como administradora con su misma contraseña (si era alumna o
-                                    profesora de esta empresa, deja ese rol). Si no, se crea la cuenta y te mostramos la contraseña
-                                    temporal una sola vez.</p>
-                                <div class="modal-botones">
-                                    <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
-                                    <button type="submit" class="btn">Asignar</button>
-                                </div>
-                            </form>
-                        </dialog>
-                        <form action="/admin/empresas/{{ e.id }}/estado" method="post"
-                              onsubmit="return confirm('{{ ('¿Reactivar ' ~ e.nombre ~ '?') if not e.activa else ('¿Desactivar ' ~ e.nombre ~ '? Sus usuarias no podrán entrar a ella; los datos se conservan.') }}')">
-                            <input type="hidden" name="activa" value="{{ 0 if e.activa else 1 }}" />
-                            <button type="submit" class="link-btn">{{ 'Desactivar' if e.activa else 'Reactivar' }}</button>
-                        </form>
-                    </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="7" class="empty">Todavía no hay empresas.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="empresas-grid">
+            {% for e in empresas %}
+            <article class="empresa-card">
+                <div class="empresa-card-top">
+                    <div class="empresa-card-titulo">
+                        <h2>{{ e.nombre }}</h2>
+                        <span class="empresa-codigo">{{ e.codigo }}</span>
+                    </div>
+                    <span class="badge {{ 'badge-on' if e.activa else 'badge-off' }}">{{ 'Activa' if e.activa else 'Inactiva' }}</span>
+                </div>
+                <dl class="empresa-cifras">
+                    <div><dt>Profesoras</dt><dd>{{ e.profesoras }}</dd></div>
+                    <div><dt>Alumnas</dt><dd>{{ e.alumnas }}</dd></div>
+                    <div><dt>Administradoras</dt><dd>{{ e.cant_admins }}</dd></div>
+                </dl>
+                <a class="btn empresa-gestionar" href="/admin/empresas/{{ e.id }}">Gestionar empresa</a>
+            </article>
+            {% else %}
+            <p class="empty">Todavía no hay empresas.</p>
+            {% endfor %}
         </div>
 
         <dialog id="empresa-nueva" class="modal">
