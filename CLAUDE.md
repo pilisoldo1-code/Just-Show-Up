@@ -757,7 +757,9 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
-- **Baja de docentes (rama `baja-docentes`; migración `20261103000000_baja_docentes.sql` SIN APLICAR en Supabase)**: en
+- **Baja de docentes (rama `baja-docentes`, PR #32; migración `20261103000000_baja_docentes.sql` APLICADA en Supabase el
+  02/11 como `20261102201448 baja_docentes`, con respaldo previo `2026-11-02 antes de desactivar docentes`; estructura igual a
+  la esperada en las 11 categorías y datos idénticos al respaldo; theta con el código anterior verificada 26/26)**: en
   pantalla se dice «Desactivar» (decisión de Julieta, 02/11: «baja» suena definitivo); en el código y la base sigue «baja». Dar de
   baja a una profesora (la administradora) o a una administradora (solo la superadministradora, nunca la última activa)
   es una sola operación con vista previa obligatoria (`previsualizar_baja_docente` / `_administradora`) y una «firma»:
