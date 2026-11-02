@@ -146,8 +146,10 @@
                 <div class="lc-fecha"><strong>{{ b.rango_txt }}</strong> · {{ b.alcance_txt }}</div>
                 <div class="lc-detalle">{{ b.motivo }} · {{ b.clases }} {{ 'clase cancelada' if b.clases == 1 else 'clases canceladas' }}{% if b.reservas %} · {{ b.reservas }} {{ 'reserva' if b.reservas == 1 else 'reservas' }}{% endif %}</div>
                 <span class="badge {{ 'badge-on' if b.estado == 'en_curso' else 'badge-espera' }}">{{ b.estado_txt }}</span>
+                {% if not b.es_baja %}
                 <button type="button" class="btn btn-peligro btn-chico"
                         onclick="document.getElementById('eliminar-{{ b.id }}').showModal()">Eliminar</button>
+                {% endif %}
 
                 <dialog id="eliminar-{{ b.id }}" class="modal">
                     <form action="/profesora/planificacion/{{ b.id }}/eliminar" method="post">

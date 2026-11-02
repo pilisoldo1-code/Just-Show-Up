@@ -95,7 +95,11 @@
         {% if not persona.yo %}
         <section class="bloque-persona">
             <h2>Estado</h2>
-            {% if persona.membresia.activa %}
+            {% if persona.membresia.activa and persona.rol == 'profesora' %}
+            <p class="nota">Activa: puede iniciar sesión en {{ usuario.empresa_nombre or 'tu empresa' }}. Al darla de baja se
+                desactivan sus horarios y se cancelan sus clases próximas (con sus reservas); antes ves exactamente qué cambia.</p>
+            <a class="btn btn-secundario" href="/profesora/{{ seccion }}/{{ persona.id }}/baja">Dar de baja…</a>
+            {% elif persona.membresia.activa %}
             <p class="nota">Activa: puede iniciar sesión en {{ usuario.empresa_nombre or 'tu empresa' }}.</p>
             <form action="/profesora/{{ seccion }}/{{ persona.id }}/estado" method="post"
                   data-confirmar="¿Dejar inactiva a {{ persona.nombre }} {{ persona.apellido }}? No va a poder entrar a tu empresa; sus datos e historial se conservan.">

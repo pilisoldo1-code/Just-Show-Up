@@ -511,7 +511,7 @@ def profesora_horarios(request: Request, ok: int = 0, aviso: str = "", usuario: 
 def _form_horario(request: Request, usuario: Usuario, horario: dict | None, accion: str,
                   errores: list[str] | None = None, status_code: int = 200):
     sb = _sb(usuario)
-    profesoras = (sorted(personas.nombres_profesoras(sb).items(), key=lambda p: p[1].lower())
+    profesoras = (sorted(_docentes_activas(sb, usuario).items(), key=lambda p: p[1].lower())
                   if usuario.es_admin and usuario.empresa_id is not None else [])
     return _render(
         request, "profesora_horario_form.html", usuario, status_code=status_code,
@@ -551,14 +551,20 @@ def crear_horario(
     datos, errores = _validar_horario(supabase, dia_semana, hora_inicio, id_tipo_clase)
     if usuario.es_admin and usuario.empresa_id is not None:
         # la administradora elige quién da la clase; sin elegir, es ella (lo completa la base)
-        if id_profesora and id_profesora not in personas.nombres_profesoras(supabase):
-            errores.append("Elegí una profesora de tu empresa.")
+        if id_profesora and id_profesora not in _docentes_activas(supabase, usuario):
+            errores.append("Elegí una profesora activa de tu empresa.")
         elif id_profesora:
             datos["id_profesora"] = id_profesora
     if errores:
         return _form_horario(request, usuario, {**datos, "activo": activo}, "/profesora/horarios/nuevo", errores, 400)
     # Duración, cupo y precio los completa la base a partir del tipo de clase.
-    supabase.table(TABLE).insert({**datos, "activo": activo}).execute()
+    try:
+        supabase.table(TABLE).insert({**datos, "activo": activo}).execute()
+    except Exception as e:
+        if not _profesora_inactiva(e):
+            raise
+        return _form_horario(request, usuario, {**datos, "activo": activo}, "/profesora/horarios/nuevo",
+                             [MSG_HORARIO_INACTIVA], 400)
     return RedirectResponse(
         url="/profesora/horarios?" + urlencode({"ok": 1, "aviso": "Horario creado."}), status_code=303
     )
@@ -606,8 +612,14 @@ def actualizar_horario(
             tipo_nuevo=tipos_clase.obtener(supabase, datos["id_tipo_clase"]),
             previa=tipos_clase.vista_previa_horario(supabase, horario_id, datos["id_tipo_clase"]),
         )
-    supabase.table(TABLE).update({"dia_semana": datos["dia_semana"], "hora_inicio": datos["hora_inicio"],
-                                  "activo": activo}).eq("id", horario_id).execute()
+    try:
+        supabase.table(TABLE).update({"dia_semana": datos["dia_semana"], "hora_inicio": datos["hora_inicio"],
+                                      "activo": activo}).eq("id", horario_id).execute()
+    except Exception as e:
+        if not _profesora_inactiva(e):
+            raise
+        return _form_horario(request, usuario, {**actual, **datos, "activo": activo},
+                             f"/profesora/horarios/{horario_id}/editar", [MSG_HORARIO_INACTIVA], 400)
     return RedirectResponse(
         url="/profesora/horarios?" + urlencode({"ok": 1, "aviso": "Horario actualizado."}), status_code=303
     )
@@ -633,9 +645,12 @@ def confirmar_tipo_horario(
         if ok:
             supabase.table(TABLE).update({"dia_semana": datos["dia_semana"], "hora_inicio": datos["hora_inicio"],
                                           "activo": activo}).eq("id", horario_id).execute()
-    except Exception:
-        logging.exception("Error al cambiar el tipo del horario")
-        ok, aviso = False, "Ocurrió un error, probá de nuevo."
+    except Exception as e:
+        if _profesora_inactiva(e):
+            ok, aviso = False, MSG_HORARIO_INACTIVA
+        else:
+            logging.exception("Error al cambiar el tipo del horario")
+            ok, aviso = False, "Ocurrió un error, probá de nuevo."
     return RedirectResponse(
         url="/profesora/horarios?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303
     )
@@ -651,7 +666,13 @@ def toggle_horario(horario_id: int, usuario: Usuario = Depends(requiere_profesor
         aviso = (f"No se puede activar: el tipo de clase \"{actual['tipo_clase']['nombre']}\" está desactivado. "
                  "Activalo o cambiá el tipo del horario.")
         return RedirectResponse(url="/profesora/horarios?" + urlencode({"ok": 0, "aviso": aviso}), status_code=303)
-    supabase.table(TABLE).update({"activo": not actual["activo"]}).eq("id", horario_id).execute()
+    try:
+        supabase.table(TABLE).update({"activo": not actual["activo"]}).eq("id", horario_id).execute()
+    except Exception as e:
+        if not _profesora_inactiva(e):
+            raise
+        return RedirectResponse(url="/profesora/horarios?" + urlencode({"ok": 0, "aviso": MSG_HORARIO_INACTIVA}),
+                                status_code=303)
     return RedirectResponse(url="/profesora/horarios", status_code=303)
 
 
@@ -1725,6 +1746,8 @@ def admin_quitar_administradora(empresa_id: int, persona_id: str, accion: str = 
     a = _administradora_de(usuario, empresa_id, persona_id)
     if a is None:
         return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"], empresa_id)
+    if accion == "inactiva":  # la baja cancela sus clases futuras: primero la vista previa
+        return RedirectResponse(url=f"/admin/empresas/{empresa_id}/administradoras/{persona_id}/baja", status_code=303)
     try:
         r = _sb(usuario).rpc("quitar_administradora", {"p_id_empresa": empresa_id, "p_id_usuario": persona_id,
                                                         "p_accion": accion}).execute().data
@@ -1942,8 +1965,152 @@ def persona_estado(seccion: str, persona_id: str, activa: int = Form(...), usuar
     except Exception:
         logging.exception("No se pudo cambiar el estado")
         r = None
-    mensajes = {"ok": "Ahora está activa: puede entrar a tu empresa." if activa else
+    if isinstance(r, str) and r.startswith("pendientes:"):  # tiene horarios o clases futuras: baja con vista previa
+        return RedirectResponse(url=f"/profesora/{seccion}/{persona_id}/baja", status_code=303)
+    mensajes = {"ok": ("Ahora está activa: puede entrar a tu empresa. Sus horarios siguen inactivos: activalos en "
+                       "Horarios si va a volver a dar clases.") if activa and persona["rol"] == "profesora" else
+                      "Ahora está activa: puede entrar a tu empresa." if activa else
                       "Quedó inactiva: ya no puede entrar a tu empresa (sus datos y su historial se conservan).",
                 "no_puede_desactivarse": "No podés desactivar tu propia cuenta.", "es_administradora": MSG_OTRA_ADMIN}
     return RedirectResponse(url=f"/profesora/{seccion}/{persona_id}?" + urlencode(
         {"ok": int(r == "ok"), "aviso": mensajes.get(r, "No se pudo cambiar el estado.")}), status_code=303)
+
+
+# ---------- baja de docentes (profesoras: la administradora; administradoras: la superadministradora) ----------
+
+MSG_HORARIO_INACTIVA = ("Ese horario es de una profesora inactiva: no se puede activar. Reactivala en Profesoras o creá "
+                        "el horario para otra profesora.")
+MSG_BAJA = {
+    "no_autorizada": "No tenés permiso para hacer eso.",
+    "no_existe": "No encontramos a esa persona en tu empresa.",
+    "no_puede_desactivarse": "No podés darte de baja a vos misma.",
+    "es_administradora": MSG_OTRA_ADMIN,
+    "no_es_profesora": "Solo se da de baja así a una profesora.",
+    "ya_inactiva": "Ya está inactiva.",
+    "no_es_administradora": "Esa persona no es administradora de la empresa.",
+    "ultima_administradora": MSG_EMPRESA["ultima_administradora"],
+    "motivo_vacio": "Escribí el motivo de la baja.",
+    "cambio": "Algo cambió desde que abriste esta pantalla (una reserva, una clase o un horario). Revisá la vista previa "
+              "actualizada y confirmá de nuevo: no se canceló nada.",
+}
+
+
+def _profesora_inactiva(e: Exception) -> bool:
+    return "profesora_inactiva" in str(e)
+
+
+def _docentes_activas(sb, usuario: Usuario) -> dict:
+    """id -> nombre de las profesoras y administradoras activas de la empresa (a quién se le puede dar un horario)."""
+    activas = {m["id_usuario"] for m in sb.table("membresia").select("id_usuario, es_admin, es_profesora, activa")
+               .eq("id_empresa", usuario.empresa_id).eq("activa", True).execute().data
+               if m["es_admin"] or m["es_profesora"]}
+    return {i: n for i, n in personas.nombres_profesoras(sb).items() if i in activas}
+
+
+def _vista_baja(previa: dict) -> dict:
+    for c in previa.get("clases", []):
+        f = date.fromisoformat(c["fecha"])
+        c["dia_txt"] = f"{clases.nombre_dia(clases.DIAS_ORDEN[f.weekday()])} {f.day}/{f.month}"
+    for h in previa.get("horarios", []):
+        h["dia_txt"] = clases.nombre_dia(h["dia_semana"])
+    return previa
+
+
+def _pantalla_baja(request: Request, usuario: Usuario, persona: dict, previa: dict, accion: str, volver: str,
+                   superadmin: bool, aviso: str = "", motivo: str = "", status_code: int = 200):
+    return _render(request, "baja_docente.html", usuario, status_code=status_code, persona=persona,
+                   previa=_vista_baja(previa), accion=accion, volver=volver, superadmin=superadmin, aviso=aviso,
+                   motivo=motivo)
+
+
+@app.get("/profesora/{seccion}/{persona_id}/baja")
+def baja_docente_ver(request: Request, seccion: str, persona_id: str, usuario: Usuario = Depends(requiere_admin)):
+    persona = _persona_de_empresa(usuario, persona_id) if seccion == "profesoras" else None
+    if persona is None:
+        return _volver_seccion("profesoras", False, MSG_BAJA["no_existe"])
+    volver = f"/profesora/profesoras/{persona_id}"
+    try:
+        previa = _sb(usuario).rpc("previsualizar_baja_docente", {"p_id_usuario": persona_id}).execute().data
+    except Exception:
+        logging.exception("No se pudo preparar la baja")
+        previa = {"resultado": None}
+    if previa.get("resultado") != "ok":
+        return RedirectResponse(url=volver + "?" + urlencode(
+            {"ok": 0, "aviso": MSG_BAJA.get(previa.get("resultado"), auth.MSG_GENERICO)}), status_code=303)
+    return _pantalla_baja(request, usuario, persona, previa, f"/profesora/profesoras/{persona_id}/baja", volver, False)
+
+
+@app.post("/profesora/{seccion}/{persona_id}/baja")
+def baja_docente_confirmar(request: Request, seccion: str, persona_id: str, motivo: str = Form(""), firma: str = Form(""),
+                           usuario: Usuario = Depends(requiere_admin)):
+    persona = _persona_de_empresa(usuario, persona_id) if seccion == "profesoras" else None
+    if persona is None:
+        return _volver_seccion("profesoras", False, MSG_BAJA["no_existe"])
+    volver = f"/profesora/profesoras/{persona_id}"
+    sb = _sb(usuario)
+    try:
+        r = sb.rpc("dar_de_baja_docente", {"p_id_usuario": persona_id, "p_motivo": motivo, "p_firma": firma}).execute().data
+    except Exception:
+        logging.exception("No se pudo dar de baja a la profesora")
+        r = {"resultado": None}
+    if r.get("resultado") == "ok":
+        return RedirectResponse(url=volver + "?" + urlencode({"ok": 1, "aviso": _texto_baja(r)}), status_code=303)
+    if r.get("resultado") in ("cambio", "motivo_vacio"):
+        previa = sb.rpc("previsualizar_baja_docente", {"p_id_usuario": persona_id}).execute().data
+        if previa.get("resultado") == "ok":
+            return _pantalla_baja(request, usuario, persona, previa, f"/profesora/profesoras/{persona_id}/baja", volver,
+                                  False, MSG_BAJA[r["resultado"]], motivo, 409 if r["resultado"] == "cambio" else 400)
+    return RedirectResponse(url=volver + "?" + urlencode(
+        {"ok": 0, "aviso": MSG_BAJA.get(r.get("resultado"), auth.MSG_GENERICO)}), status_code=303)
+
+
+def _texto_baja(r: dict) -> str:
+    n = lambda k, uno, varios: f"{r[k]} {uno if r[k] == 1 else varios}"
+    partes = [n("horarios", "horario desactivado", "horarios desactivados"), n("clases", "clase cancelada", "clases canceladas"),
+              n("reservas", "reserva cancelada", "reservas canceladas")]
+    if r.get("espera"):
+        partes.append(n("espera", "lugar en lista de espera cerrado", "lugares en lista de espera cerrados"))
+    return ("Quedó inactiva: " + ", ".join(partes) + ". Las clases pasadas, asistencias, facturas y pagos se conservan.")
+
+
+@app.get("/admin/empresas/{empresa_id}/administradoras/{persona_id}/baja")
+def baja_admin_ver(request: Request, empresa_id: int, persona_id: str, usuario: Usuario = Depends(requiere_superadmin)):
+    a = _administradora_de(usuario, empresa_id, persona_id)
+    if a is None:
+        return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"], empresa_id)
+    try:
+        previa = _sb(usuario).rpc("previsualizar_baja_administradora",
+                                  {"p_id_empresa": empresa_id, "p_id_usuario": persona_id}).execute().data
+    except Exception:
+        logging.exception("No se pudo preparar la baja de la administradora")
+        previa = {"resultado": None}
+    if previa.get("resultado") != "ok":
+        return _volver_empresas(False, MSG_BAJA.get(previa.get("resultado"), auth.MSG_GENERICO), empresa_id)
+    return _pantalla_baja(request, usuario, a, previa, f"/admin/empresas/{empresa_id}/administradoras/{persona_id}/baja",
+                          f"/admin/empresas/{empresa_id}", True)
+
+
+@app.post("/admin/empresas/{empresa_id}/administradoras/{persona_id}/baja")
+def baja_admin_confirmar(request: Request, empresa_id: int, persona_id: str, motivo: str = Form(""), firma: str = Form(""),
+                         usuario: Usuario = Depends(requiere_superadmin)):
+    a = _administradora_de(usuario, empresa_id, persona_id)
+    if a is None:
+        return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"], empresa_id)
+    sb = _sb(usuario)
+    try:
+        r = sb.rpc("dar_de_baja_administradora", {"p_id_empresa": empresa_id, "p_id_usuario": persona_id,
+                                                  "p_motivo": motivo, "p_firma": firma}).execute().data
+    except Exception:
+        logging.exception("No se pudo dar de baja a la administradora")
+        r = {"resultado": None}
+    if r.get("resultado") == "ok":
+        return _volver_empresas(True, f"{a['nombre']} {a['apellido']} ya no administra la empresa. " + _texto_baja(r),
+                                empresa_id)
+    if r.get("resultado") in ("cambio", "motivo_vacio"):
+        previa = sb.rpc("previsualizar_baja_administradora", {"p_id_empresa": empresa_id, "p_id_usuario": persona_id}).execute().data
+        if previa.get("resultado") == "ok":
+            return _pantalla_baja(request, usuario, a, previa,
+                                  f"/admin/empresas/{empresa_id}/administradoras/{persona_id}/baja",
+                                  f"/admin/empresas/{empresa_id}", True, MSG_BAJA[r["resultado"]], motivo,
+                                  409 if r["resultado"] == "cambio" else 400)
+    return _volver_empresas(False, MSG_BAJA.get(r.get("resultado"), auth.MSG_GENERICO), empresa_id)

@@ -555,7 +555,7 @@ def bloqueos(sb: Client) -> dict:
     desde_min = min(b["fecha_desde"] for b in filas)
     hasta_max = max(b["fecha_hasta"] for b in filas)
     canceladas = (
-        sb.table("clase").select("id, fecha, hora_inicio, id_horario").eq("estado", "cancelada")
+        sb.table("clase").select("id, fecha, hora_inicio, id_horario, id_profesora").eq("estado", "cancelada")
         .gte("fecha", desde_min).lte("fecha", hasta_max).execute().data
     )
     ids = [b["id"] for b in filas]
@@ -565,7 +565,9 @@ def bloqueos(sb: Client) -> dict:
     )
 
     def cubre(b, c):
-        return b["fecha_desde"] <= c["fecha"] <= b["fecha_hasta"] and b["id_horario"] in (None, c["id_horario"])
+        # una licencia o una baja de una profesora cubre solo sus clases
+        return (b["fecha_desde"] <= c["fecha"] <= b["fecha_hasta"] and b["id_horario"] in (None, c["id_horario"])
+                and b.get("id_profesora") in (None, c.get("id_profesora")))
 
     vigentes, finalizados = [], []
     for b in filas:
@@ -581,7 +583,9 @@ def bloqueos(sb: Client) -> dict:
             "estado": estado,
             "estado_txt": ESTADOS_BLOQUEO[estado],
             "rango_txt": _rango_texto(desde, hasta),
-            "alcance_txt": f"Solo {nombre_dia(h['dia_semana'])} {h['hora_inicio'][:5]}" if h else "Todas las clases",
+            "alcance_txt": ("Baja de una profesora (sus clases)" if b.get("tipo") == "baja" else
+                            f"Solo {nombre_dia(h['dia_semana'])} {h['hora_inicio'][:5]}" if h else "Todas las clases"),
+            "es_baja": b.get("tipo") == "baja",
             "motivo": b["motivo"],
             "clases": len(propias),
             "reservas": sum(r["id_bloqueo"] == b["id"] for r in reservas),

@@ -354,12 +354,15 @@ ok("superadmin: pasa a la segunda administradora a profesora (y vuelve a la fich
    and r.headers["location"].startswith(f"/admin/empresas/{PIL}?")
    and membresias("segunda.pil@prueba.invalid") == {"PIL": (False, True, False)})
 r = SA.post(f"/admin/empresas/{PIL}/administradoras/{A2_ID}/quitar", data={"accion": "inactiva"}, follow_redirects=False)
+r = SA.get(r.headers["location"], follow_redirects=False)  # dejarla inactiva pasa por la vista previa de la baja
 ok("superadmin: no puede dejar la empresa sin administradora activa", "ok=0" in r.headers["location"]
    and "ninguna+administradora" in r.headers["location"] and membresias("admin.pil@prueba.invalid") == {"PIL": (True, False, False)})
 r = SA.post(f"/admin/empresas/{PIL}/administradora", data={"nombre": "Bea", "apellido": "Segunda", "mail": "segunda.pil@prueba.invalid"},
             follow_redirects=False)
 ok("superadmin: vuelve a designarla (misma cuenta)", membresias("segunda.pil@prueba.invalid") == {"PIL": (True, False, False)})
 r = SA.post(f"/admin/empresas/{PIL}/administradoras/{B}/quitar", data={"accion": "inactiva"}, follow_redirects=False)
+firma = re.search(r'name="firma" value="([0-9a-f]+)"', SA.get(r.headers["location"]).text).group(1)
+r = SA.post(r.headers["location"], data={"motivo": "PRUEBA", "firma": firma}, follow_redirects=False)
 ok("superadmin: deja inactiva a una administradora sin clases (queda profesora inactiva) y ya no entra",
    "ok=1" in r.headers["location"] and membresias("segunda.pil@prueba.invalid") == {"PIL": (False, True, False)}
    and sql("select activa from membresia where id_usuario = %s and id_empresa = %s", (B, PIL), uno=True)["activa"] is False

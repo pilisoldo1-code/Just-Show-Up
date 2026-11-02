@@ -2996,3 +2996,48 @@ main.ancho.empresa-detalle {
         font-size: 0.85rem;
     }
 }
+
+/* ---------- baja de docentes ---------- */
+.baja-cifras {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin: 16px 0;
+}
+
+.baja-cifras div {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    padding: 10px 14px;
+}
+
+.baja-cifras dt {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.baja-cifras dd {
+    margin: 4px 0 0;
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+.baja-lista {
+    margin: 0 0 8px;
+    padding-left: 18px;
+}
+
+.baja-lista li {
+    margin: 4px 0;
+    overflow-wrap: anywhere;
+}
+
+.baja-detalle {
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.baja-form {
+    margin-top: 20px;
+}

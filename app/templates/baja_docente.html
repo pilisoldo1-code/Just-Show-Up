@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Dar de baja a {{ persona.nombre }} {{ persona.apellido }}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    {% include "_menu.html" %}
+    <main>
+        <p class="subtitle"><a href="{{ volver }}">← Volver sin hacer cambios</a></p>
+        <h1>Dar de baja a {{ persona.nombre }} {{ persona.apellido }}</h1>
+        <p class="subtitle">{{ 'Deja de ser administradora y' if superadmin else 'Queda' }} inactiva: no puede iniciar sesión en
+            {{ 'la empresa' if superadmin else (usuario.empresa_nombre or 'tu empresa') }}. Revisá qué pasa antes de confirmar.</p>
+
+        {% if aviso %}
+        <div class="aviso aviso-error">{{ aviso }}</div>
+        {% endif %}
+
+        {% set n_clases = previa.clases|length %}
+        <dl class="baja-cifras">
+            <div><dt>Horarios que se desactivan</dt><dd>{{ previa.horarios|length }}</dd></div>
+            <div><dt>Clases próximas que se cancelan</dt><dd>{{ n_clases }}</dd></div>
+            <div><dt>Reservas que se cancelan</dt><dd>{{ previa.reservas }}</dd></div>
+            <div><dt>En lista de espera</dt><dd>{{ previa.espera }}</dd></div>
+        </dl>
+
+        {% if previa.horarios %}
+        <section class="bloque-persona">
+            <h2>Horarios que se desactivan</h2>
+            <ul class="baja-lista">
+                {% for h in previa.horarios %}<li>{{ h.dia_txt }} {{ h.hora_inicio }} · {{ h.tipo }}</li>{% endfor %}
+            </ul>
+            <p class="nota">Quedan guardados: se pueden volver a activar (o crear para otra profesora) en Horarios.</p>
+        </section>
+        {% endif %}
+
+        {% if previa.clases %}
+        <section class="bloque-persona">
+            <h2>Clases que se cancelan</h2>
+            <ul class="baja-lista">
+                {% for c in previa.clases %}
+                <li><strong>{{ c.dia_txt }}</strong> {{ c.hora_inicio }} · {{ c.tipo }}
+                    <span class="baja-detalle">{{ c.reservas }} {{ 'reserva' if c.reservas == 1 else 'reservas' }}{% if c.espera %} · {{ c.espera }} en espera{% endif %}</span></li>
+                {% endfor %}
+            </ul>
+            {% if previa.alumnas %}
+            <p class="nota">{{ previa.alumnas }} {{ 'alumna afectada' if previa.alumnas == 1 else 'alumnas afectadas' }}{% if previa.nombres %}:
+                {{ previa.nombres|join(', ') }}{% endif %}. Van a ver esas clases como «Cancelada» y no se les cobran.</p>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        <section class="bloque-persona">
+            <h2>Lo que no cambia</h2>
+            <p class="nota">Las clases que ya pasaron{% if previa.en_curso %} y {{ 'la clase que está en curso' if previa.en_curso == 1 else 'las ' ~ previa.en_curso ~ ' clases que están en curso' }}{% endif %},
+                las asistencias, las facturas y los pagos se conservan tal cual. Si después se la reactiva, sus horarios y
+                sus clases canceladas no vuelven solos.</p>
+        </section>
+
+        <form action="{{ accion }}" method="post" class="horario-form baja-form"
+              data-confirmar="¿Dar de baja a {{ persona.nombre }} {{ persona.apellido }}? Se {{ 'cancela' if n_clases == 1 else 'cancelan' }} {{ n_clases }} {{ 'clase' if n_clases == 1 else 'clases' }} y {{ previa.reservas }} {{ 'reserva' if previa.reservas == 1 else 'reservas' }}. No se puede deshacer.">
+            <input type="hidden" name="firma" value="{{ previa.firma }}" />
+            <label>Motivo de la baja (solo lo ve la administración)
+                <input type="text" name="motivo" value="{{ motivo }}" maxlength="200" required
+                       placeholder="Ej.: dejó de trabajar en el estudio" /></label>
+            <div class="acciones-confirmar">
+                <a class="btn btn-secundario" href="{{ volver }}">Volver</a>
+                <button type="submit" class="btn btn-peligro-solido">Confirmar baja</button>
+            </div>
+        </form>
+    </main>
+    <script>
+        document.querySelectorAll("form[data-confirmar]").forEach(function (f) {
+            f.addEventListener("submit", function (ev) { if (!confirm(f.dataset.confirmar)) ev.preventDefault(); });
+        });
+    </script>
+</body>
+</html>

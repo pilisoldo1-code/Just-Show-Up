@@ -757,6 +757,19 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **Baja de docentes (rama `baja-docentes`; migración `20261103000000_baja_docentes.sql` SIN APLICAR en Supabase)**: dar de
+  baja a una profesora (la administradora) o a una administradora (solo la superadministradora, nunca la última activa)
+  es una sola operación con vista previa obligatoria (`previsualizar_baja_docente` / `_administradora`) y una «firma»:
+  si algo cambió desde la vista previa, `dar_de_baja_*` devuelve `cambio` y no hace nada. Desactiva sus horarios, cancela
+  sus clases que no empezaron (reservas con `id_bloqueo` = un bloqueo de tipo `baja`, listas de espera expiradas) y lo
+  registra en `baja_docente`; no toca clases empezadas, asistencias, facturas ni pagos. Reactivar NO restaura nada. Los
+  triggers `validar_docente` de `horario` y `clase` impiden horarios activos o clases programadas de una docente
+  inactiva (con bloqueo compartido de su membresía: sin carreras con la baja). La superadministradora no tiene empresa
+  activa: `_proteger_empresa` la deja operar solo dentro de `dar_de_baja_administradora` (marca `jsu.baja_empresa` de esa
+  transacción). Vuelta atrás: `supabase/pendientes/vuelta_atras_baja_docentes.sql` (deja las 5 funciones byte a byte
+  como en producción; se niega si ya hay bajas). Pruebas: `tests/base_local/test_baja_docentes_base.py "<respaldo>"` (67),
+  `tests/supabase_local/prueba_baja_reales.py` (31), `tests.test_baja_docentes` (12). **Orden de despliegue: primero la
+  migración (el código de `main` funciona con ella: 35/35 y 96/96) y después el merge.**
 - **Tres roles por empresa (rama `tres-roles`, PR #29; migración `20261101000000_tres_roles.sql` APLICADA en Supabase el 02/11
   como `20261102173826 tres_roles`, con respaldo previo `2026-11-02 antes de tres roles`; estructura igual a la esperada y
   datos iguales al respaldo; theta con el código anterior verificada 37/37)**:
