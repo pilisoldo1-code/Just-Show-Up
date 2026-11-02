@@ -233,7 +233,7 @@ class Menu(Base):
         r = self.get("/admin/empresas/1")
         self.assertEqual(r.status_code, 200)
         for texto in ("← Volver a empresas", "Datos generales", "Editar datos", "Desactivar empresa", "Asignar administradora",
-                      "profesora@prueba.invalid", "Pasar a profesora", "Dar de baja…", "Reiniciar contraseña", "Reactivar",
+                      "profesora@prueba.invalid", "Pasar a profesora", ">Desactivar</button>", "Reiniciar contraseña", "Reactivar",
                       'class="menu-acciones"', "<dt>Administradoras</dt><dd>1</dd>"):
             self.assertIn(texto, r.text)
         self.assertEqual(r.text.count("Pasar a profesora"), 1)  # solo la activa; la inactiva tiene «Reactivar»
@@ -243,7 +243,7 @@ class Menu(Base):
         self.assertIn('<button type="button" class="correo" title="profesora@prueba.invalid"', r.text)
         # única administradora activa: no se le puede quitar el rol (opciones deshabilitadas, con el motivo)
         self.assertIn('<button type="submit" disabled>Pasar a profesora</button>', r.text)
-        self.assertIn('<button type="submit" class="accion-peligro" disabled>Dar de baja…</button>', r.text)
+        self.assertIn('<button type="submit" class="accion-peligro" disabled>Desactivar</button>', r.text)
         self.assertIn("Es la única administradora activa", r.text)
         # la baja siempre pasa por la vista previa (cancela sus clases próximas): ya no se bloquea por sus horarios
         self.assertIn('action="/admin/empresas/1/administradoras/u1/baja" method="get"', r.text)
@@ -262,7 +262,7 @@ class Menu(Base):
         r = self.get("/admin/empresas/1")
         # dos activas: las dos pueden pasar a profesora o darse de baja (con vista previa, aunque tenga horarios)
         self.assertEqual(r.text.count('<button type="submit" >Pasar a profesora</button>'), 2)
-        self.assertEqual(r.text.count('class="accion-peligro" >Dar de baja…'), 2)
+        self.assertEqual(r.text.count('class="accion-peligro" >Desactivar</button>'), 2)
         self.assertNotIn("primero hay que resolver", r.text)
         self.assertNotIn("Es la única administradora activa", r.text)
 
@@ -821,7 +821,7 @@ class EditarPersona(Base):
         r = self.get(f"/profesora/profesoras/{self.ID}")
         self.assertEqual(r.status_code, 200)
         for texto in ("Pia Dos", "Guardar datos", "Rol actual: <strong>Profesora</strong>", "Cambiar a alumna",
-                      f'action="/profesora/profesoras/{self.ID}/baja" method="get"', "Dar de baja…", "p@x.uy", "<dt>Teléfono</dt><dd>099123456</dd>", "<dt>Cédula</dt><dd>No registrada</dd>",
+                      f'action="/profesora/profesoras/{self.ID}/baja" method="get"', ">Desactivar</button>", "p@x.uy", "<dt>Teléfono</dt><dd>099123456</dd>", "<dt>Cédula</dt><dd>No registrada</dd>",
                       "<dt>Carné de salud vence</dt>", "Reiniciar contraseña"):
             self.assertIn(texto, r.text)
         for texto in ("es_admin", "Administradora</label>", "Guardar roles"):

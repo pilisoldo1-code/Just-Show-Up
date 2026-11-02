@@ -1983,13 +1983,13 @@ MSG_HORARIO_INACTIVA = ("Ese horario es de una profesora inactiva: no se puede a
 MSG_BAJA = {
     "no_autorizada": "No tenés permiso para hacer eso.",
     "no_existe": "No encontramos a esa persona en tu empresa.",
-    "no_puede_desactivarse": "No podés darte de baja a vos misma.",
+    "no_puede_desactivarse": "No podés desactivarte a vos misma.",
     "es_administradora": MSG_OTRA_ADMIN,
-    "no_es_profesora": "Solo se da de baja así a una profesora.",
+    "no_es_profesora": "Así solo se desactiva a una profesora.",
     "ya_inactiva": "Ya está inactiva.",
     "no_es_administradora": "Esa persona no es administradora de la empresa.",
     "ultima_administradora": MSG_EMPRESA["ultima_administradora"],
-    "motivo_vacio": "Escribí el motivo de la baja.",
+    "motivo_vacio": "Escribí el motivo de la desactivación.",
     "cambio": "Algo cambió desde que abriste esta pantalla (una reserva, una clase o un horario). Revisá la vista previa "
               "actualizada y confirmá de nuevo: no se canceló nada.",
 }

@@ -4,6 +4,7 @@ las reglas de la base se prueban en tests/base_local/test_baja_docentes_base.py.
 
 Uso: python -m unittest tests.test_baja_docentes -v
 """
+import re
 import unittest
 from unittest import mock
 
@@ -37,11 +38,15 @@ class BajaProfesora(Base):
         self.preparar()
         r = self.get(f"/profesora/profesoras/{ID}/baja")
         self.assertEqual(r.status_code, 200)
-        for texto in ("Dar de baja a Pia Dos", "Sábado · 10:00", "Sábado 7/11 · 10:00", "Pilates · 2 reservas · 1 en espera",
+        for texto in ("Desactivar a Pia Dos", "Sábado · 10:00", "Sábado 7/11 · 10:00", "Pilates · 2 reservas · 1 en espera",
                       "<strong>2 alumnas afectadas</strong>:", "Ana Uno, Eva Dos",
-                      "la clase que está en curso", 'name="firma" value="f1"', "Confirmar baja", "No se puede deshacer"):
+                      "la clase que está en curso", 'name="firma" value="f1"', "Confirmar desactivación", "Motivo de la desactivación",
+                      "esas clases y reservas no vuelven"):
             self.assertIn(texto, r.text)
         self.assertNotIn("dar_de_baja_docente", self.llamadas())
+        main_html = r.text[r.text.index("<main"):r.text.index("</main>")]
+        visible = re.sub(r"<[^>]+>", " ", main_html).lower()
+        self.assertNotIn("baja", visible)  # la palabra que se ve es «desactivar» (las rutas internas siguen igual)
 
     def test_confirmar(self):
         self.como(ADMIN)
@@ -162,7 +167,7 @@ class TextosParaAlumnasYPlanificacion(unittest.TestCase):
                          + clases.fecha_corta(date(2026, 11, 2))[1:])
         self.assertNotIn("ene", b["rango_txt"])
         self.assertTrue(b["es_baja"])
-        self.assertEqual(b["alcance_txt"], "Baja de una profesora (sus clases)")
+        self.assertEqual(b["alcance_txt"], "Profesora desactivada (sus clases)")
 
     def test_mis_inscripciones_dice_solo_cancelada(self):
         from types import SimpleNamespace

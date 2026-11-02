@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Just Show Up - Dar de baja a {{ persona.nombre }} {{ persona.apellido }}</title>
+    <title>Just Show Up - Desactivar a {{ persona.nombre }} {{ persona.apellido }}</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
     {% include "_menu.html" %}
     <main class="baja-pagina">
         <p class="subtitle"><a href="{{ volver }}">← Volver sin hacer cambios</a></p>
-        <h1>Dar de baja a {{ persona.nombre }} {{ persona.apellido }}</h1>
+        <h1>Desactivar a {{ persona.nombre }} {{ persona.apellido }}</h1>
         <p class="subtitle">{{ 'Deja de ser administradora y queda' if superadmin else 'Queda' }} inactiva: no puede iniciar sesión en
             {{ 'la empresa' if superadmin else (usuario.empresa_nombre or 'tu empresa') }}. Revisá qué pasa antes de confirmar.</p>
 
@@ -66,14 +66,14 @@
         </section>
 
         <form action="{{ accion }}" method="post" class="horario-form baja-form"
-              data-confirmar="¿Dar de baja a {{ persona.nombre }} {{ persona.apellido }}? Se {{ 'cancela' if n_clases == 1 else 'cancelan' }} {{ n_clases }} {{ 'clase' if n_clases == 1 else 'clases' }} y {{ previa.reservas }} {{ 'reserva' if previa.reservas == 1 else 'reservas' }}. No se puede deshacer.">
+              data-confirmar="¿Desactivar a {{ persona.nombre }} {{ persona.apellido }}? Se {{ 'cancela' if n_clases == 1 else 'cancelan' }} {{ n_clases }} {{ 'clase' if n_clases == 1 else 'clases' }} y {{ previa.reservas }} {{ 'reserva' if previa.reservas == 1 else 'reservas' }}. Aunque después se la reactive, esas clases y reservas no vuelven.">
             <input type="hidden" name="firma" value="{{ previa.firma }}" />
-            <label>Motivo de la baja (solo lo ve la administración)
+            <label>Motivo de la desactivación (solo lo ve la administración)
                 <input type="text" name="motivo" value="{{ motivo }}" maxlength="200" required
                        placeholder="Ej.: dejó de trabajar en el estudio" /></label>
             <div class="acciones-confirmar">
                 <a class="btn btn-secundario" href="{{ volver }}">Volver</a>
-                <button type="submit" class="btn btn-peligro-solido">Confirmar baja</button>
+                <button type="submit" class="btn btn-peligro-solido">Confirmar desactivación</button>
             </div>
         </form>
     </main>

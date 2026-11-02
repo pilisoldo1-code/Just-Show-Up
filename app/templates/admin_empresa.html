@@ -72,9 +72,9 @@
                                 <input type="hidden" name="accion" value="profesora" />
                                 <button type="submit" {{ 'disabled' if a.ultima }}>Pasar a profesora</button>
                             </form>
-                            {# la baja cancela sus clases próximas: primero se ve la vista previa #}
+                            {# desactivarla cancela sus clases próximas: primero se ve la vista previa #}
                             <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/baja" method="get">
-                                <button type="submit" class="accion-peligro" {{ 'disabled' if a.ultima }}>Dar de baja…</button>
+                                <button type="submit" class="accion-peligro" {{ 'disabled' if a.ultima }}>Desactivar</button>
                             </form>
                             {% if a.ultima %}
                             <p class="menu-acciones-motivo">Es la única administradora activa de la empresa: para quitarle el rol, primero asigná otra.</p>

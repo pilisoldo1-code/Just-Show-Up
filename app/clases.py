@@ -585,7 +585,7 @@ def bloqueos(sb: Client) -> dict:
             # la baja no tiene fin real (su fecha final es un margen interno): solo se muestra desde cuándo
             "rango_txt": f"Desde el {fecha_corta(desde)[0].lower()}{fecha_corta(desde)[1:]}" if b.get("tipo") == "baja"
                          else _rango_texto(desde, hasta),
-            "alcance_txt": ("Baja de una profesora (sus clases)" if b.get("tipo") == "baja" else
+            "alcance_txt": ("Profesora desactivada (sus clases)" if b.get("tipo") == "baja" else
                             f"Solo {nombre_dia(h['dia_semana'])} {h['hora_inicio'][:5]}" if h else "Todas las clases"),
             "es_baja": b.get("tipo") == "baja",
             "motivo": b["motivo"],

@@ -119,7 +119,8 @@ r = A.post(f"/profesora/profesoras/{PROF}/estado", data={"activa": "0"}, follow_
 ok("«Dejar inactiva» con horarios y clases lleva a la vista previa y no cambia nada",
    r.headers["location"] == f"/profesora/profesoras/{PROF}/baja"
    and sql("select activa from membresia where id_usuario = %s and id_empresa = %s", (PROF, PIL), True)["activa"])
-ok("la ficha ofrece «Dar de baja…»", f"/profesora/profesoras/{PROF}/baja" in A.get(f"/profesora/profesoras/{PROF}").text)
+ficha = A.get(f"/profesora/profesoras/{PROF}").text
+ok("la ficha ofrece «Desactivar»", f"/profesora/profesoras/{PROF}/baja" in ficha and ">Desactivar</button>" in ficha)
 
 # ---------- vista previa ----------
 JSU_antes = huella_empresa(JSU)
@@ -157,7 +158,7 @@ ok("la alumna la ve en «Clases canceladas» de Mis inscripciones, como «Cancel
    "Clases canceladas" in ins and ">Cancelada</span>" in ins and "por la profesora" not in ins)
 pl = A.get("/profesora/planificacion").text
 ok("Planificación muestra la baja sin «Eliminar»",
-   "Baja de una profesora" in pl and pl.count("Eliminar</button>") == 0)
+   "Profesora desactivada" in pl and pl.count("Eliminar</button>") == 0)
 
 # ---------- caminos cerrados, también escribiendo directo en la API con el token real ----------
 r = A.post(f"/profesora/horarios/{H[PROF]}/toggle", follow_redirects=False)

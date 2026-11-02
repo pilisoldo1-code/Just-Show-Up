@@ -96,10 +96,10 @@
         <section class="bloque-persona">
             <h2>Estado</h2>
             {% if persona.membresia.activa and persona.rol == 'profesora' %}
-            <p class="nota">Activa: puede iniciar sesión en {{ usuario.empresa_nombre or 'tu empresa' }}. Al darla de baja se
+            <p class="nota">Activa: puede iniciar sesión en {{ usuario.empresa_nombre or 'tu empresa' }}. Al desactivarla se
                 desactivan sus horarios y se cancelan sus clases próximas (con sus reservas); antes ves exactamente qué cambia.</p>
             <form action="/profesora/{{ seccion }}/{{ persona.id }}/baja" method="get">
-                <button type="submit" class="btn btn-secundario">Dar de baja…</button>
+                <button type="submit" class="btn btn-secundario">Desactivar</button>
             </form>
             {% elif persona.membresia.activa %}
             <p class="nota">Activa: puede iniciar sesión en {{ usuario.empresa_nombre or 'tu empresa' }}.</p>
