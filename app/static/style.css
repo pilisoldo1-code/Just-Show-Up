@@ -3172,3 +3172,39 @@ main.baja-pagina h1 {
 .nota + .lista-clases {
     margin-top: 12px;
 }
+
+/* avisos de la vista previa: informativos, no impiden confirmar */
+.baja-aviso-pronto {
+    background: rgba(250, 204, 21, 0.1);
+    border: 1px solid rgba(250, 204, 21, 0.45);
+    color: #fde68a;
+    line-height: 1.5;
+    margin: 16px 0;
+}
+
+.baja-aviso-pronto strong {
+    color: #facc15;
+}
+
+.baja-aviso-reactivar {
+    background: rgba(248, 113, 113, 0.08);
+    border: 1px solid rgba(248, 113, 113, 0.4);
+    color: var(--text);
+    line-height: 1.5;
+    margin: 20px 0 0;
+}
+
+.baja-aviso-reactivar strong {
+    display: block;
+    color: #fca5a5;
+    margin-bottom: 4px;
+}
+
+.baja-badge-pronto {
+    background: rgba(250, 204, 21, 0.15);
+    color: #facc15;
+    font-size: 0.75rem;
+    margin-left: 6px;
+    vertical-align: middle;
+    white-space: nowrap;
+}

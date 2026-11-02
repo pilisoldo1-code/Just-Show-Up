@@ -129,6 +129,12 @@ firma = re.search(r'name="firma" value="([0-9a-f]+)"', v.text).group(1)
 ok("vista previa: horario, clase, 2 reservas y los nombres de las alumnas",
    v.status_code == 200 and "Pilates mat" in v.text and "Ana Prueba, Eva Prueba" in v.text
    and "<dt>Reservas a cancelar</dt><dd>2</dd>" in v.text)
+ok("vista previa: aclara que reactivarla no recupera clases ni reservas",
+   "nada de esto se recupera automáticamente" in v.text)
+from datetime import datetime  # noqa: E402
+empieza = datetime.combine(manana, datetime.strptime("10:00", "%H:%M").time(), tzinfo=clases.TZ)
+ok("vista previa: avisa si la clase empieza en menos de 24 horas (y solo entonces)",
+   ("próximas 24 horas" in v.text) == (empieza - clases.ahora() <= timedelta(hours=24)))
 P = entrar("Pilates Centro", "otra.pil@prueba.invalid")
 ok("una profesora común no abre la baja de otra", P.get(f"/profesora/profesoras/{PROF}/baja", follow_redirects=False).status_code == 303)
 ok("otra empresa: la administradora de Just Show Up no la ve",

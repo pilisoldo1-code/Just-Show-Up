@@ -48,6 +48,31 @@ class BajaProfesora(Base):
         visible = re.sub(r"<[^>]+>", " ", main_html).lower()
         self.assertNotIn("baja", visible)  # la palabra que se ve es «desactivar» (las rutas internas siguen igual)
 
+    def test_aviso_de_clases_que_empiezan_en_menos_de_24_horas(self):
+        # ahora (en las pruebas): lunes 2/11 10:00. Martes 3/11 09:00 empieza en 23 h; martes 3/11 11:00, en 25 h.
+        clases = [{"id": 1, "fecha": "2026-11-03", "hora_inicio": "09:00", "tipo": "Pilates", "reservas": 1, "espera": 0},
+                  {"id": 2, "fecha": "2026-11-03", "hora_inicio": "11:00", "tipo": "Pilates", "reservas": 1, "espera": 0}]
+        self.como(ADMIN)
+        self.preparar(previsualizar_baja_docente={**PREVIA, "clases": clases})
+        r = self.get(f"/profesora/profesoras/{ID}/baja")
+        self.assertIn("Una clase empieza en las próximas 24 horas:</strong>", r.text)
+        self.assertIn("Martes 3/11 09:00.", r.text)
+        self.assertNotIn("Martes 3/11 11:00.", r.text)
+        self.assertEqual(r.text.count("Empieza pronto"), 1)
+        self.assertIn("todavía no envía avisos", r.text)
+        self.assertIn("Es solo un aviso: podés confirmar igual.", r.text)
+        self.assertIn("Confirmar desactivación</button>", r.text)  # no impide confirmar
+        self.assertNotIn("disabled", r.text.split("<form", 1)[1])
+
+    def test_sin_clases_proximas_no_hay_aviso_y_siempre_se_aclara_la_reactivacion(self):
+        self.como(ADMIN)
+        self.preparar()  # su clase es el sábado 7/11: más de 24 horas
+        r = self.get(f"/profesora/profesoras/{ID}/baja")
+        self.assertNotIn("próximas 24 horas", r.text)
+        self.assertNotIn("Empieza pronto", r.text)
+        self.assertIn("Si después se la reactiva, nada de esto se recupera automáticamente.", r.text)
+        self.assertIn("las clases y reservas canceladas no vuelven", r.text)
+
     def test_confirmar(self):
         self.como(ADMIN)
         self.preparar(dar_de_baja_docente={"resultado": "ok", "horarios": 1, "clases": 1, "reservas": 2, "espera": 1})

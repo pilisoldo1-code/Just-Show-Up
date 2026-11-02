@@ -763,7 +763,7 @@ Para cada módulo, en este orden:
   es una sola operación con vista previa obligatoria (`previsualizar_baja_docente` / `_administradora`) y una «firma»:
   si algo cambió desde la vista previa, `dar_de_baja_*` devuelve `cambio` y no hace nada. Desactiva sus horarios, cancela
   sus clases que no empezaron (reservas con `id_bloqueo` = un bloqueo de tipo `baja`, listas de espera expiradas) y lo
-  registra en `baja_docente`; no toca clases empezadas, asistencias, facturas ni pagos. Reactivar NO restaura nada. Los
+  registra en `baja_docente`; no toca clases empezadas, asistencias, facturas ni pagos. Reactivar NO restaura nada (la vista previa lo dice en un aviso destacado). Decisiones D1–D4 aprobadas por Julieta el 02/11. Si alguna clase a cancelar empieza en las próximas 24 h (`HORAS_AVISO_BAJA`), la vista previa lo avisa (solo informativo: no hay avisos automáticos a las alumnas). Los
   triggers `validar_docente` de `horario` y `clase` impiden horarios activos o clases programadas de una docente
   inactiva (con bloqueo compartido de su membresía: sin carreras con la baja). La superadministradora no tiene empresa
   activa: `_proteger_empresa` la deja operar solo dentro de `dar_de_baja_administradora` (marca `jsu.baja_empresa` de esa

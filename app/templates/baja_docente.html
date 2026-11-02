@@ -19,6 +19,16 @@
         {% endif %}
 
         {% set n_clases = previa.clases|length %}
+        {% if previa.pronto %}
+        {% set n = previa.pronto|length %}
+        <div class="aviso baja-aviso-pronto" role="note">
+            <strong>{{ 'Una clase empieza' if n == 1 else n ~ ' clases empiezan' }} en las próximas 24 horas:</strong>
+            {% for c in previa.pronto %}{{ c.dia_txt }} {{ c.hora_inicio }}{{ ', ' if not loop.last }}{% endfor %}.
+            Las alumnas podrían no enterarse a tiempo de la cancelación, porque la plataforma todavía no envía avisos
+            automáticos. Podés avisarles por otro medio o esperar a que {{ 'pase esa clase' if n == 1 else 'pasen esas clases' }}
+            para desactivarla. Es solo un aviso: podés confirmar igual.
+        </div>
+        {% endif %}
         <dl class="baja-cifras">
             <div><dt>Horarios a desactivar</dt><dd>{{ previa.horarios|length }}</dd></div>
             <div><dt>Clases a cancelar</dt><dd>{{ n_clases }}</dd></div>
@@ -44,7 +54,7 @@
             <h2>Clases que se cancelan</h2>
             <ul class="baja-lista">
                 {% for c in previa.clases %}
-                <li><span class="baja-item-titulo">{{ c.dia_txt }} · {{ c.hora_inicio }}</span>
+                <li><span class="baja-item-titulo">{{ c.dia_txt }} · {{ c.hora_inicio }}{% if c.pronto %} <span class="badge baja-badge-pronto">Empieza pronto</span>{% endif %}</span>
                     <span class="baja-detalle">{{ c.tipo }} · {{ c.reservas }} {{ 'reserva' if c.reservas == 1 else 'reservas' }}{% if c.espera %} · {{ c.espera }} en espera{% endif %}</span></li>
                 {% endfor %}
             </ul>
@@ -61,9 +71,14 @@
         <section class="bloque-persona">
             <h2>Lo que no cambia</h2>
             <p class="nota">Las clases que ya pasaron{% if previa.en_curso %} y {{ 'la clase que está en curso' if previa.en_curso == 1 else 'las ' ~ previa.en_curso ~ ' clases que están en curso' }}{% endif %},
-                las asistencias, las facturas y los pagos se conservan tal cual. Si después se la reactiva, sus horarios y
-                sus clases canceladas no vuelven solos.</p>
+                las asistencias, las facturas y los pagos se conservan tal cual.</p>
         </section>
+
+        <div class="aviso baja-aviso-reactivar" role="note">
+            <strong>Si después se la reactiva, nada de esto se recupera automáticamente.</strong>
+            Vuelve a poder iniciar sesión, pero las clases y reservas canceladas no vuelven: las alumnas tienen que reservar
+            de nuevo y sus horarios se activan a mano en Horarios.
+        </div>
 
         <form action="{{ accion }}" method="post" class="horario-form baja-form"
               data-confirmar="¿Desactivar a {{ persona.nombre }} {{ persona.apellido }}? Se {{ 'cancela' if n_clases == 1 else 'cancelan' }} {{ n_clases }} {{ 'clase' if n_clases == 1 else 'clases' }} y {{ previa.reservas }} {{ 'reserva' if previa.reservas == 1 else 'reservas' }}. Aunque después se la reactive, esas clases y reservas no vuelven.">

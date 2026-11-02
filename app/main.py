@@ -2007,10 +2007,16 @@ def _docentes_activas(sb, usuario: Usuario) -> dict:
     return {i: n for i, n in personas.nombres_profesoras(sb).items() if i in activas}
 
 
+HORAS_AVISO_BAJA = 24  # clases que empiezan antes de esto: las alumnas podrían no enterarse (no hay avisos automáticos)
+
+
 def _vista_baja(previa: dict) -> dict:
+    limite = clases.ahora() + timedelta(hours=HORAS_AVISO_BAJA)
     for c in previa.get("clases", []):
         f = date.fromisoformat(c["fecha"])
         c["dia_txt"] = f"{clases.nombre_dia(clases.DIAS_ORDEN[f.weekday()])} {f.day}/{f.month}"
+        c["pronto"] = clases._inicio_clase(c) <= limite
+    previa["pronto"] = [c for c in previa.get("clases", []) if c["pronto"]]
     for h in previa.get("horarios", []):
         h["dia_txt"] = clases.nombre_dia(h["dia_semana"])
     return previa
