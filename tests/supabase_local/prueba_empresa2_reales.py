@@ -267,6 +267,15 @@ for nombre, cli, emp in (("administradora de Pilates", AP, PIL), ("profesora de 
         if otras:
             ajenas[t] = len(otras)
     ok(f"API con token real ({nombre}): ninguna fila de la otra empresa en {len(OPER)} tablas", not ajenas, ajenas)
+redir = lambda cli, ruta: cli.get(ruta, follow_redirects=False).status_code in (302, 303)
+ok("superadministradora: no entra a pantallas de una empresa (alumnas, facturación, Mis facturas)",
+   all(redir(SA, r) for r in ("/profesora/alumnas", "/profesora/resumenes", "/mis-facturas", "/")))
+ok("administradora de Pilates: no entra al panel de empresas", all(redir(AP, r) for r in ("/admin/empresas", f"/admin/empresas/{PIL}")))
+ok("profesora de Pilates: ni panel de empresas, ni facturación, ni tipos de clase, ni altas de alumnas",
+   all(redir(PP, r) for r in ("/admin/empresas", "/profesora/resumenes", "/profesora/tipos-clase", "/profesora/alumnas/nueva")))
+ok("profesora de Pilates: ve sus clases en Asistencias", "Pilates" in PP.get("/profesora/clases").text)
+ok("alumna de Pilates: no entra a pantallas de docentes ni al panel", all(redir(LP, r) for r in
+   ("/profesora/clases", "/profesora/resumenes", "/administracion", "/admin/empresas")))
 ok("la profesora de Pilates no ve facturas ni pagos", api(PP).table("resumen_mensual").select("id").execute().data == []
    and PP.get("/profesora/resumenes", follow_redirects=False).status_code == 303)
 rp = api(PP).table("reserva").select("id_clase").execute().data

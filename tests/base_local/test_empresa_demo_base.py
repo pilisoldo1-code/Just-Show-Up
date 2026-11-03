@@ -3,7 +3,8 @@ COPIA de producción y las migraciones de multiempresa 1 a 4. Crea la empresa, c
 con la sesión de cada una (RLS real), que la Empresa 1 no cambia, y que `borrar` deja todo como estaba.
 No toca Supabase.
 
-Uso:  python tests/base_local/test_empresa_demo_base.py "<carpeta del respaldo antes de multiempresa>"
+Uso:  python tests/base_local/test_empresa_demo_base.py "<carpeta del respaldo antes de multiempresa>" [AAAA-MM-DD]
+      (la fecha simula el día en que se crea el escenario; por defecto 2026-11-04)
 """
 import hashlib
 import json
@@ -24,7 +25,8 @@ from scripts import empresa_demo  # noqa: E402
 
 fallas = total_casos = 0
 RESPALDO = sys.argv[1]
-HOY = date(2026, 11, 4)
+HOY = date.fromisoformat(sys.argv[2]) if len(sys.argv) > 2 else date(2026, 11, 4)
+print(f"Escenario creado el {HOY.isoformat()}")
 
 
 def ok(n, c, extra=""):
@@ -123,6 +125,18 @@ estado = lambda mail, clave: q(su, "select r.estado reserva, a.estado asistencia
                                    "join horario h on h.id = c.id_horario left join asistencia a on a.id_reserva = r.id "
                                    "where r.id_alumna = %s and c.fecha = %s and h.dia_semana = %s",
                                (U[mail], clave[0], ED.HORARIOS[clave[1]][0]), True)
+docente = {f"{x['dia']}": x for x in q(su, "select h.dia_semana dia, p.nombre || ' ' || p.apellido docente, count(c.id) clases, "
+    "count(*) filter (where c.id_profesora is distinct from h.id_profesora) distintas from horario h join profiles p on p.id = h.id_profesora "
+    "join clase c on c.id_horario = h.id where h.id_empresa = %s group by 1, 2", (E2,))}
+ok("profesoras: Lucía da lunes (mat) y miércoles (reformer); Carolina martes (mat) y jueves (reformer); cada clase con la de su horario",
+   {d: x["docente"] for d, x in docente.items()} == {"lunes": "Lucía Bentancor", "miercoles": "Lucía Bentancor",
+                                                       "martes": "Carolina Méndez", "jueves": "Carolina Méndez"}
+   and all(x["distintas"] == 0 for x in docente.values()), docente)
+from app import facturas as FA  # noqa: E402
+aus25 = reg["ines_ausente_25"]
+ok("la inasistencia de Inés de este mes cae en la vigencia: en el provisorio se cobra al 25 %",
+   aus25 is not None and FA.porcentaje_cobro(aus25[0], "ausente", HOY.replace(day=1)) == 25
+   and FA.porcentaje_cobro(reg["ines_ausente_100"][0], "ausente", HOY.replace(day=1)) == 100, reg)
 ok("Inés: ausente en el mes anterior y en este mes", estado(ED.INES, reg["ines_ausente_100"])["asistencia"] == "ausente"
    and estado(ED.INES, reg["ines_ausente_25"])["asistencia"] == "ausente"
    and reg["ines_ausente_100"][0].month != HOY.month and reg["ines_ausente_25"][0].month == HOY.month)
