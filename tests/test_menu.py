@@ -21,10 +21,11 @@ SECCIONES_PROFESORA = [
     ("/administracion", "Inicio"), ("/profesora/horarios", "Horarios"), ("/profesora/tipos-clase", "Tipos de clase"),
     ("/profesora/planificacion", "Planificación"), ("/profesora/clases", "Asistencias"), ("/profesora/alumnas", "Alumnas"),
     ("/profesora/profesoras", "Profesoras"), ("/profesora/resumenes", "Facturación"), ("/profesora/estadisticas", "Estadísticas"),
+    ("/videos", "Videos On Demand"),
 ]
 SECCIONES_ALUMNA = [
     ("/", "Reservar clases"), ("/mis-inscripciones", "Mis inscripciones"),
-    ("/mi-historial", "Mi historial"), ("/mis-facturas", "Mis facturas"),
+    ("/mi-historial", "Mi historial"), ("/mis-facturas", "Mis facturas"), ("/videos", "Videos On Demand"),
 ]
 
 
@@ -50,10 +51,10 @@ def activos(html):
 
 
 class MenuPrincipal(unittest.TestCase):
-    def test_administradora_tiene_sus_nueve_secciones_en_orden(self):
+    def test_administradora_tiene_sus_diez_secciones_en_orden(self):
         self.assertEqual(enlaces(bloque(menu_de(PROFESORA, "/profesora/horarios"), "menu-links")), SECCIONES_PROFESORA)
 
-    def test_alumna_tiene_sus_cuatro_secciones_en_orden(self):
+    def test_alumna_tiene_sus_cinco_secciones_en_orden(self):
         self.assertEqual(enlaces(bloque(menu_de(ALUMNA, "/"), "menu-links")), SECCIONES_ALUMNA)
 
     def test_alumna_no_ve_secciones_de_la_profesora(self):
@@ -62,7 +63,8 @@ class MenuPrincipal(unittest.TestCase):
     def test_profesora_no_ve_secciones_de_la_alumna(self):
         menu = bloque(menu_de(PROFESORA, "/profesora/horarios"), "menu-links")
         for href, _ in SECCIONES_ALUMNA:
-            self.assertNotIn(f'href="{href}"', menu)
+            if href != "/videos":  # Videos On Demand es de los dos roles
+                self.assertNotIn(f'href="{href}"', menu)
 
 
 class SeccionActiva(unittest.TestCase):

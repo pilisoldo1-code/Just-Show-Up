@@ -25,8 +25,8 @@ Mercado Pago y Videos On Demand y las ideas a evaluar. **Orden de trabajo (actua
    `GUIA_DEFENSA_MERCADO_PAGO.md`; detalle en `CONTINUIDAD_PROYECTO.md` §7. **Theta es la plataforma de
    la defensa; la credencial de prueba está en Supabase Vault (no en Vercel).** Desde el PR #23 solo
    `alumna@prueba.invalid` puede iniciar un pago; el rediseño de la sección «Pago» (PR #24) está en theta.
-4. Videos On Demand: Zoom gratuito (~40 min, carga manual) + Mux gratuito si pasa la prueba de
-   reproducción firmada.
+4. Videos On Demand: **en desarrollo** en la rama `feature/videos-on-demand` (Pilar). Cambió la decisión del 27/10:
+   ahora es automático desde Zoom Basic, con Supabase Storage; Mux gratuito queda como plan B (ver Estado actual).
 
 Ideas pendientes **para evaluar (no aprobadas)**: notificaciones de cancelación, magic links, gráficas en
 Estadísticas, revisión integral para celulares (`CONTINUIDAD_PROYECTO.md` §11). El cobro del 25 % por inasistencia ya
@@ -506,6 +506,30 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   cambiarla** (no está en su permiso de UPDATE por columna). La profesora la carga en el alta o
   después con "Cargar/Corregir cédula" en Alumnas (función `actualizar_cedula`, verifica rol;
   vacía = quitarla).
+- **Videos On Demand (rama `feature/videos-on-demand`, Pilar, 03/11; migración
+  `20261106000000_videos_on_demand.sql` SIN APLICAR y sin integrar en `main`)**: la profesora da la clase con Zoom Basic,
+  `agente/agente_videos.py` (en su computadora) detecta la grabación, la comprime a ~400 kbps (~120 MB para 40 min), la
+  divide en partes de hasta 45 MB y la sube con URLs firmadas directo a Supabase (Vercel limita los pedidos a 4,5 MB).
+  El video se ve 24 h desde la publicación en `/videos` (alumna, profesora y administradora de esa empresa, solo para
+  mirar); después `/api/videos/limpieza` (cron diario de Vercel, y cada vez que se publica otro) borra los archivos y
+  conserva la fila.
+  - Reproducción: HLS con una lista de rangos de bytes sobre pocas partes; `GET /videos/{id}/lista.m3u8` firma las
+    URLs al momento, por `min(90 min, tiempo restante)`. Safari usa HLS nativo y Chrome de Android `hls.js`.
+  - Tablas `video` (una fila por clase, la empresa y la profesora salen de la clase), `video_agente` (huella del token de
+    cada computadora; se crea con `scripts/video_agente.py`) y `video_reproduccion` (topes). «Vencido» no es un estado:
+    se calcula con `vence_en`, así el corte es exacto aunque el cron se atrase.
+  - **El bucket privado `videos-clases` no tiene políticas para usuarias a propósito**: `createSignedUrl` solo necesita
+    `select` en `storage.objects`, así que con esa política una sesión podría firmar URLs con el vencimiento que quiera.
+  - **Topes en `video_reproducir`**: 4 GB estimados por mes en total y 3 inicios por usuaria y video (reabrir antes de
+    90 min no cuenta). Superar la cuota de Supabase puede bloquear con 402 toda la organización: la app entera. Por eso
+    `VIDEOS_SUPABASE_URL` y `VIDEOS_SUPABASE_SERVICE_KEY` permiten guardar los archivos en un proyecto aparte, de otra
+    organización (`scripts/video_agente.py bucket` crea ahí el bucket); sin ellas se usa el proyecto principal.
+  - Límite real: unas 33 reproducciones completas por mes en total; no alcanza para grabar todas las clases.
+  - Pruebas: `python tests/base_local/test_videos_base.py` (81), `tests.test_videos` y `tests.test_agente_videos`.
+    **Sin probar todavía**: una grabación real de Zoom, FFmpeg, Supabase Storage real (rangos de bytes con URL firmada) y
+    Safari de iPhone (si manda la cookie al pedir la lista HLS). Variables nuevas en Vercel: `CRON_SECRET`. Vuelta atrás:
+    `supabase/pendientes/vuelta_atras_videos_on_demand.sql`. **Orden de despliegue: primero la migración y después el
+    merge**: el menú ya muestra la sección y sin las funciones la pantalla da aviso de error.
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -693,10 +717,9 @@ en la web, no solo cambios de esquema.
    Estado actual): PR #15 integrado en `main` el 27/10
    (merge común, `568d551`), desplegado en theta y verificado; migraciones aplicadas en Supabase. Pago con **Mercado Pago Checkout Pro solo en modo de prueba**: paso 3 del
    orden de trabajo (propuesta en `CONTINUIDAD_PROYECTO.md` §7).
-7. **Clases grabadas → "Videos On Demand"** (decidido 27/10): la profesora sube la grabación (Zoom
-   gratuito, carga manual) y todas las alumnas la ven 24 h desde la publicación; alojamiento en Mux
-   gratuito sujeto a validación. Paso 4 del orden de trabajo (`CONTINUIDAD_PROYECTO.md` §8). La
-   suscripción paga original queda fuera por ahora.
+7. **Clases grabadas → "Videos On Demand"** — **en desarrollo** (rama `feature/videos-on-demand`, ver Estado actual):
+   subida automática desde Zoom Basic y 24 h de disponibilidad por empresa. La suscripción paga original queda fuera
+   por ahora.
 8. **Notificaciones y extras** — mails vía Resend (confirmación, recordatorio
    24hs), integración con Google Calendar, automatizaciones con n8n,
    analytics con PostHog.

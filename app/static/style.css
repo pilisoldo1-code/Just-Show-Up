@@ -3566,3 +3566,57 @@ main.baja-pagina h1 {
         display: none;
     }
 }
+
+/* ---------- videos on demand ---------- */
+
+.videos-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+    gap: 16px;
+}
+
+.video-card {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 16px;
+    color: inherit;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+a.video-card:hover {
+    border-color: var(--accent);
+}
+
+.video-card h2 {
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.video-dato {
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.video-restante {
+    color: var(--accent);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.video-reproductor {
+    display: block;
+    width: 100%;
+    max-height: 70vh;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 12px;
+    margin-bottom: 12px;
+}
+
+.video-volver {
+    color: var(--accent);
+}

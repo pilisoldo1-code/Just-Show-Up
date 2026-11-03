@@ -319,6 +319,14 @@ def requiere_profesora(request: Request) -> Usuario:
     return usuario
 
 
+def requiere_espectadora(request: Request) -> Usuario:
+    """Alumna o docente de la empresa activa: las personas que pueden mirar Videos On Demand."""
+    usuario = _con_empresa(request)
+    if not (usuario.es_alumna or usuario.es_docente):
+        raise Redirigir(usuario.inicio)
+    return usuario
+
+
 def requiere_admin(request: Request) -> Usuario:
     """Solo la administradora de la empresa activa (facturación, pagos, altas, tipos de clase)."""
     usuario = requiere_profesora(request)

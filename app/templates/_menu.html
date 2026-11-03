@@ -17,6 +17,7 @@
     ("/profesora/profesoras", "Profesoras", ruta.startswith("/profesora/profesoras")),
     ("/profesora/resumenes", "Facturación", ruta.startswith("/profesora/resumenes")),
     ("/profesora/estadisticas", "Estadísticas", ruta.startswith("/profesora/estadisticas")),
+    ("/videos", "Videos On Demand", ruta.startswith("/videos")),
 ] %}
 {% elif usuario.es_profesora %}
 {% set secciones = [
@@ -25,6 +26,7 @@
     ("/profesora/clases", "Asistencias", ruta.startswith("/profesora/clases")),
     ("/profesora/alumnas", "Alumnas", ruta.startswith("/profesora/alumnas")),
     ("/profesora/estadisticas", "Estadísticas", ruta.startswith("/profesora/estadisticas")),
+    ("/videos", "Videos On Demand", ruta.startswith("/videos")),
 ] %}
 {% else %}
 {% set secciones = [
@@ -32,6 +34,7 @@
     ("/mis-inscripciones", "Mis inscripciones", ruta.startswith("/mis-inscripciones")),
     ("/mi-historial", "Mi historial", ruta.startswith("/mi-historial")),
     ("/mis-facturas", "Mis facturas", ruta.startswith("/mis-facturas")),
+    ("/videos", "Videos On Demand", ruta.startswith("/videos")),
 ] %}
 {% endif %}
 <header class="menu">

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Videos On Demand</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    {% include "_menu.html" %}
+    <main>
+        <h1>Videos On Demand</h1>
+        <p class="subtitle">Las clases grabadas se pueden ver durante 24 horas desde que se publican.</p>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        {% if videos %}
+        <div class="videos-lista">
+            {% for v in videos %}
+            <a class="video-card" href="/videos/{{ v.id }}">
+                <h2>{{ v.clase }}</h2>
+                <span class="video-dato">{{ v.fecha_txt }} · {{ v.hora }}</span>
+                <span class="video-dato">{{ v.profesora }} · {{ v.duracion_txt }}</span>
+                <span class="video-restante">{{ v.restante_txt }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="vacio">No hay videos disponibles en este momento.</p>
+        {% endif %}
+    </main>
+</body>
+</html>

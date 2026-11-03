@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - {{ video.clase }}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    {% include "_menu.html" %}
+    <main>
+        <h1>{{ video.clase }}</h1>
+        <p class="subtitle">{{ video.fecha_txt }} · {{ video.hora }} · {{ video.profesora }} · {{ video.duracion_txt }}</p>
+
+        <video id="reproductor" class="video-reproductor" controls playsinline preload="metadata"
+               data-lista="/videos/{{ video.id }}/lista.m3u8" data-restante="{{ video.segundos_restantes }}"></video>
+        <div id="video-aviso" class="aviso aviso-error" hidden></div>
+        <p class="video-restante" id="video-restante">{{ video.restante_txt }}</p>
+        <p><a class="video-volver" href="/videos">Volver a Videos On Demand</a></p>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
+    <script>
+        (function () {
+            var video = document.getElementById("reproductor");
+            var aviso = document.getElementById("video-aviso");
+            var lista = video.dataset.lista;
+            var hls = null;
+
+            function mostrar(texto) {
+                aviso.textContent = texto;
+                aviso.hidden = false;
+            }
+
+            function fallo() {
+                fetch(lista, { method: "GET" }).then(function (r) {
+                    mostrar(r.status === 429
+                        ? "Por ahora no se puede reproducir este video: se alcanzó el límite de reproducciones."
+                        : "No pudimos reproducir el video. Probá de nuevo más tarde.");
+                }).catch(function () {
+                    mostrar("No pudimos reproducir el video. Revisá tu conexión.");
+                });
+            }
+
+            // Safari de iPhone reproduce HLS solo; Chrome de Android necesita hls.js.
+            if (video.canPlayType("application/vnd.apple.mpegurl")) {
+                video.src = lista;
+                video.addEventListener("error", fallo);
+            } else if (window.Hls && Hls.isSupported()) {
+                hls = new Hls();
+                hls.on(Hls.Events.ERROR, function (_, datos) {
+                    if (datos.fatal) { hls.destroy(); fallo(); }
+                });
+                hls.loadSource(lista);
+                hls.attachMedia(video);
+            } else {
+                mostrar("Este navegador no puede reproducir el video.");
+            }
+
+            setTimeout(function () {
+                video.pause();
+                if (hls) hls.destroy();
+                video.removeAttribute("src");
+                video.load();
+                document.getElementById("video-restante").hidden = true;
+                mostrar("Este video ya no está disponible.");
+            }, Number(video.dataset.restante) * 1000);
+        })();
+    </script>
+</body>
+</html>

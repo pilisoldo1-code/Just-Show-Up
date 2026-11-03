@@ -6,15 +6,16 @@ from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import urlencode
 
-from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
-from app import auth, clases, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones
-from app.auth import (ErrorAuth, Redirigir, Usuario, requiere_admin, requiere_alumna, requiere_login, requiere_profesora,
-                      requiere_superadmin)
+from app import auth, clases, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones, videos
+from app.auth import (ErrorAuth, Redirigir, Usuario, requiere_admin, requiere_alumna, requiere_espectadora, requiere_login,
+                      requiere_profesora, requiere_superadmin)
 from app.clases import DIAS_ORDEN
 from app import tipos_clase
 
@@ -2219,3 +2220,100 @@ def baja_admin_confirmar(request: Request, empresa_id: int, persona_id: str, mot
                                   f"/admin/empresas/{empresa_id}", True, MSG_BAJA[r["resultado"]], motivo,
                                   409 if r["resultado"] == "cambio" else 400)
     return _volver_empresas(False, MSG_BAJA.get(r.get("resultado"), auth.MSG_GENERICO), empresa_id)
+
+
+# ---------- Videos On Demand ----------
+
+@app.get("/videos")
+def videos_lista(request: Request, aviso: str = "", usuario: Usuario = Depends(requiere_espectadora)):
+    try:
+        lista = videos.disponibles(_sb(usuario))
+    except Exception:
+        logging.exception("No se pudieron cargar los videos")
+        lista, aviso = [], "No pudimos cargar los videos. Probá de nuevo."
+    return _render(request, "videos.html", usuario, videos=lista, aviso=aviso, aviso_ok=False)
+
+
+@app.get("/videos/{video_id}")
+def video_ver(request: Request, video_id: int, usuario: Usuario = Depends(requiere_espectadora)):
+    try:
+        video = videos.detalle(_sb(usuario), video_id)
+    except Exception:
+        logging.exception("No se pudo cargar el video")
+        video = None
+    if video is None:
+        return RedirectResponse(url="/videos?" + urlencode({"aviso": videos.MSG_NO_DISPONIBLE}), status_code=303)
+    return _render(request, "video.html", usuario, video=video)
+
+
+@app.get("/videos/{video_id}/lista.m3u8")
+def video_lista_hls(video_id: int, usuario: Usuario = Depends(requiere_espectadora)):
+    try:
+        estado, lista = videos.lista_para_reproducir(_sb(usuario), video_id)
+    except Exception:
+        logging.exception("No se pudo preparar la reproducción")
+        return Response(status_code=503)
+    if estado != "ok":
+        return Response(status_code=videos.CODIGOS_REPRODUCCION.get(estado, 404))
+    return Response(content=lista, media_type="application/vnd.apple.mpegurl")
+
+
+class VideoRegistro(BaseModel):
+    inicio: str
+    huella: str
+    duracion_seg: int
+    tamano_bytes: int
+    partes: list[dict]
+    lista_hls: str
+
+
+class VideoFallo(BaseModel):
+    mensaje: str = ""
+
+
+def _agente(request: Request) -> str:
+    """id de la profesora dueña del token del programa local."""
+    id_profesora = videos.identificar_agente(request.headers.get("authorization", ""))
+    if id_profesora is None:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    return id_profesora
+
+
+def _video_del_agente(video_id: int, id_profesora: str) -> dict:
+    video = videos.video_de_agente(video_id, id_profesora)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video no encontrado")
+    return video
+
+
+@app.post("/api/videos/agente/registrar")
+def video_agente_registrar(datos: VideoRegistro, id_profesora: str = Depends(_agente)):
+    return videos.registrar(id_profesora, datos.model_dump())
+
+
+@app.post("/api/videos/agente/{video_id}/urls-subida")
+def video_agente_urls(video_id: int, id_profesora: str = Depends(_agente)):
+    return videos.urls_subida(_video_del_agente(video_id, id_profesora))
+
+
+@app.post("/api/videos/agente/{video_id}/publicar")
+def video_agente_publicar(video_id: int, id_profesora: str = Depends(_agente)):
+    r = videos.publicar(_video_del_agente(video_id, id_profesora), id_profesora)
+    videos.limpiar_sin_fallar()
+    return r
+
+
+@app.post("/api/videos/agente/{video_id}/error")
+def video_agente_error(video_id: int, datos: VideoFallo, id_profesora: str = Depends(_agente)):
+    videos.registrar_error(video_id, id_profesora, datos.mensaje)
+    return {"resultado": "ok"}
+
+
+@app.get("/api/videos/limpieza")
+def video_limpieza(request: Request):
+    secreto = os.environ.get("CRON_SECRET")
+    if not secreto:
+        return Response(status_code=503)
+    if not videos.secreto_valido(request.headers.get("authorization", ""), secreto):
+        return Response(status_code=401)
+    return {"eliminados": videos.limpiar()}
