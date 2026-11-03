@@ -62,9 +62,6 @@
                         </div>
                         {# una sola línea; si no entra se recorta con «…» y, al tocarlo, se despliega completo en su lugar #}
                         {{ correo(a.mail, quien) }}
-                        {% if a.activa and a.pendientes_txt %}
-                        <span class="admin-aviso">Para dejarla inactiva, antes hay que resolver que {{ a.pendientes_txt|join('; que ') }}.</span>
-                        {% endif %}
                     </div>
                     <details class="menu-acciones">
                         <summary aria-label="Acciones para {{ quien }}">⋮</summary>
@@ -75,15 +72,12 @@
                                 <input type="hidden" name="accion" value="profesora" />
                                 <button type="submit" {{ 'disabled' if a.ultima }}>Pasar a profesora</button>
                             </form>
-                            <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/quitar" method="post"
-                                  data-confirmar="¿Dejar inactiva a {{ quien }}? Pasa a ser profesora inactiva: pierde el acceso a {{ e.nombre }} y deja de figurar como administradora. Sus datos e historial se conservan.">
-                                <input type="hidden" name="accion" value="inactiva" />
-                                <button type="submit" class="accion-peligro" {{ 'disabled' if a.ultima or a.pendientes_txt }}>Dejar inactiva</button>
+                            {# desactivarla cancela sus clases próximas: primero se ve la vista previa #}
+                            <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/baja" method="get">
+                                <button type="submit" class="accion-peligro" {{ 'disabled' if a.ultima }}>Desactivar</button>
                             </form>
                             {% if a.ultima %}
                             <p class="menu-acciones-motivo">Es la única administradora activa de la empresa: para quitarle el rol, primero asigná otra.</p>
-                            {% elif a.pendientes_txt %}
-                            <p class="menu-acciones-motivo">Para dejarla inactiva, primero hay que resolver sus horarios activos o clases futuras (ver el aviso debajo del correo).</p>
                             {% endif %}
                             {% else %}
                             <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/reactivar" method="post"

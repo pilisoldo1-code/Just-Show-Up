@@ -29,14 +29,14 @@
         {% endif %}
 
         {% if canceladas_profesora %}
-        <h2 class="seccion">Canceladas por la profesora</h2>
-        <p class="nota">Estas clases que tenías reservadas no se van a dictar y no se cobran.</p>
+        <h2 class="seccion">Clases canceladas</h2>
+        <p class="nota">Estas clases no se van a dictar y no se cobran.</p>
         <ul class="lista-clases">
             {% for c in canceladas_profesora %}
             <li>
                 <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
                 <div class="lc-detalle">{{ c.duracion }} min</div>
-                <span class="badge badge-espera">Cancelada por la profesora</span>
+                <span class="badge badge-off">Cancelada</span>
             </li>
             {% endfor %}
         </ul>

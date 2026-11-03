@@ -233,8 +233,8 @@ class Menu(Base):
         r = self.get("/admin/empresas/1")
         self.assertEqual(r.status_code, 200)
         for texto in ("← Volver a empresas", "Datos generales", "Editar datos", "Desactivar empresa", "Asignar administradora",
-                      "profesora@prueba.invalid", "Pasar a profesora", "Dejar inactiva", "Reiniciar contraseña", "Reactivar",
-                      "tiene horarios activos", 'class="menu-acciones"', "<dt>Administradoras</dt><dd>1</dd>"):
+                      "profesora@prueba.invalid", "Pasar a profesora", ">Desactivar</button>", "Reiniciar contraseña", "Reactivar",
+                      'class="menu-acciones"', "<dt>Administradoras</dt><dd>1</dd>"):
             self.assertIn(texto, r.text)
         self.assertEqual(r.text.count("Pasar a profesora"), 1)  # solo la activa; la inactiva tiene «Reactivar»
         self.assertNotIn("También da clases", r.text)
@@ -243,9 +243,11 @@ class Menu(Base):
         self.assertIn('<button type="button" class="correo" title="profesora@prueba.invalid"', r.text)
         # única administradora activa: no se le puede quitar el rol (opciones deshabilitadas, con el motivo)
         self.assertIn('<button type="submit" disabled>Pasar a profesora</button>', r.text)
-        self.assertIn('<button type="submit" class="accion-peligro" disabled>Dejar inactiva</button>', r.text)
+        self.assertIn('<button type="submit" class="accion-peligro" disabled>Desactivar</button>', r.text)
         self.assertIn("Es la única administradora activa", r.text)
-        self.assertIn("pierde el acceso a Just Show Up y deja de figurar como administradora", r.text)
+        # la baja siempre pasa por la vista previa (cancela sus clases próximas): ya no se bloquea por sus horarios
+        self.assertIn('action="/admin/empresas/1/administradoras/u1/baja" method="get"', r.text)
+        self.assertNotIn("tiene horarios activos", r.text)
         self.assertIn("en todas las empresas donde usa Just Show Up", r.text)
         self.RESUMEN = [{**self.RESUMEN[0], "activa": False}]
         self.responder()
@@ -258,11 +260,10 @@ class Menu(Base):
         self.ADMINS = [{**self.ADMINS[0]}, {**self.ADMINS[1], "activa": True, "pendientes": []}]
         self.responder()
         r = self.get("/admin/empresas/1")
-        # dos activas: la que tiene horarios puede pasar a profesora, pero no quedar inactiva; la otra, las dos
+        # dos activas: las dos pueden pasar a profesora o darse de baja (con vista previa, aunque tenga horarios)
         self.assertEqual(r.text.count('<button type="submit" >Pasar a profesora</button>'), 2)
-        self.assertEqual(r.text.count('class="accion-peligro" disabled>Dejar inactiva'), 1)
-        self.assertEqual(r.text.count('class="accion-peligro" >Dejar inactiva'), 1)
-        self.assertIn("primero hay que resolver sus horarios activos o clases futuras", r.text)
+        self.assertEqual(r.text.count('class="accion-peligro" >Desactivar</button>'), 2)
+        self.assertNotIn("primero hay que resolver", r.text)
         self.assertNotIn("Es la única administradora activa", r.text)
 
     def test_empresa_inexistente_vuelve_al_listado(self):
@@ -711,7 +712,7 @@ class ProfesoraSoloLoSuyo(Base):
 
     def test_admin_elige_la_profesora_del_horario(self):
         self.como(ADMIN)
-        with mock.patch.object(main.personas, "nombres_profesoras", return_value={"pr": "Paula Ruiz"}), \
+        with mock.patch.object(main, "_docentes_activas", return_value={"pr": "Paula Ruiz"}), \
                 mock.patch.object(main, "_validar_horario", return_value=({"dia_semana": "lunes", "hora_inicio": "10:00",
                                                                            "id_tipo_clase": 1}, [])):
             r = self.post("/profesora/horarios/nuevo", {"dia_semana": "lunes", "hora_inicio": "10:00", "id_tipo_clase": "1",
@@ -820,7 +821,7 @@ class EditarPersona(Base):
         r = self.get(f"/profesora/profesoras/{self.ID}")
         self.assertEqual(r.status_code, 200)
         for texto in ("Pia Dos", "Guardar datos", "Rol actual: <strong>Profesora</strong>", "Cambiar a alumna",
-                      "Dejar inactiva", "p@x.uy", "<dt>Teléfono</dt><dd>099123456</dd>", "<dt>Cédula</dt><dd>No registrada</dd>",
+                      f'action="/profesora/profesoras/{self.ID}/baja" method="get"', ">Desactivar</button>", "p@x.uy", "<dt>Teléfono</dt><dd>099123456</dd>", "<dt>Cédula</dt><dd>No registrada</dd>",
                       "<dt>Carné de salud vence</dt>", "Reiniciar contraseña"):
             self.assertIn(texto, r.text)
         for texto in ("es_admin", "Administradora</label>", "Guardar roles"):
@@ -936,10 +937,10 @@ class SuperadminAdministradoras(Base):
         self.como(SUPER)
         self.responder(quitar_administradora="ultima_administradora")
         self.assertIn("ninguna+administradora", self.post(self.url("quitar"), {"accion": "profesora"}).headers["location"])
-        self.responder(quitar_administradora="pendientes:clases_futuras")
+        # dejarla inactiva cancela sus clases próximas: siempre va primero a la vista previa (nada cambia todavía)
         r = self.post(self.url("quitar"), {"accion": "inactiva"})
-        self.assertIn("ok=0", r.headers["location"])
-        self.assertIn("clases+pr%C3%B3ximas", r.headers["location"])
+        self.assertEqual(r.headers["location"], self.url("baja"))
+        self.assertNotIn("quitar_administradora", [c.args[0] for c in self.sb.rpc.call_args_list if c.args[1].get("p_accion") == "inactiva"])
 
     def test_persona_que_no_es_administradora_de_esa_empresa(self):
         self.como(SUPER)

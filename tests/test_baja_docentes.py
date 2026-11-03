@@ -1,0 +1,226 @@
+"""Baja de docentes: vista previa y confirmación (administradora para profesoras, superadministradora para
+administradoras), permisos del servidor y los caminos viejos que ahora pasan por la vista previa. La base se simula;
+las reglas de la base se prueban en tests/base_local/test_baja_docentes_base.py.
+
+Uso: python -m unittest tests.test_baja_docentes -v
+"""
+import re
+import unittest
+from unittest import mock
+
+from app import main
+from tests.test_multiempresa_app import ADMIN, PROFE, SUPER, Base
+
+ID = "22222222-2222-4222-8222-222222222222"
+PREVIA = {"resultado": "ok", "firma": "f1", "reservas": 2, "alumnas": 2, "nombres": ["Ana Uno", "Eva Dos"], "espera": 1,
+          "en_curso": 1, "horarios": [{"id": 5, "dia_semana": "sabado", "hora_inicio": "10:00", "tipo": "Pilates"}],
+          "clases": [{"id": 9, "fecha": "2026-11-07", "hora_inicio": "10:00", "tipo": "Pilates", "reservas": 2, "espera": 1}]}
+
+
+class BajaProfesora(Base):
+    MEMB = {"id_usuario": ID, "es_admin": False, "es_profesora": True, "es_alumna": False, "activa": True}
+
+    def preparar(self, **respuestas):
+        t = self.sb.table.return_value.select.return_value
+        t.eq.return_value.eq.return_value.execute.return_value.data = [self.MEMB]
+        t.eq.return_value.execute.return_value.data = [{"id": ID, "nombre": "Pia", "apellido": "Dos", "mail": "p@x.uy",
+                                                       "telefono": None}]
+        self.respuestas = {"datos_personales": [], "pendientes_cambio_rol": [], "previsualizar_baja_docente": PREVIA,
+                           **respuestas}
+        self.sb.rpc.side_effect = lambda nombre, params: mock.MagicMock(
+            **{"execute.return_value.data": self.respuestas.get(nombre, "ok")})
+
+    def llamadas(self):
+        return [c.args[0] for c in self.sb.rpc.call_args_list]
+
+    def test_vista_previa_muestra_lo_que_se_cancela_sin_cambiar_nada(self):
+        self.como(ADMIN)
+        self.preparar()
+        r = self.get(f"/profesora/profesoras/{ID}/baja")
+        self.assertEqual(r.status_code, 200)
+        for texto in ("Desactivar a Pia Dos", "Sábado · 10:00", "Sábado 7/11 · 10:00", "Pilates · 2 reservas · 1 en espera",
+                      "<strong>2 alumnas afectadas</strong>:", "Ana Uno, Eva Dos",
+                      "la clase que está en curso", 'name="firma" value="f1"', "Confirmar desactivación", "Motivo de la desactivación",
+                      "que no vuelven aunque después se la reactive"):
+            self.assertIn(texto, r.text)
+        self.assertNotIn("dar_de_baja_docente", self.llamadas())
+        main_html = r.text[r.text.index("<main"):r.text.index("</main>")]
+        visible = re.sub(r"<[^>]+>", " ", main_html).lower()
+        self.assertNotIn("baja", visible)  # la palabra que se ve es «desactivar» (las rutas internas siguen igual)
+
+    def test_aviso_de_clases_que_empiezan_en_menos_de_24_horas(self):
+        # ahora (en las pruebas): lunes 2/11 10:00. Martes 3/11 09:00 empieza en 23 h; martes 3/11 11:00, en 25 h.
+        clases = [{"id": 1, "fecha": "2026-11-03", "hora_inicio": "09:00", "tipo": "Pilates", "reservas": 1, "espera": 0},
+                  {"id": 2, "fecha": "2026-11-03", "hora_inicio": "11:00", "tipo": "Pilates", "reservas": 1, "espera": 0}]
+        self.como(ADMIN)
+        self.preparar(previsualizar_baja_docente={**PREVIA, "clases": clases})
+        r = self.get(f"/profesora/profesoras/{ID}/baja")
+        self.assertIn("<strong>Una clase comienza en menos de 24 horas.</strong>", r.text)
+        self.assertIn("Martes 3/11 a las 09:00.", r.text)
+        self.assertNotIn("Martes 3/11 a las 11:00", r.text)
+        self.assertEqual(r.text.count("Empieza pronto"), 1)
+        self.assertIn("todavía no envía notificaciones automáticas", r.text)
+        self.assertIn("Te recomendamos avisarles antes de desactivar. Podés continuar igualmente.", r.text)
+        self.assertIn("Confirmar desactivación</button>", r.text)  # no impide confirmar
+        self.assertNotIn("disabled", r.text.split("<form", 1)[1])
+
+    def test_sin_clases_proximas_no_hay_aviso_y_siempre_se_aclara_la_reactivacion(self):
+        self.como(ADMIN)
+        self.preparar()  # su clase es el sábado 7/11: más de 24 horas
+        r = self.get(f"/profesora/profesoras/{ID}/baja")
+        self.assertNotIn("menos de 24 horas", r.text)
+        self.assertNotIn("Empieza pronto", r.text)
+        self.assertIn("Si después se la reactiva, esto no se recupera automáticamente.", r.text)
+        self.assertIn("la clase cancelada no vuelve", r.text)
+        self.assertIn("las alumnas afectadas tienen que reservar de nuevo", r.text)
+        self.assertIn("su horario queda inactivo y se activa a mano en Horarios", r.text)
+
+    def test_sin_nada_afectado_el_aviso_solo_dice_que_recupera_el_acceso(self):
+        self.como(ADMIN)
+        self.preparar(previsualizar_baja_docente={**PREVIA, "horarios": [], "clases": [], "reservas": 0, "alumnas": 0,
+                                                  "nombres": [], "espera": 0, "en_curso": 0})
+        r = self.get(f"/profesora/profesoras/{ID}/baja")
+        self.assertIn("No tiene horarios, clases ni reservas próximas", r.text)
+        self.assertIn("recupera el acceso sin nada más que", r.text)
+        for texto in ("reservar de nuevo", "a mano en Horarios", "no se recupera automáticamente", "Clases que se cancelan",
+                      "Horarios que se desactivan"):
+            self.assertNotIn(texto, r.text)
+        self.assertIn("No tiene clases próximas: no se cancela ninguna.", r.text)
+
+    def test_confirmar(self):
+        self.como(ADMIN)
+        self.preparar(dar_de_baja_docente={"resultado": "ok", "horarios": 1, "clases": 1, "reservas": 2, "espera": 1})
+        r = self.post(f"/profesora/profesoras/{ID}/baja", {"motivo": "Se mudó", "firma": "f1"})
+        self.sb.rpc.assert_any_call("dar_de_baja_docente", {"p_id_usuario": ID, "p_motivo": "Se mudó", "p_firma": "f1"})
+        self.assertTrue(r.headers["location"].startswith(f"/profesora/profesoras/{ID}?ok=1"))
+        self.assertIn("1+clase+cancelada", r.headers["location"])
+
+    def test_si_algo_cambio_vuelve_a_la_vista_previa_actualizada(self):
+        self.como(ADMIN)
+        self.preparar(dar_de_baja_docente={"resultado": "cambio"})
+        r = self.post(f"/profesora/profesoras/{ID}/baja", {"motivo": "Se mudó", "firma": "vieja"})
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("Algo cambió desde que abriste esta pantalla", r.text)
+        self.assertIn('name="firma" value="f1"', r.text)  # la firma nueva
+        self.assertIn('value="Se mudó"', r.text)  # no se pierde el motivo
+
+    def test_solo_la_administradora(self):
+        for quien in (PROFE, SUPER):
+            with self.subTest(quien=quien.nombre):
+                self.como(quien)
+                self.preparar()
+                self.assertEqual(self.get(f"/profesora/profesoras/{ID}/baja").status_code, 303)
+                self.post(f"/profesora/profesoras/{ID}/baja", {"motivo": "x", "firma": "f1"})
+                self.assertNotIn("dar_de_baja_docente", self.llamadas())
+
+    def test_la_base_rechaza_y_se_explica(self):
+        self.como(ADMIN)
+        self.preparar(previsualizar_baja_docente={"resultado": "es_administradora"})
+        r = self.get(f"/profesora/profesoras/{ID}/baja")
+        self.assertIn("administraci%C3%B3n+general", r.headers["location"])
+
+    def test_dejar_inactiva_con_pendientes_lleva_a_la_baja(self):
+        self.como(ADMIN)
+        self.preparar(cambiar_estado_membresia="pendientes:horarios,clases_futuras")
+        r = self.post(f"/profesora/profesoras/{ID}/estado", {"activa": 0})
+        self.assertEqual(r.headers["location"], f"/profesora/profesoras/{ID}/baja")
+
+    def test_solo_desde_profesoras(self):
+        self.como(ADMIN)
+        self.preparar()
+        r = self.get(f"/profesora/alumnas/{ID}/baja")
+        self.assertIn("ok=0", r.headers["location"])
+        self.assertNotIn("previsualizar_baja_docente", self.llamadas())
+
+
+class BajaAdministradora(Base):
+    ADM = {"id": "11111111-1111-4111-8111-111111111111", "nombre": "Lia", "apellido": "Paz", "mail": "lia@prueba.invalid",
+           "activa": True, "pendientes": []}
+
+    def responder(self, **respuestas):
+        respuestas.setdefault("administradoras_empresa", [self.ADM])
+        respuestas.setdefault("previsualizar_baja_administradora", {**PREVIA, "nombres": []})
+        self.sb.rpc.side_effect = lambda nombre, params: mock.MagicMock(**{"execute.return_value.data": respuestas.get(nombre)})
+
+    def url(self):
+        return f"/admin/empresas/2/administradoras/{self.ADM['id']}/baja"
+
+    def test_vista_previa_y_confirmacion(self):
+        self.como(SUPER)
+        self.responder(dar_de_baja_administradora={"resultado": "ok", "horarios": 1, "clases": 1, "reservas": 2, "espera": 0})
+        r = self.get(self.url())
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Deja de ser administradora y queda inactiva", r.text)
+        self.assertIn("<strong>2 alumnas afectadas</strong>.", r.text)  # cantidades, sin nombres
+        r = self.post(self.url(), {"motivo": "Cambio de dirección", "firma": "f1"})
+        self.sb.rpc.assert_any_call("dar_de_baja_administradora", {"p_id_empresa": 2, "p_id_usuario": self.ADM["id"],
+                                                                   "p_motivo": "Cambio de dirección", "p_firma": "f1"})
+        self.assertTrue(r.headers["location"].startswith("/admin/empresas/2?ok=1"))
+
+    def test_nunca_la_ultima(self):
+        self.como(SUPER)
+        self.responder(previsualizar_baja_administradora={"resultado": "ultima_administradora"})
+        self.assertIn("ninguna+administradora", self.get(self.url()).headers["location"])
+
+    def test_la_administradora_comun_no_entra(self):
+        self.como(ADMIN)
+        self.responder()
+        self.assertEqual(self.get(self.url()).status_code, 303)
+        self.post(self.url(), {"motivo": "x", "firma": "f1"})
+        self.assertNotIn("dar_de_baja_administradora", [c.args[0] for c in self.sb.rpc.call_args_list])
+
+
+class HorariosDeInactivas(Base):
+    def test_activar_un_horario_de_una_inactiva_se_explica(self):
+        self.como(ADMIN)
+        self.sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value.data = {
+            "activo": False, "id_profesora": "x", "tipo_clase": {"activo": True, "nombre": "Pilates"}}
+        self.sb.table.return_value.update.return_value.eq.return_value.execute.side_effect = Exception(
+            "{'message': 'profesora_inactiva', 'code': 'P0001'}")
+        r = self.post("/profesora/horarios/7/toggle", {})
+        self.assertIn("profesora+inactiva", r.headers["location"])
+
+    def test_solo_docentes_activas_para_elegir(self):
+        self.sb.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = [
+            {"id_usuario": "a", "es_admin": False, "es_profesora": True, "activa": True},
+            {"id_usuario": "c", "es_admin": False, "es_profesora": False, "activa": True}]
+        with mock.patch.object(main.personas, "nombres_profesoras", return_value={"a": "Ana", "b": "Bea (inactiva)"}):
+            self.assertEqual(main._docentes_activas(self.sb, ADMIN), {"a": "Ana"})
+
+
+class TextosParaAlumnasYPlanificacion(unittest.TestCase):
+    def test_la_baja_se_muestra_desde_cuando_y_sin_eliminar(self):
+        from datetime import date, datetime
+        from zoneinfo import ZoneInfo
+        from app import clases
+        sb = mock.MagicMock()
+        consulta = sb.table.return_value.select.return_value
+        consulta.order.return_value.execute.return_value.data = [
+            {"id": 1, "tipo": "baja", "fecha_desde": "2026-11-02", "fecha_hasta": "2027-01-01", "id_horario": None,
+             "id_profesora": "p", "motivo": "Se mudó", "horario": None}]
+        consulta.eq.return_value.gte.return_value.lte.return_value.execute.return_value.data = []
+        consulta.in_.return_value.eq.return_value.execute.return_value.data = []
+        with mock.patch.object(clases, "ahora", return_value=datetime(2026, 11, 2, 10, tzinfo=ZoneInfo("America/Montevideo"))):
+            b = clases.bloqueos(sb)["vigentes"][0]
+        self.assertEqual(b["rango_txt"], "Desde el " + clases.fecha_corta(date(2026, 11, 2)).lower()[:1]
+                         + clases.fecha_corta(date(2026, 11, 2))[1:])
+        self.assertNotIn("ene", b["rango_txt"])
+        self.assertTrue(b["es_baja"])
+        self.assertEqual(b["alcance_txt"], "Profesora desactivada (sus clases)")
+
+    def test_mis_inscripciones_dice_solo_cancelada(self):
+        from types import SimpleNamespace
+        from app.auth import Usuario
+        html = main.templates.get_template("mis_inscripciones.html").render(
+            request=SimpleNamespace(url=SimpleNamespace(path="/mis-inscripciones")),
+            usuario=Usuario(id="a", mail="a@prueba.invalid", nombre="Ana", apellido="P", rol="alumna", token="t"),
+            proximas=[], espera=[], ofertas=[], aviso="", aviso_ok=False,
+            canceladas_profesora=[{"dia": "Lunes", "fecha_txt": "9/11", "hora": "19:00", "duracion": 60, "fecha": "2026-11-09"}])
+        self.assertIn("<h2 class=\"seccion\">Clases canceladas</h2>", html)
+        self.assertIn("Estas clases no se van a dictar y no se cobran.", html)
+        self.assertIn(">Cancelada</span>", html)
+        self.assertNotIn("por la profesora", html)
+
+
+if __name__ == "__main__":
+    unittest.main()
