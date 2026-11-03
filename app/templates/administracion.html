@@ -29,6 +29,13 @@
                 <span>Clases semanales activas</span>
             </div>
         </div>
+        {% if pendientes.clases %}
+        <p class="aviso-suave panel-aviso">
+            {{ pendientes.clases }} {{ 'clase terminada tiene' if pendientes.clases == 1 else 'clases terminadas tienen' }}
+            asistencias sin registrar.
+            <a href="/profesora/clases?mes={{ pendientes.ultima_fecha.strftime('%Y-%m') }}&filtro=pendientes#terminadas">Ver en Asistencias</a>
+        </p>
+        {% endif %}
     </main>
 </body>
 </html>

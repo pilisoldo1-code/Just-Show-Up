@@ -10,7 +10,7 @@
     {% include "_menu.html" %}
     <main>
         <h1>{{ clase.titulo }}</h1>
-        <p class="subtitle"><a href="/profesora/clases?fecha={{ clase.fecha.isoformat() }}">‹ Volver a las clases del día</a></p>
+        <p class="subtitle"><a href="{{ '/profesora/clases?mes=' ~ clase.mes ~ '#terminadas' if clase.terminada else '/profesora/clases?fecha=' ~ clase.fecha.isoformat() }}">‹ Volver a Asistencias</a></p>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
@@ -18,13 +18,68 @@
 
         {% if clase.ventana == 'antes' %}
         <p class="nota">La asistencia se marca el día de la clase, mientras dura: de {{ clase.hora }} a {{ clase.hora_fin }}.</p>
-        {% elif clase.ventana == 'cerrada' %}
-        <p class="nota">La clase terminó a las {{ clase.hora_fin }}: la asistencia ya no se puede modificar.</p>
+        {% elif clase.cancelada %}
+        <p class="nota">Clase cancelada: su asistencia no se registra.</p>
+        {% elif clase.terminada and usuario.es_admin %}
+        <p class="nota">La clase finalizó. Podés completar o corregir las asistencias indicando el motivo.</p>
+        {% elif clase.terminada %}
+        <p class="nota">La clase terminó a las {{ clase.hora_fin }}. Fuera del horario de clase, solo la administración puede
+            completar o corregir la asistencia.</p>
         {% endif %}
 
-        {% if clase.alumnas %}
+        {% if clase.alumnas and clase.terminada and usuario.es_admin %}
         <p class="asistencia-resumen">
             {{ clase.alumnas | length }} reservadas · {{ clase.presentes }} presentes · {{ clase.ausentes }} ausentes
+            {% if clase.sin_registrar %} · <strong>{{ clase.sin_registrar }} sin registrar</strong>{% endif %}
+        </p>
+        <form action="/profesora/clases/{{ clase.id }}/corregir" method="post" class="asist-correccion">
+            <div class="tabla-scroll">
+                <table class="horario-table asistencia-tabla">
+                    <thead>
+                        <tr>
+                            <th>Alumna</th>
+                            <th class="col-box">Presente</th>
+                            <th class="col-box">Ausente</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for a in clase.alumnas %}
+                        <tr class="{{ 'fila-pendiente' if a.estado is none }}">
+                            <td>{{ a.nombre }}
+                                {% if a.bloqueada %}<span class="asist-bloqueo">La factura de este mes ya está confirmada</span>
+                                {% elif a.estado is none %}<span class="asist-bloqueo">Sin registrar</span>{% endif %}</td>
+                            {% for valor in ['presente', 'ausente'] %}
+                            <td class="col-box">
+                                <input type="radio" class="box box-{{ valor }}" name="estado_{{ a.id_reserva }}" value="{{ valor }}"
+                                       aria-label="{{ valor | capitalize }}: {{ a.nombre }}"
+                                       {{ 'checked' if a.estado == valor else '' }} {{ 'disabled' if a.bloqueada else '' }} />
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <label class="asist-motivo">Motivo de la corrección (solo lo ve la administración)
+                <input type="text" name="motivo" maxlength="200" required placeholder="Ej.: planilla en papel de la clase" /></label>
+            <button type="submit" class="btn">Guardar asistencias</button>
+        </form>
+
+        {% if clase.historial %}
+        <h2 class="seccion">Historial</h2>
+        <ul class="asist-historial">
+            {% for h in clase.historial %}
+            <li><span class="asist-historial-cuando">{{ h.cuando }} · {{ h.por }}</span>
+                <span>{{ h.alumna }}: {{ (h.estado_anterior or 'sin registrar') | capitalize }} → {{ h.estado_nuevo | capitalize }}
+                    {% if h.origen == 'clase' %}<span class="asist-historial-motivo">(durante la clase)</span>
+                    {% else %}<span class="asist-historial-motivo">· Motivo: {{ h.motivo }}</span>{% endif %}</span></li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% elif clase.alumnas %}
+        <p class="asistencia-resumen">
+            {{ clase.alumnas | length }} reservadas · {{ clase.presentes }} presentes · {{ clase.ausentes }} ausentes
+            {% if clase.terminada and clase.sin_registrar %} · {{ clase.sin_registrar }} sin registrar{% endif %}
         </p>
         <div class="tabla-scroll">
             <table class="horario-table asistencia-tabla">

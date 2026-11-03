@@ -224,8 +224,8 @@ def salir_lista_espera(sb: Client, clase_id: int) -> tuple[bool, str]:
     return False, "No estabas en la lista de espera de esta clase."
 
 
-def _hora_local(iso: str) -> str:
-    return datetime.fromisoformat(iso).astimezone(TZ).strftime("%H:%M")
+def _hora_local(iso: str, con_fecha: bool = False) -> str:
+    return datetime.fromisoformat(iso).astimezone(TZ).strftime("%d/%m %H:%M" if con_fecha else "%H:%M")
 
 
 def _item_clase(c: dict, **extra) -> dict:
@@ -364,7 +364,7 @@ def clases_del_dia(sb: Client, fecha: date, id_profesora: str | None = None) -> 
     ]
 
 
-def clase_con_asistencia(sb: Client, clase_id: int) -> dict | None:
+def clase_con_asistencia(sb: Client, clase_id: int, es_admin: bool = False) -> dict | None:
     filas = sb.table("clase").select("*, tipo_clase(nombre)").eq("id", clase_id).execute().data
     if not filas:
         return None
@@ -393,10 +393,24 @@ def clase_con_asistencia(sb: Client, clase_id: int) -> dict | None:
          "oferta_vence": _hora_local(e["oferta_vence_en"]) if e["estado"] == "ofrecido" else ""}
         for i, e in enumerate(filas_espera, start=1)
     ]
+    terminada = c["estado"] == "programada" and _ventana_asistencia(c) == "cerrada"
+    bloqueadas, historial = set(), []
+    if es_admin and terminada and alumnas:
+        bloqueadas = {x if isinstance(x, int) else next(iter(x.values())) for x in sb.rpc(
+            "reservas_con_factura_confirmada", {"p_ids": [a["id_reserva"] for a in alumnas]}).execute().data or []}
+        historial = [{**h, "cuando": _hora_local(h["creado_en"], con_fecha=True)}
+                     for h in sb.rpc("historial_asistencias_clase", {"p_id_clase": clase_id}).execute().data or []]
+    for a in alumnas:
+        a["bloqueada"] = a["id_reserva"] in bloqueadas
     return {
         "id": c["id"],
         "id_profesora": c.get("id_profesora"),
         "fecha": fecha,
+        "mes": f"{fecha.year}-{fecha.month:02d}",
+        "terminada": terminada,
+        "cancelada": c["estado"] != "programada",
+        "sin_registrar": sum(a["estado"] is None for a in alumnas),
+        "historial": historial,
         "titulo": f"{nombre_dia(fecha)} {fecha.day}/{fecha.month} · {c['hora_inicio'][:5]}"
                   + (f" · {c['tipo_clase']['nombre']}" if c.get("tipo_clase") else ""),
         "hora_fin": (_inicio_clase(c) + timedelta(minutes=c["duracion"])).strftime("%H:%M"),
@@ -407,6 +421,61 @@ def clase_con_asistencia(sb: Client, clase_id: int) -> dict | None:
         "ausentes": sum(a["estado"] == "ausente" for a in alumnas),
         "espera": espera,
     }
+
+
+# ---------- asistencias pendientes y correcciones de la administradora ----------
+MESES_ATRAS_ASISTENCIAS = 5  # el filtro de Asistencias ofrece el mes actual y los 5 anteriores
+
+
+def meses_asistencias(hoy: date) -> list[tuple[int, int]]:
+    meses, a, m = [], hoy.year, hoy.month
+    for _ in range(MESES_ATRAS_ASISTENCIAS + 1):
+        meses.append((a, m))
+        a, m = (a, m - 1) if m > 1 else (a - 1, 12)
+    return meses
+
+
+def clases_terminadas(sb: Client, anio: int, mes: int) -> list[dict]:
+    """Clases terminadas del mes con reservas: las que tienen asistencias sin registrar primero, y dentro de cada grupo
+    de la más reciente a la más antigua. La base decide qué ve cada rol (la profesora, solo las suyas)."""
+    filas = [f for f in sb.rpc("resumen_asistencias_mes", {"p_anio": anio, "p_mes": mes}).execute().data or []
+             if f["reservas"]]
+    profesoras = personas.nombres_profesoras(sb) if filas else {}
+    items = []
+    for f in filas:
+        d = date.fromisoformat(f["fecha"])
+        items.append({"id": f["id_clase"], "fecha": d, "hora": f["hora_inicio"][:5], "tipo": f["tipo"] or "",
+                      "dia_txt": f"{nombre_dia(d)} {d.day}/{d.month}", "profesora": profesoras.get(f["id_profesora"], ""),
+                      "reservas": f["reservas"], "sin_registrar": f["sin_registrar"]})
+    items.sort(key=lambda c: (c["fecha"], c["hora"]), reverse=True)
+    items.sort(key=lambda c: c["sin_registrar"] == 0)
+    return items
+
+
+def pendientes_totales(sb: Client) -> dict:
+    r = sb.rpc("asistencias_pendientes_resumen", {}).execute().data or {}
+    return {"clases": r.get("clases") or 0, "asistencias": r.get("asistencias") or 0,
+            "ultima_fecha": date.fromisoformat(r["ultima_fecha"]) if r.get("ultima_fecha") else None}
+
+
+MSG_CORRECCION = {
+    "no_autorizada": "Solo la administración puede completar o corregir asistencias fuera del horario de clase.",
+    "motivo_vacio": "Escribí el motivo de la corrección.",
+    "sin_cambios": "No había cambios para guardar.",
+    "estado_invalido": "Elegí presente o ausente.",
+    "no_existe": "Una de esas reservas ya no está confirmada. Volvé a abrir la clase.",
+    "clase_cancelada": "La clase está cancelada: su asistencia no se registra.",
+    "no_termino": "La clase todavía no terminó: mientras dura, la asistencia se marca de la forma habitual.",
+    "factura_confirmada": "La factura de ese mes de una de las alumnas ya está confirmada: su asistencia no se puede cambiar.",
+}
+
+
+def corregir_asistencias(sb: Client, cambios: list[dict], motivo: str) -> tuple[bool, str]:
+    r = sb.rpc("corregir_asistencias", {"p_cambios": cambios, "p_motivo": motivo}).execute().data or {}
+    if r.get("resultado") == "ok":
+        n = r["cambios"]
+        return True, f"{'Se guardó 1 asistencia' if n == 1 else f'Se guardaron {n} asistencias'}. El cambio quedó en el historial."
+    return False, MSG_CORRECCION.get(r.get("resultado"), "No se pudieron guardar las asistencias. Probá de nuevo.")
 
 
 def marcar_asistencia(sb: Client, id_reserva: int, estado: str) -> tuple[bool, str]:

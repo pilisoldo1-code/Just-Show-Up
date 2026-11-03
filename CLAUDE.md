@@ -757,6 +757,22 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **Correcciones de asistencia (rama `asistencias-correcciones`, PR #34; migración `20261104000000_asistencias_correcciones.sql`
+  APLICADA en Supabase el 03/11 como `20261103131731 asistencias_correcciones`, con respaldo previo `2026-11-03 antes de
+  correcciones de asistencia`; estructura igual a la esperada, datos idénticos y las 74 pendientes intactas)**: la profesora sigue marcando solo mientras dura la clase (`marcar_asistencia`, mismas reglas). La
+  administradora completa o corrige asistencias de clases **ya terminadas** con `corregir_asistencias(cambios, motivo)`:
+  motivo obligatorio, solo presente/ausente (no vuelve a «sin registrar»), todo o nada, nunca en clases canceladas ni en
+  reservas de un mes cuya factura de esa alumna esté **confirmada** (se libera si se anula y la reemitida está en
+  borrador). Toma el mismo candado por mes que la facturación (`pg_advisory_xact_lock(hashtext('facturas_mes'), ...)`).
+  Todo cambio (también los de la clase) queda en `asistencia_historial` (`origen` clase/correccion; solo lo lee la
+  administradora). Nada se marca ausente solo: el futuro cobro del 25 % debe usar ausencias explícitas. Pantalla:
+  Asistencias tiene filtro por mes (actual y 5 anteriores) y «Todas | Pendientes» (Todas por defecto), aviso de
+  pendientes y la sección «Clases terminadas» (pendientes primero) debajo de «Próximos días». Avisos discretos en Inicio
+  y al confirmar las facturas del mes. Vuelta atrás: `supabase/pendientes/vuelta_atras_asistencias_correcciones.sql`
+  (deja `marcar_asistencia` byte a byte como en producción; si el historial tiene filas, lo conserva). Pruebas:
+  `tests/base_local/test_asistencias_correcciones_base.py "<respaldo>"` (54), `tests/supabase_local/prueba_asistencias_reales.py`
+  (24), `tests.test_asistencias_correcciones` (13). **Orden de despliegue: primero la migración (el código de `main`
+  funciona con ella) y después el merge.**
 - **Algunas pantallas ESCRIBEN en la base al abrirse (generación automática de clases)** — pasó el 03/11 al
   verificar theta: abrir Asistencias creó las 10 clases de la semana siguiente (se conservaron: eran las que tocaban).
   No hay tareas programadas (decisión: todo gratis y sin servicios extra), así que las clases se generan **a demanda**

@@ -10,15 +10,40 @@
     {% include "_menu.html" %}
     <main>
         <h1>Asistencias</h1>
+
+        {# mes y filtro: una sola fila; «Todas» por defecto #}
+        <form class="asist-filtros" method="get" action="/profesora/clases">
+            <label class="visualmente-oculto" for="mes">Mes</label>
+            <select id="mes" name="mes" onchange="this.form.submit()">
+                {% for m in meses %}<option value="{{ m.valor }}" {{ 'selected' if m.valor == mes_elegido }}>{{ m.texto }}</option>{% endfor %}
+            </select>
+            <input type="hidden" name="filtro" value="{{ filtro }}" />
+            <noscript><button type="submit" class="btn btn-chico">Ver</button></noscript>
+            <nav class="asist-chips" aria-label="Filtrar clases terminadas">
+                <a href="/profesora/clases?mes={{ mes_elegido }}&filtro=todas#terminadas" class="dia-chip {{ 'dia-chip-activo' if filtro == 'todas' }}"
+                   {{ 'aria-current=page' if filtro == 'todas' }}>Todas</a>
+                <a href="/profesora/clases?mes={{ mes_elegido }}&filtro=pendientes#terminadas" class="dia-chip {{ 'dia-chip-activo' if filtro == 'pendientes' }}"
+                   {{ 'aria-current=page' if filtro == 'pendientes' }}>Pendientes ({{ pend_clases }})</a>
+            </nav>
+        </form>
+
+        {% if pend_clases %}
+        <p class="aviso-suave asist-aviso">
+            {{ pend_asistencias }} {{ 'asistencia' if pend_asistencias == 1 else 'asistencias' }} sin registrar en
+            {{ pend_clases }} {{ 'clase' if pend_clases == 1 else 'clases' }}. <a href="#terminadas">Ver {{ 'clase' if pend_clases == 1 else 'clases' }}</a>
+        </p>
+        {% endif %}
+
+        {% if es_mes_actual %}
+        <h2 class="seccion">Próximos días</h2>
         <nav class="dias-nav" aria-label="Elegir día">
             {% for d in dias %}
-            <a href="/profesora/clases?fecha={{ d.fecha }}" class="dia-chip {{ 'dia-chip-activo' if d.activo else '' }}"
+            <a href="/profesora/clases?fecha={{ d.fecha }}&mes={{ mes_elegido }}&filtro={{ filtro }}" class="dia-chip {{ 'dia-chip-activo' if d.activo else '' }}"
                {{ 'aria-current=page' if d.activo else '' }}>{{ d.texto }}</a>
             {% endfor %}
         </nav>
         {% if dias %}
         <p class="subtitle">{{ titulo_dia }}{% if not es_hoy %} · podés ver quiénes reservaron; la asistencia se marca el día de la clase{% endif %}</p>
-
         {% endif %}
 
         {% if not dias %}
@@ -49,6 +74,35 @@
         </div>
         {% else %}
         <p class="vacio">{{ 'Hoy no hay clases.' if es_hoy else 'No hay clases este día.' }}</p>
+        {% endif %}
+        {% endif %}
+
+        <h2 class="seccion" id="terminadas">Clases terminadas · {{ mes_txt }}</h2>
+        {% if not usuario.es_admin %}
+        <p class="nota">Fuera del horario de clase, solo la administración puede completar o corregir asistencias.</p>
+        {% endif %}
+        {% if terminadas %}
+        <ul class="asist-terminadas">
+            {% for c in terminadas %}
+            <li class="asist-fila">
+                <div class="asist-fila-texto">
+                    <strong>{{ c.dia_txt }} · {{ c.hora }}</strong>
+                    <span class="asist-fila-sub">{{ c.tipo }}{% if usuario.es_admin and c.profesora %} · {{ c.profesora }}{% endif %}</span>
+                </div>
+                {% if c.sin_registrar %}
+                <span class="badge badge-espera asist-estado">{{ c.sin_registrar }} de {{ c.reservas }} sin registrar</span>
+                {% else %}
+                <span class="badge badge-on asist-estado">Completa</span>
+                {% endif %}
+                <a class="btn btn-chico asist-boton" href="/profesora/clases/{{ c.id }}"
+                   aria-label="{{ 'Completar' if usuario.es_admin and c.sin_registrar else 'Ver' }} {{ c.dia_txt }} {{ c.hora }}">{{ 'Completar' if usuario.es_admin and c.sin_registrar else 'Ver' }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% elif filtro == 'pendientes' %}
+        <p class="vacio vacio-izq">No hay asistencias sin registrar en {{ mes_txt }}.</p>
+        {% else %}
+        <p class="vacio vacio-izq">No hay clases terminadas con reservas en {{ mes_txt }}.</p>
         {% endif %}
     </main>
 </body>
