@@ -251,14 +251,17 @@ def crear(db, hoy: date, guardar_contrasenas=True) -> dict:
     return {"empresa": e2, **resumen, "cuentas": len(CUENTAS), "contrasenas": contrasenas, "reglas": reglas, "ids": ids}
 
 
-MOTIVO_ACTUALIZAR = "Carga del escenario de demostración (empresa_demo.py actualizar)"
+MOTIVO_ACTUALIZAR = "Preparación automática del escenario de demostración (la registró un script, no una persona)"
+# Autora técnica de esas asistencias en el historial: así nunca aparecen como hechas por Lucía. No pertenece a ninguna
+# empresa ni tiene rol (su contraseña se descarta: no puede iniciar sesión en ningún lugar).
+SISTEMA = ("escenario.sistema@demo.invalid", "Carga automática", "(script de demostración)")
 
 
 def actualizar(db, ahora: datetime, aplicar: bool = False) -> dict:
     """Pone al día el escenario de una Pilates Centro YA creada, sin borrar nada (para mantener la demostración hasta
     la defensa). Solo agrega; nunca cambia una asistencia, reserva, factura ni pago existentes:
-    - asistencias «sin registrar» de clases ya dictadas, en meses sin factura confirmada de esa alumna: las completa como
-      corrección de la administradora con motivo (queda en el historial). Si Inés no tiene una inasistencia en el mes en
+    - asistencias «sin registrar» de clases ya dictadas, en meses sin factura confirmada de esa alumna: las completa con
+      registro en el historial a nombre de la cuenta técnica SISTEMA («Carga automática»), nunca de una persona. Si Inés no tiene una inasistencia en el mes en
       curso, la última pendiente de ella va como ausente (25 %); la última pendiente de Sabrina queda sin registrar.
     - reservas del patrón en las clases que todavía no empezaron hasta el fin de la próxima semana (sin pasar el cupo, sin
       repetir ni revivir cancelaciones); crea las clases que falten de los horarios del escenario.
@@ -369,11 +372,14 @@ def actualizar(db, ahora: datetime, aplicar: bool = False) -> dict:
                     plan["avisos"].append(f"El jueves {fecha.day}/{fecha.month} no llega al cupo ({ocupadas[clave]}/{cupo}): no se crea la lista de espera.")
 
     if aplicar:
-        lucia = ids[ADMIN[0]]
+        autor = None
+        if plan["asistencias"]:
+            existente = db.leer("profiles", "id", mail=SISTEMA[0])
+            autor = existente[0]["id"] if existente else db.crear_cuenta(*SISTEMA, secrets.token_urlsafe(24), {"sin_empresa": True})
         for r, estado in plan["asistencias"]:
             db.insertar("asistencia", [{"id_reserva": r["id"], "id_empresa": e2, "estado": estado}])
             db.insertar("asistencia_historial", [{"id_empresa": e2, "id_reserva": r["id"], "estado_anterior": None, "estado_nuevo": estado,
-                                                  "origen": "correccion", "motivo": MOTIVO_ACTUALIZAR, "por": lucia}])
+                                                  "origen": "correccion", "motivo": MOTIVO_ACTUALIZAR, "por": autor}])
         nuevas = {}
         for n in plan["clases"]:
             h = horarios[n["horario"]]
@@ -383,12 +389,20 @@ def actualizar(db, ahora: datetime, aplicar: bool = False) -> dict:
                                                         "cupo_max": tipo["cupo_max"], "id_tipo_clase": tipo["id"], "estado": "programada",
                                                         "id_profesora": h["id_profesora"], "id_empresa": e2}])[0]["id"]
         id_de = lambda clave: nuevas.get(clave, clave)
+        confirmadas = lambda cid: len(db.leer("reserva", "id", id_clase=cid, estado="confirmada"))
         for k, x in enumerate(plan["reservas"]):
+            cid = id_de(x["clave"])
+            # se vuelve a contar justo antes: si alguien reservó mientras tanto, no se pasa el cupo
+            if confirmadas(cid) >= plan["cupos"][x["clave"]][1]:
+                plan["avisos"].append(f"La clase del {x['fecha'].day}/{x['fecha'].month} se llenó mientras tanto: no se agregó a {x['mail']}.")
+                continue
             reservada = datetime.combine(hoy, datetime.min.time()) + timedelta(minutes=k)
-            db.insertar("reserva", [{"id_alumna": ids[x["mail"]], "id_clase": id_de(x["clave"]), "estado": "confirmada",
+            db.insertar("reserva", [{"id_alumna": ids[x["mail"]], "id_clase": cid, "estado": "confirmada",
                                      "fecha_reserva": reservada.isoformat(), "id_empresa": e2}])
-        for clave, (ocupadas_c, _) in plan["cupos"].items():
-            db.actualizar("clase", {"cantidad_inscriptas": ocupadas_c}, id=id_de(clave))
+        for clave, (_, cupo) in plan["cupos"].items():
+            db.actualizar("clase", {"cantidad_inscriptas": confirmadas(id_de(clave))}, id=id_de(clave))
+            plan["cupos"][clave] = (confirmadas(id_de(clave)), cupo)
+        plan["espera"] = [x for x in plan["espera"] if plan["cupos"][x["clave"]][0] >= plan["cupos"][x["clave"]][1]]
         for x in plan["espera"]:
             db.insertar("listadeespera", [{"id_alumna": ids[NOELIA], "id_clase": id_de(x["clave"]), "posicion": x["posicion"],
                                            "estado": "en_espera", "id_empresa": e2}])
@@ -459,6 +473,8 @@ def borrar(db, guardar_contrasenas=True) -> dict:
             db.actualizar("profiles", {"empresa_activa": None}, id=p["id"])
     db.borrar("membresia", id_empresa=e2)
     db.borrar("empresa", id=e2)
+    for p in db.leer("profiles", "id", mail=SISTEMA[0]):  # la autora técnica de «actualizar» (sin empresa)
+        db.borrar_cuenta(p["id"])
     if guardar_contrasenas:
         _guardar_contrasenas({}, db.local)
     return {"empresa": e2}

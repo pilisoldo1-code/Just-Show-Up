@@ -189,8 +189,20 @@ ok("no se revive la cancelación de Julia (ninguna reserva nueva suya ese lunes)
    q(su, "select count(*) n from reserva where id_alumna = %s and id_clase = %s", (U[ED.JULIA], c_lunes9), True)["n"] == 1)
 hist = q(su, "select count(*) n, count(distinct id_reserva) d from asistencia_historial where id_empresa = %s and motivo = %s",
          (E2, ED.MOTIVO_ACTUALIZAR), True)
-ok("cada asistencia completada quedó en el historial como corrección de Lucía, con motivo", hist["n"] == hist["d"] == r16["asistencias"]
-   and q(su, "select count(*) n from asistencia_historial where motivo = %s and por <> %s", (ED.MOTIVO_ACTUALIZAR, U[ED.ADMIN[0]]), True)["n"] == 0)
+SIS = q(su, "select id::text, nombre, apellido, es_superadmin from profiles where mail = %s", (ED.SISTEMA[0],), True)
+ok("cada asistencia completada quedó en el historial, con motivo, a nombre de la cuenta técnica (nunca de Lucía)",
+   SIS and hist["n"] == hist["d"] == r16["asistencias"]
+   and q(su, "select count(*) n from asistencia_historial where motivo = %s and por <> %s", (ED.MOTIVO_ACTUALIZAR, SIS["id"]), True)["n"] == 0
+   and q(su, "select count(*) n from asistencia_historial where por = %s and motivo <> %s", (U[ED.ADMIN[0]], ED.MOTIVO_ACTUALIZAR), True)["n"]
+   == q(su, "select count(*) n from asistencia_historial where por = %s", (U[ED.ADMIN[0]],), True)["n"])
+ok("la cuenta técnica no pertenece a ninguna empresa ni es superadministradora",
+   not SIS["es_superadmin"] and q(su, "select count(*) n from membresia where id_usuario = %s", (SIS["id"],), True)["n"] == 0)
+LU = ClienteFalso(uri, U[ED.ADMIN[0]])
+c12 = q(su, "select c.id from clase c join horario h on h.id = c.id_horario where c.id_empresa = %s and c.fecha = '2026-11-12' "
+            "and h.dia_semana = 'jueves'", (E2,), True)["id"]
+vista = LU.rpc("historial_asistencias_clase", {"p_id_clase": c12}).execute().data
+ok("en la pantalla, el historial de la clase dice «Carga automática (script de demostración)» y el motivo explícito",
+   vista and all(x["por"] == "Carga automática (script de demostración)" and x["motivo"] == ED.MOTIVO_ACTUALIZAR for x in vista), vista)
 pend = q(su, "select count(*) n from reserva r join clase c on c.id = r.id_clase left join asistencia a on a.id_reserva = r.id "
              "where c.id_empresa = %s and r.estado = 'confirmada' and c.fecha < '2026-11-16' and c.fecha >= '2026-11-01' and a.id is null "
              "and r.id_alumna <> %s", (E2, EXTRA), True)["n"]
@@ -231,8 +243,9 @@ ok("repetirlo el 17/11 no cambia nada", ED.actualizar(db, d17, aplicar=True)["as
 
 # ---------- borrar después de actualizar ----------
 ED.borrar(db, guardar_contrasenas=False)
-ok("borrar después de actualizar: Pilates eliminada y Just Show Up idéntico", jsu() == FOTO_JSU
-   and q(su, "select count(*) n from empresa where codigo = 'PIL'", uno=True)["n"] == 0)
+ok("borrar después de actualizar: Pilates y la cuenta técnica eliminadas, Just Show Up idéntico", jsu() == FOTO_JSU
+   and q(su, "select count(*) n from empresa where codigo = 'PIL'", uno=True)["n"] == 0
+   and q(su, "select count(*) n from profiles where mail = %s", (ED.SISTEMA[0],), True)["n"] == 0)
 try:
     ED.actualizar(db, d17, aplicar=True)
     ok("actualizar sin la empresa se niega", False)
