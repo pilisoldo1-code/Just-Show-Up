@@ -1,21 +1,33 @@
-"""Empresa 2 de demostración para multiempresa: «Pilates Centro» (PIL), con su administradora (que también
-da clases), otra profesora, 5 alumnas @demo.invalid y alumna@prueba.invalid (que ya es alumna de la Empresa 1,
-con la misma cuenta). Crea sus tipos de clase, horarios, clases de las últimas 3 semanas, esta y la próxima,
-reservas y asistencias. No crea facturas ni pagos, y Mercado Pago queda apagado para esta empresa.
+"""Empresa 2 de demostración para la defensa: «Pilates Centro» (PIL), con un escenario FIJO y reproducible (mismas
+personas, horarios y reglas; las fechas se calculan desde el día en que se ejecuta).
 
-`borrar` elimina SOLO lo de esta empresa (y las cuentas que creó este script); la Empresa 1 no se toca.
-Las contraseñas de las dos profesoras y de una alumna se guardan en .env.cuentas-prueba (ignorado por git).
+Personas (todas ficticias, @demo.invalid salvo la alumna compartida):
+- Lucía Bentancor, administradora (da Pilates mat los lunes y reformer los miércoles).
+- Carolina Méndez, profesora común (mat los martes y reformer los jueves): no ve Facturación.
+- Rocío Acosta (cumplidora), Inés Duarte (dos inasistencias: una el mes anterior, al 100 %, y otra este mes, al
+  25 %), Julia Ferreira (canceló a tiempo una clase: no se cobra), Noelia Gómez (en lista de espera de una clase
+  completa de la próxima semana), Sabrina Viera (su última clase de este mes quedó «sin registrar»).
+- alumna@prueba.invalid: la misma cuenta que ya es alumna de Just Show Up (alumna compartida).
 
-ESCRIBE EN LA BASE DEL .env: correrlo contra Supabase de producción necesita la autorización de Julieta
-(nombres definitivos confirmados). Se prueba completo en la base local:
-    python tests/base_local/test_empresa_demo_base.py "<carpeta del respaldo antes de multiempresa>"
+Crea tipos de clase, horarios, clases de las 4 semanas anteriores, esta y la próxima, reservas, asistencias, la lista
+de espera y las facturas del mes anterior (confirmadas con numeración PIL; la de Rocío, pagada). El cobro del 25 %
+rige desde el 1° del mes en curso (nunca hacia atrás). Mercado Pago queda apagado en esta empresa.
+
+`crear` no hace nada si la empresa ya existe (no duplica). `borrar` elimina SOLO lo de esta empresa y las cuentas que
+pertenecen únicamente a ella (siempre ficticias): la alumna compartida y Just Show Up no se tocan.
+
+SEGURIDAD: por defecto solo corre contra un Supabase LOCAL (localhost). Contra producción hace falta `--produccion`,
+que solo se usa con la autorización de Julieta. Las contraseñas se generan al azar y nunca se muestran: en local van a
+`.env.cuentas-local` y en producción a `.env.cuentas-prueba` (los dos ignorados por git).
+
+Pruebas: tests/base_local/test_empresa_demo_base.py y tests/supabase_local/prueba_empresa2_reales.py
 
 Uso:
-    python scripts/empresa_demo.py crear
-    python scripts/empresa_demo.py borrar
+    python scripts/empresa_demo.py crear [--con-superadmin] [--produccion]
+    python scripts/empresa_demo.py borrar [--produccion]
 """
 
-import random
+import re
 import secrets
 import sys
 from datetime import date, datetime, timedelta
@@ -26,37 +38,53 @@ sys.path.insert(0, str(RAIZ))
 
 NOMBRE, CODIGO = "Pilates Centro", "PIL"
 ALUMNA_COMPARTIDA = "alumna@prueba.invalid"
+SUPERADMIN = ("superadmin@prueba.invalid", "Administración", "General")
 ADMIN = ("admin.pilates@demo.invalid", "Lucía", "Bentancor", "admin")
 PROFESORA = ("profe.pilates@demo.invalid", "Carolina", "Méndez", "profesora")
+ROCIO, INES, JULIA, NOELIA, SABRINA = (f"{n}.pilates@demo.invalid" for n in ("rocio", "ines", "julia", "noelia", "sabrina"))
 ALUMNAS = [
-    ("rocio.pilates@demo.invalid", "Rocío", "Acosta", "099222333"),
-    ("ines.pilates@demo.invalid", "Inés", "Duarte", "098333444"),
-    ("julia.pilates@demo.invalid", "Julia", "Ferreira", "091444555"),
-    ("noelia.pilates@demo.invalid", "Noelia", "Gómez", "094555666"),
-    ("sabrina.pilates@demo.invalid", "Sabrina", "Viera", "092666777"),
+    (ROCIO, "Rocío", "Acosta", "099222333"),
+    (INES, "Inés", "Duarte", "098333444"),
+    (JULIA, "Julia", "Ferreira", "091444555"),
+    (NOELIA, "Noelia", "Gómez", "094555666"),
+    (SABRINA, "Sabrina", "Viera", "092666777"),
 ]
 CUENTAS = [ADMIN, PROFESORA] + [(m, n, a, "alumna") for m, n, a, _ in ALUMNAS]
-CON_CONTRASENA = {ADMIN[0], PROFESORA[0], ALUMNAS[0][0]}
+CON_CONTRASENA = {ADMIN[0], PROFESORA[0], ROCIO, INES}
 TIPOS = [("Pilates mat", "Pilates en colchoneta, todos los niveles.", 50, 900, 6),
          ("Pilates reformer", "Clase con máquina reformer, grupos reducidos.", 50, 1200, 4)]
-# (día, hora, tipo, profesora): la administradora da los lunes y miércoles; la profesora, martes y jueves.
-HORARIOS = [("lunes", "19:00", 0, "admin"), ("miercoles", "19:00", 1, "admin"),
-            ("martes", "18:00", 0, "profe"), ("jueves", "18:00", 1, "profe")]
+# (día, hora, tipo, docente, alumnas que reservan cada semana)
+HORARIOS = [
+    ("lunes", "19:00", 0, "admin", [ROCIO, INES, JULIA, SABRINA]),
+    ("martes", "18:00", 0, "profe", [ROCIO, NOELIA, SABRINA]),
+    ("miercoles", "19:00", 1, "admin", [INES, JULIA, NOELIA]),
+    ("jueves", "18:00", 1, "profe", [ROCIO, SABRINA]),
+]
+LLENA_PROXIMA = [ROCIO, INES, JULIA, SABRINA]  # el jueves de la próxima semana (reformer, cupo 4): completa
 DIAS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
-ARCHIVO_CUENTAS = RAIZ / ".env.cuentas-prueba"
+ARCHIVOS = {"local": RAIZ / ".env.cuentas-local", "produccion": RAIZ / ".env.cuentas-prueba"}
+
+
+def es_local(url: str) -> bool:
+    return bool(re.match(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?/?$", str(url)))
 
 
 class BaseSupabase:
     """Acceso con la clave de administrador del .env (ignora RLS: solo para este script)."""
 
-    def __init__(self):
+    def __init__(self, produccion: bool = False):
         import os
         from dotenv import load_dotenv
         load_dotenv(RAIZ / ".env")
         if not os.environ.get("SUPABASE_SERVICE_KEY"):
             raise SystemExit("Falta SUPABASE_SERVICE_KEY en el archivo .env.")
         from app import auth
+        self.auth = auth
         self.cli = auth.cliente_admin()
+        self.local = es_local(self.cli.supabase_url)
+        if not self.local and not produccion:
+            raise SystemExit("Este script solo corre contra un Supabase local. Contra producción hace falta --produccion "
+                             "(y la autorización de Julieta).")
 
     def crear_cuenta(self, mail, nombre, apellido, contrasena, meta):
         datos = {"email": mail, "password": contrasena, "email_confirm": True,
@@ -87,30 +115,68 @@ class BaseSupabase:
             consulta = consulta.eq(k, v)
         consulta.execute()
 
+    def como(self, mail, contrasena, lugar):
+        """Ejecuta funciones de la base con la sesión de una persona en un lugar (para facturar como la administradora)."""
+        acceso, _ = self.auth.iniciar_sesion(mail, contrasena)
+        if self.auth.entrar_a_empresa(acceso, lugar) is None:
+            raise SystemExit(f"{mail} no pudo entrar a {lugar}.")
+        cli = self.auth.cliente_con_token(acceso)
+        return lambda funcion, params: cli.rpc(funcion, params).execute().data
+
 
 def _empresa(db):
     filas = db.leer("empresa", "id, nombre, mp_habilitado", codigo=CODIGO)
     return filas[0] if filas else None
 
 
+def fechas(hoy: date) -> dict:
+    """Las clases del escenario: 4 semanas anteriores, esta y la próxima (sin el día de hoy, que lo genera la app)."""
+    lunes = hoy - timedelta(days=hoy.weekday())
+    inicio_mes = hoy.replace(day=1)
+    clases = []
+    for semana in range(-4, 2):
+        for i, (dia, hora, t, quien, alumnas) in enumerate(HORARIOS):
+            f = lunes + timedelta(weeks=semana, days=DIAS.index(dia))
+            if f == hoy:
+                continue
+            reservas = list(alumnas)
+            if dia == "lunes" and f >= inicio_mes:
+                reservas.append(ALUMNA_COMPARTIDA)  # la compartida toma los lunes desde este mes
+            if semana == 1 and dia == "jueves":
+                reservas = list(LLENA_PROXIMA)
+            clases.append({"horario": i, "fecha": f, "pasada": f < hoy, "reservas": reservas, "semana": semana})
+    pasadas = [c for c in clases if c["pasada"]]
+    del_mes_ant = [c for c in pasadas if c["fecha"] < inicio_mes]
+    del_mes = [c for c in pasadas if c["fecha"] >= inicio_mes]
+    de = lambda mail, lista: [c for c in lista if mail in c["reservas"]]
+    reglas = {
+        "ines_ausente_100": min((c["fecha"], c["horario"]) for c in de(INES, del_mes_ant)) if de(INES, del_mes_ant) else None,
+        "ines_ausente_25": max((c["fecha"], c["horario"]) for c in de(INES, del_mes)) if de(INES, del_mes) else None,
+        "sabrina_sin_registrar": max((c["fecha"], c["horario"]) for c in de(SABRINA, del_mes)) if de(SABRINA, del_mes) else None,
+        "julia_cancelada": max((c["fecha"], c["horario"]) for c in de(JULIA, del_mes_ant) if HORARIOS[c["horario"]][0] == "miercoles")
+        if [c for c in de(JULIA, del_mes_ant) if HORARIOS[c["horario"]][0] == "miercoles"] else None,
+    }
+    return {"clases": clases, "reglas": reglas, "mes_anterior": (inicio_mes - timedelta(days=1)), "inicio_mes": inicio_mes}
+
+
 def crear(db, hoy: date, guardar_contrasenas=True) -> dict:
     if _empresa(db):
-        raise SystemExit(f"Ya existe la empresa {CODIGO}. Corré primero: python scripts/empresa_demo.py borrar")
+        return {"ya_existia": True}
     for mail, *_ in CUENTAS:
         if db.leer("profiles", "id", mail=mail):
-            raise SystemExit(f"Ya existe la cuenta {mail}: borrala antes de crear la empresa de demostración.")
+            raise SystemExit(f"Ya existe la cuenta {mail} sin la empresa {CODIGO}: revisá antes de crear (no se creó nada).")
     compartida = db.leer("profiles", "id", mail=ALUMNA_COMPARTIDA)
     if not compartida:
-        raise SystemExit(f"No existe {ALUMNA_COMPARTIDA} (alumna de la Empresa 1).")
+        raise SystemExit(f"No existe {ALUMNA_COMPARTIDA} (alumna de la Empresa 1): no se creó nada.")
+    plan = fechas(hoy)
 
     e2 = db.insertar("empresa", [{"nombre": NOMBRE, "codigo": CODIGO, "mp_habilitado": False}])[0]["id"]
     ids, contrasenas = {}, {}
     for mail, nombre, apellido, rol in CUENTAS:
-        contrasena = "Demo-" + secrets.token_urlsafe(8)
+        contrasena = "Demo-" + secrets.token_urlsafe(9)
         if mail in CON_CONTRASENA:
             contrasenas[mail] = contrasena
-        ids[mail] = db.crear_cuenta(mail, nombre, apellido, contrasena if mail in CON_CONTRASENA else secrets.token_urlsafe(16),
-                                    {"id_empresa": e2, "rol_empresa": rol})
+        ids[mail] = db.crear_cuenta(mail, nombre, apellido, contrasena, {"id_empresa": e2, "rol_empresa": rol})
     for mail, _, _, tel in ALUMNAS:
         db.actualizar("profiles", {"telefono": tel}, id=ids[mail])
     ids[ALUMNA_COMPARTIDA] = compartida[0]["id"]
@@ -119,43 +185,78 @@ def crear(db, hoy: date, guardar_contrasenas=True) -> dict:
     tipos = [db.insertar("tipo_clase", [{"nombre": n, "descripcion": d, "duracion": dur, "precio_presencial": p,
                                           "cupo_max": cupo, "activo": True, "id_empresa": e2}])[0]
              for n, d, dur, p, cupo in TIPOS]
-    profesoras = {"admin": ids[ADMIN[0]], "profe": ids[PROFESORA[0]]}
-    horarios = []
-    for dia, hora, t, quien in HORARIOS:
-        h = db.insertar("horario", [{"dia_semana": dia, "hora_inicio": hora, "id_tipo_clase": tipos[t]["id"], "activo": True,
-                                     "id_profesora": profesoras[quien], "id_empresa": e2}])[0]
-        horarios.append((h, tipos[t]))
+    docentes = {"admin": ids[ADMIN[0]], "profe": ids[PROFESORA[0]]}
+    horarios = [db.insertar("horario", [{"dia_semana": dia, "hora_inicio": hora, "id_tipo_clase": tipos[t]["id"], "activo": True,
+                                         "id_profesora": docentes[quien], "id_empresa": e2}])[0]
+                for dia, hora, t, quien, _ in HORARIOS]
 
-    # clases de las últimas 3 semanas (ya dictadas, con asistencia) y de las próximas 2 (con algunas reservas)
-    rnd = random.Random(11)
-    alumnas = [ids[m] for m, *_ in ALUMNAS] + [ids[ALUMNA_COMPARTIDA]]
-    lunes = hoy - timedelta(days=hoy.weekday())
-    resumen = {"clases": 0, "reservas": 0, "asistencias": 0}
-    for semana in range(-3, 2):
-        for h, tipo in horarios:
-            fecha = lunes + timedelta(weeks=semana, days=DIAS.index(h["dia_semana"]))
-            pasada = fecha < hoy
-            if fecha == hoy:
-                continue  # el día de hoy lo genera la app sola, sin reservas inventadas
-            c = db.insertar("clase", [{"id_horario": h["id"], "fecha": fecha.isoformat(), "hora_inicio": h["hora_inicio"],
+    reglas = plan["reglas"]
+    resumen = {"clases": 0, "reservas": 0, "asistencias": 0, "canceladas": 0, "espera": 0}
+    for c in plan["clases"]:
+        h, tipo = horarios[c["horario"]], tipos[HORARIOS[c["horario"]][2]]
+        clave = (c["fecha"], c["horario"])
+        clase = db.insertar("clase", [{"id_horario": h["id"], "fecha": c["fecha"].isoformat(), "hora_inicio": h["hora_inicio"],
                                        "duracion": tipo["duracion"], "precio": tipo["precio_presencial"],
                                        "cupo_max": tipo["cupo_max"], "id_tipo_clase": tipo["id"], "estado": "programada",
                                        "id_profesora": h["id_profesora"], "id_empresa": e2}])[0]
-            resumen["clases"] += 1
-            elegidas = rnd.sample(alumnas, rnd.randint(2, tipo["cupo_max"]) if pasada else rnd.randint(1, tipo["cupo_max"] - 1))
-            for a in elegidas:
-                cuando = datetime.combine(fecha, datetime.min.time()) - timedelta(days=rnd.randint(1, 3))
-                r = db.insertar("reserva", [{"id_alumna": a, "id_clase": c["id"], "estado": "confirmada",
-                                             "fecha_reserva": cuando.isoformat(), "id_empresa": e2}])[0]
-                resumen["reservas"] += 1
-                if pasada:
-                    db.insertar("asistencia", [{"id_reserva": r["id"], "id_empresa": e2,
-                                                "estado": "presente" if rnd.random() < 0.8 else "ausente"}])
-                    resumen["asistencias"] += 1
-            db.actualizar("clase", {"cantidad_inscriptas": len(elegidas)}, id=c["id"])
+        resumen["clases"] += 1
+        confirmadas = 0
+        for n, mail in enumerate(c["reservas"]):
+            reservada = datetime.combine(c["fecha"], datetime.min.time()) - timedelta(days=2, hours=n)
+            cancelada = mail == JULIA and clave == reglas["julia_cancelada"]
+            fila = {"id_alumna": ids[mail], "id_clase": clase["id"], "id_empresa": e2, "fecha_reserva": reservada.isoformat(),
+                    "estado": "cancelada" if cancelada else "confirmada"}
+            if cancelada:
+                fila["fecha_cancelacion"] = (reservada + timedelta(days=1)).isoformat()
+            r = db.insertar("reserva", [fila])[0]
+            resumen["reservas"] += 1
+            if cancelada:
+                resumen["canceladas"] += 1
+                continue
+            confirmadas += 1
+            if not c["pasada"] or (mail == SABRINA and clave == reglas["sabrina_sin_registrar"]):
+                continue
+            ausente = mail == INES and clave in (reglas["ines_ausente_100"], reglas["ines_ausente_25"])
+            db.insertar("asistencia", [{"id_reserva": r["id"], "id_empresa": e2, "estado": "ausente" if ausente else "presente"}])
+            resumen["asistencias"] += 1
+        db.actualizar("clase", {"cantidad_inscriptas": confirmadas}, id=clase["id"])
+        if c["semana"] == 1 and HORARIOS[c["horario"]][0] == "jueves":
+            db.insertar("listadeespera", [{"id_alumna": ids[NOELIA], "id_clase": clase["id"], "posicion": 1,
+                                           "estado": "en_espera", "id_empresa": e2}])
+            resumen["espera"] += 1
+
+    # el 25 % rige desde el 1° de este mes (nunca hacia atrás: el mes anterior se factura con la regla anterior)
+    db.actualizar("empresa", {"cobro_inasistencia_desde": plan["inicio_mes"].isoformat()}, id=e2)
+
+    # facturas del mes anterior: borradores, confirmación (numeración PIL) y el pago de Rocío, como la administradora
+    mes_ant = plan["mes_anterior"]
+    rpc = db.como(ADMIN[0], contrasenas[ADMIN[0]], NOMBRE)
+    rpc("sincronizar_borradores", {"p_mes": mes_ant.month, "p_anio": mes_ant.year})
+    facturas = db.leer("resumen_mensual", "id, id_alumna, version, estado_factura", id_empresa=e2)
+    for f in sorted(facturas, key=lambda f: f["id"]):
+        rpc("confirmar_factura", {"p_id": f["id"], "p_version": f["version"]})
+    rocio = next((f for f in db.leer("resumen_mensual", "id, id_alumna, total", id_empresa=e2) if f["id_alumna"] == ids[ROCIO]), None)
+    if rocio:
+        rpc("registrar_pago", {"p_id_resumen": rocio["id"], "p_monto": str(rocio["total"]), "p_medio": "transferencia",
+                               "p_fecha": hoy.isoformat()})
+    resumen["facturas"] = len(facturas)
+
     if guardar_contrasenas:
-        _guardar_contrasenas(contrasenas)
-    return {"empresa": e2, **resumen, "cuentas": len(CUENTAS), "contrasenas": contrasenas}
+        _guardar_contrasenas(contrasenas, db.local)
+    return {"empresa": e2, **resumen, "cuentas": len(CUENTAS), "contrasenas": contrasenas, "reglas": reglas, "ids": ids}
+
+
+def crear_superadmin_local(db) -> str | None:
+    """Solo en local: la superadministradora de prueba (en producción la crea Julieta con scripts/crear_superadmin.py)."""
+    if not db.local:
+        raise SystemExit("--con-superadmin solo se usa en local; en producción: python scripts/crear_superadmin.py")
+    mail, nombre, apellido = SUPERADMIN
+    if db.leer("profiles", "id", mail=mail):
+        return None
+    contrasena = "Demo-" + secrets.token_urlsafe(9)
+    uid = db.crear_cuenta(mail, nombre, apellido, contrasena, {"sin_empresa": True})
+    db.actualizar("profiles", {"es_superadmin": True}, id=uid)
+    return contrasena
 
 
 def borrar(db, guardar_contrasenas=True) -> dict:
@@ -190,27 +291,40 @@ def borrar(db, guardar_contrasenas=True) -> dict:
     db.borrar("membresia", id_empresa=e2)
     db.borrar("empresa", id=e2)
     if guardar_contrasenas:
-        _guardar_contrasenas({})
+        _guardar_contrasenas({}, db.local)
     return {"empresa": e2}
 
 
-def _guardar_contrasenas(contrasenas: dict) -> None:
-    mails = {m for m, *_ in CUENTAS}
-    lineas = ARCHIVO_CUENTAS.read_text().splitlines() if ARCHIVO_CUENTAS.exists() else []
-    lineas = [l for l in lineas if l.split("  ")[0] not in mails]
+def _guardar_contrasenas(contrasenas: dict, local: bool) -> None:
+    archivo = ARCHIVOS["local" if local else "produccion"]
+    quitar = {m for m, *_ in CUENTAS} | set(contrasenas)  # la superadministradora se conserva salvo que se reemplace
+    lineas = archivo.read_text().splitlines() if archivo.exists() else []
+    lineas = [l for l in lineas if l.split("  ")[0] not in quitar]
     lineas += [f"{m}  {c}" for m, c in contrasenas.items()]
-    ARCHIVO_CUENTAS.write_text("\n".join(lineas) + "\n")
+    archivo.write_text("\n".join(lineas) + "\n")
+    archivo.chmod(0o600)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2 or sys.argv[1] not in ("crear", "borrar"):
+    args = sys.argv[1:]
+    if not args or args[0] not in ("crear", "borrar") or set(args[1:]) - {"--produccion", "--con-superadmin"}:
         raise SystemExit(__doc__)
     from app import clases
-    base = BaseSupabase()
-    if sys.argv[1] == "crear":
-        r = crear(base, clases.ahora().date())
-        print(f"Empresa {NOMBRE} creada: {r['cuentas']} cuentas, {r['clases']} clases, {r['reservas']} reservas, "
-              f"{r['asistencias']} asistencias. Contraseñas en .env.cuentas-prueba.")
+    base = BaseSupabase(produccion="--produccion" in args)
+    if args[0] == "crear":
+        extra = {}
+        if "--con-superadmin" in args:
+            clave = crear_superadmin_local(base)
+            if clave:
+                extra[SUPERADMIN[0]] = clave
+        r = crear(base, clases.ahora().date(), guardar_contrasenas=False)
+        if r.get("ya_existia"):
+            print(f"La empresa {NOMBRE} ya existe: no se creó nada (para empezar de nuevo: borrar y crear).")
+        else:
+            _guardar_contrasenas({**r["contrasenas"], **extra}, base.local)
+            print(f"Empresa {NOMBRE} creada: {r['cuentas']} cuentas, {r['clases']} clases, {r['reservas']} reservas, "
+                  f"{r['asistencias']} asistencias, {r['facturas']} facturas del mes anterior. "
+                  f"Contraseñas en {ARCHIVOS['local' if base.local else 'produccion'].name}.")
     else:
         borrar(base)
-        print(f"Empresa {NOMBRE} borrada (la Empresa 1 no se tocó).")
+        print(f"Empresa {NOMBRE} borrada (Just Show Up y la alumna compartida no se tocaron).")
