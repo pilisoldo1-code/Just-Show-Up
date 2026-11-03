@@ -22,8 +22,13 @@ que solo se usa con la autorización de Julieta. Las contraseñas se generan al 
 
 Pruebas: tests/base_local/test_empresa_demo_base.py y tests/supabase_local/prueba_empresa2_reales.py
 
+`actualizar` pone al día una Pilates Centro ya creada sin borrar nada (asistencias pendientes de clases dictadas, reservas
+de las próximas clases, clase completa con lista de espera); conserva lo hecho en los ensayos y no toca facturas
+confirmadas, pagos ni Just Show Up. Sin `--aplicar` solo muestra el plan.
+
 Uso:
     python scripts/empresa_demo.py crear [--con-superadmin] [--produccion]
+    python scripts/empresa_demo.py actualizar [--aplicar] [--produccion]
     python scripts/empresa_demo.py borrar [--produccion]
 """
 
@@ -246,6 +251,184 @@ def crear(db, hoy: date, guardar_contrasenas=True) -> dict:
     return {"empresa": e2, **resumen, "cuentas": len(CUENTAS), "contrasenas": contrasenas, "reglas": reglas, "ids": ids}
 
 
+MOTIVO_ACTUALIZAR = "Preparación automática del escenario de demostración (la registró un script, no una persona)"
+# Autora técnica de esas asistencias en el historial: así nunca aparecen como hechas por Lucía. No pertenece a ninguna
+# empresa ni tiene rol (su contraseña se descarta: no puede iniciar sesión en ningún lugar).
+SISTEMA = ("escenario.sistema@demo.invalid", "Carga automática", "(script de demostración)")
+
+
+def actualizar(db, ahora: datetime, aplicar: bool = False) -> dict:
+    """Pone al día el escenario de una Pilates Centro YA creada, sin borrar nada (para mantener la demostración hasta
+    la defensa). Solo agrega; nunca cambia una asistencia, reserva, factura ni pago existentes:
+    - asistencias «sin registrar» de clases ya dictadas, en meses sin factura confirmada de esa alumna: las completa con
+      registro en el historial a nombre de la cuenta técnica SISTEMA («Carga automática»), nunca de una persona. Si Inés no tiene una inasistencia en el mes en
+      curso, la última pendiente de ella va como ausente (25 %); la última pendiente de Sabrina queda sin registrar.
+    - reservas del patrón en las clases que todavía no empezaron hasta el fin de la próxima semana (sin pasar el cupo, sin
+      repetir ni revivir cancelaciones); crea las clases que falten de los horarios del escenario.
+    - el jueves de la próxima semana completo y Noelia en la lista de espera (si se puede llegar al cupo).
+    Por defecto no escribe nada: devuelve el plan. Con aplicar=True lo ejecuta."""
+    e = _empresa(db)
+    if not e:
+        raise SystemExit(f"No existe la empresa {CODIGO}: primero hay que crearla.")
+    e2 = e["id"]
+    hoy = ahora.date()
+    lunes = hoy - timedelta(days=hoy.weekday())
+    inicio_mes = hoy.replace(day=1)
+    # personas del escenario: solo las que pertenecen a Pilates Centro
+    en_e2 = {m["id_usuario"] for m in db.leer("membresia", "id_usuario", id_empresa=e2)}
+    mails = [ADMIN[0]] + [m for m, *_ in ALUMNAS] + [ALUMNA_COMPARTIDA]
+    ids = {p["mail"]: p["id"] for p in db.leer("profiles", "id, mail") if p["mail"] in mails and p["id"] in en_e2}
+    faltan = [m for m in mails if m not in ids]
+    if faltan:
+        raise SystemExit(f"Faltan personas del escenario en {CODIGO} ({', '.join(faltan)}): no se cambió nada.")
+    del_escenario = set(ids.values()) - {ids[ADMIN[0]]}
+
+    tipos = {t["id"]: t for t in db.leer("tipo_clase", "id, nombre, duracion, precio_presencial, cupo_max, activo", id_empresa=e2)}
+    horarios = {}
+    for h in db.leer("horario", "id, dia_semana, hora_inicio, id_tipo_clase, id_profesora, activo", id_empresa=e2):
+        for i, (dia, hora, t, _, _) in enumerate(HORARIOS):
+            if (h["dia_semana"], str(h["hora_inicio"])[:5], tipos.get(h["id_tipo_clase"], {}).get("nombre")) == (dia, hora, TIPOS[t][0]):
+                horarios[i] = h
+    clases_e2 = db.leer("clase", "id, id_horario, fecha, hora_inicio, estado, cupo_max", id_empresa=e2)
+    por_horario_fecha = {(c["id_horario"], str(c["fecha"])[:10]): c for c in clases_e2}
+    reservas = db.leer("reserva", "id, id_alumna, id_clase, estado", id_empresa=e2)
+    asistencias = {a["id_reserva"]: a["estado"] for a in db.leer("asistencia", "id_reserva, estado", id_empresa=e2)}
+    espera = db.leer("listadeespera", "id, id_alumna, id_clase, estado, posicion", id_empresa=e2)
+    confirmadas_fact = {(f["id_alumna"], f["mes"], f["anio"]) for f in db.leer("resumen_mensual", "id_alumna, mes, anio, estado_factura",
+                                                                             id_empresa=e2) if f["estado_factura"] == "confirmada"}
+    clase_por_id = {c["id"]: c for c in clases_e2}
+    inicio = lambda c: datetime.combine(_fecha(c["fecha"]), _hora(c["hora_inicio"]), tzinfo=ahora.tzinfo)
+    del_horario = {h["id"]: i for i, h in horarios.items()}
+    plan = {"asistencias": [], "clases": [], "reservas": [], "espera": [], "avisos": [], "cupos": {}}
+
+    # ---------- asistencias pendientes de clases ya dictadas ----------
+    pendientes = []
+    for r in reservas:
+        c = clase_por_id.get(r["id_clase"])
+        if (not c or c["id_horario"] not in del_horario or r["estado"] != "confirmada" or c["estado"] != "programada"
+                or r["id_alumna"] not in del_escenario or r["id"] in asistencias or inicio(c) >= ahora):
+            continue
+        f = _fecha(c["fecha"])
+        if (r["id_alumna"], f.month, f.year) in confirmadas_fact:
+            continue  # su factura de ese mes está confirmada: no se toca (la base tampoco lo permitiría)
+        pendientes.append((inicio(c), r))
+    pendientes.sort(key=lambda x: x[0])
+    del_mes = lambda mail: [r for t, r in pendientes if r["id_alumna"] == ids[mail] and t.date() >= inicio_mes]
+    ines_ausente_mes = any(asistencias.get(r["id"]) == "ausente" and r["id_alumna"] == ids[INES]
+                           and _fecha(clase_por_id[r["id_clase"]]["fecha"]) >= inicio_mes
+                           for r in reservas if r["id_clase"] in clase_por_id)
+    ines = None if ines_ausente_mes or not del_mes(INES) else del_mes(INES)[-1]
+    sabrina = del_mes(SABRINA)[-1] if del_mes(SABRINA) else None
+    if not ines_ausente_mes and ines is None:
+        plan["avisos"].append("Inés no tiene una inasistencia este mes ni una clase pendiente para marcarla: el caso del 25 % no se puede preparar sin cambiar un ensayo.")
+    if sabrina is None:
+        plan["avisos"].append("Sabrina no tiene ninguna clase de este mes sin registrar: no queda el caso de asistencia pendiente.")
+    for _, r in pendientes:
+        if sabrina and r["id"] == sabrina["id"]:
+            continue
+        plan["asistencias"].append((r, "ausente" if ines and r["id"] == ines["id"] else "presente"))
+
+    # ---------- reservas de las clases que todavía no empezaron (hasta el fin de la próxima semana) ----------
+    jueves_proximo = lunes + timedelta(days=7 + DIAS.index("jueves"))
+    ocupadas = {}  # id de clase -> reservas confirmadas (contando las que se agregan)
+    for i, (dia, hora, t, _, alumnas) in enumerate(HORARIOS):
+        h = horarios.get(i)
+        if not h or not h["activo"]:
+            if i not in horarios:
+                plan["avisos"].append(f"No está el horario del escenario {dia} {hora}: no se agregan reservas ahí.")
+            continue
+        for semana in (0, 1):
+            fecha = lunes + timedelta(weeks=semana, days=DIAS.index(dia))
+            if datetime.combine(fecha, _hora(hora), tzinfo=ahora.tzinfo) <= ahora:
+                continue
+            c = por_horario_fecha.get((h["id"], fecha.isoformat()))
+            if c and c["estado"] != "programada":
+                continue  # cancelada (por ejemplo, en un ensayo de Planificación): se respeta
+            patron = list(LLENA_PROXIMA) if fecha == jueves_proximo else list(alumnas) + ([ALUMNA_COMPARTIDA] if dia == "lunes" else [])
+            clave = c["id"] if c else ("nueva", i, fecha)
+            if not c:
+                plan["clases"].append({"horario": i, "fecha": fecha, "clave": clave})
+            de_la_clase = [r for r in reservas if c and r["id_clase"] == c["id"]]
+            en_espera = {x["id_alumna"] for x in espera if c and x["id_clase"] == c["id"] and x["estado"] in ("en_espera", "ofrecido")}
+            cupo = c["cupo_max"] if c else tipos[h["id_tipo_clase"]]["cupo_max"]
+            ocupadas[clave] = sum(r["estado"] == "confirmada" for r in de_la_clase)
+            for mail in patron:
+                if any(r["id_alumna"] == ids[mail] for r in de_la_clase) or ids[mail] in en_espera:
+                    continue  # ya reservó, canceló o espera: no se repite ni se revive
+                if ocupadas[clave] >= cupo:
+                    break
+                plan["reservas"].append({"clave": clave, "mail": mail, "fecha": fecha, "horario": i})
+                ocupadas[clave] += 1
+            plan["cupos"][clave] = (ocupadas[clave], cupo)
+            if fecha == jueves_proximo:
+                ya = any(x["id_alumna"] == ids[NOELIA] for x in espera if c and x["id_clase"] == c["id"]) \
+                    or any(r["id_alumna"] == ids[NOELIA] for r in de_la_clase)
+                if ya:
+                    pass
+                elif ocupadas[clave] >= cupo:
+                    pos = max([x["posicion"] for x in espera if c and x["id_clase"] == c["id"]] or [0]) + 1
+                    plan["espera"].append({"clave": clave, "fecha": fecha, "posicion": pos})
+                else:
+                    plan["avisos"].append(f"El jueves {fecha.day}/{fecha.month} no llega al cupo ({ocupadas[clave]}/{cupo}): no se crea la lista de espera.")
+
+    if aplicar:
+        autor = None
+        if plan["asistencias"]:
+            existente = db.leer("profiles", "id", mail=SISTEMA[0])
+            autor = existente[0]["id"] if existente else db.crear_cuenta(*SISTEMA, secrets.token_urlsafe(24), {"sin_empresa": True})
+        for r, estado in plan["asistencias"]:
+            db.insertar("asistencia", [{"id_reserva": r["id"], "id_empresa": e2, "estado": estado}])
+            db.insertar("asistencia_historial", [{"id_empresa": e2, "id_reserva": r["id"], "estado_anterior": None, "estado_nuevo": estado,
+                                                  "origen": "correccion", "motivo": MOTIVO_ACTUALIZAR, "por": autor}])
+        nuevas = {}
+        for n in plan["clases"]:
+            h = horarios[n["horario"]]
+            tipo = tipos[h["id_tipo_clase"]]
+            nuevas[n["clave"]] = db.insertar("clase", [{"id_horario": h["id"], "fecha": n["fecha"].isoformat(), "hora_inicio": h["hora_inicio"],
+                                                        "duracion": tipo["duracion"], "precio": tipo["precio_presencial"],
+                                                        "cupo_max": tipo["cupo_max"], "id_tipo_clase": tipo["id"], "estado": "programada",
+                                                        "id_profesora": h["id_profesora"], "id_empresa": e2}])[0]["id"]
+        id_de = lambda clave: nuevas.get(clave, clave)
+        confirmadas = lambda cid: len(db.leer("reserva", "id", id_clase=cid, estado="confirmada"))
+        for k, x in enumerate(plan["reservas"]):
+            cid = id_de(x["clave"])
+            # se vuelve a contar justo antes: si alguien reservó mientras tanto, no se pasa el cupo
+            if confirmadas(cid) >= plan["cupos"][x["clave"]][1]:
+                plan["avisos"].append(f"La clase del {x['fecha'].day}/{x['fecha'].month} se llenó mientras tanto: no se agregó a {x['mail']}.")
+                continue
+            reservada = datetime.combine(hoy, datetime.min.time()) + timedelta(minutes=k)
+            db.insertar("reserva", [{"id_alumna": ids[x["mail"]], "id_clase": cid, "estado": "confirmada",
+                                     "fecha_reserva": reservada.isoformat(), "id_empresa": e2}])
+        for clave, (_, cupo) in plan["cupos"].items():
+            db.actualizar("clase", {"cantidad_inscriptas": confirmadas(id_de(clave))}, id=id_de(clave))
+            plan["cupos"][clave] = (confirmadas(id_de(clave)), cupo)
+        plan["espera"] = [x for x in plan["espera"] if plan["cupos"][x["clave"]][0] >= plan["cupos"][x["clave"]][1]]
+        for x in plan["espera"]:
+            db.insertar("listadeespera", [{"id_alumna": ids[NOELIA], "id_clase": id_de(x["clave"]), "posicion": x["posicion"],
+                                           "estado": "en_espera", "id_empresa": e2}])
+
+    nombre = {v: k for k, v in ids.items()}
+    return {
+        "aplicado": aplicar,
+        "asistencias": len(plan["asistencias"]),
+        "ausentes": [(_fecha(clase_por_id[r["id_clase"]]["fecha"]), nombre[r["id_alumna"]]) for r, e in plan["asistencias"] if e == "ausente"],
+        "sin_registrar_queda": sabrina and _fecha(clase_por_id[sabrina["id_clase"]]["fecha"]),
+        "clases_nuevas": len(plan["clases"]),
+        "reservas": len(plan["reservas"]),
+        "espera": [x["fecha"] for x in plan["espera"]],
+        "avisos": plan["avisos"],
+    }
+
+
+def _fecha(v) -> date:
+    return v if isinstance(v, date) else date.fromisoformat(str(v)[:10])
+
+
+def _hora(v):
+    from datetime import time as _time
+    return v if isinstance(v, _time) else _time.fromisoformat(str(v)[:8] if len(str(v)) >= 8 else str(v))
+
+
 def crear_superadmin_local(db) -> str | None:
     """Solo en local: la superadministradora de prueba (en producción la crea Julieta con scripts/crear_superadmin.py)."""
     if not db.local:
@@ -290,6 +473,8 @@ def borrar(db, guardar_contrasenas=True) -> dict:
             db.actualizar("profiles", {"empresa_activa": None}, id=p["id"])
     db.borrar("membresia", id_empresa=e2)
     db.borrar("empresa", id=e2)
+    for p in db.leer("profiles", "id", mail=SISTEMA[0]):  # la autora técnica de «actualizar» (sin empresa)
+        db.borrar_cuenta(p["id"])
     if guardar_contrasenas:
         _guardar_contrasenas({}, db.local)
     return {"empresa": e2}
@@ -307,7 +492,7 @@ def _guardar_contrasenas(contrasenas: dict, local: bool) -> None:
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if not args or args[0] not in ("crear", "borrar") or set(args[1:]) - {"--produccion", "--con-superadmin"}:
+    if not args or args[0] not in ("crear", "borrar", "actualizar") or set(args[1:]) - {"--produccion", "--con-superadmin", "--aplicar"}:
         raise SystemExit(__doc__)
     from app import clases
     base = BaseSupabase(produccion="--produccion" in args)
@@ -325,6 +510,17 @@ if __name__ == "__main__":
             print(f"Empresa {NOMBRE} creada: {r['cuentas']} cuentas, {r['clases']} clases, {r['reservas']} reservas, "
                   f"{r['asistencias']} asistencias, {r['facturas']} facturas del mes anterior. "
                   f"Contraseñas en {ARCHIVOS['local' if base.local else 'produccion'].name}.")
+    elif args[0] == "actualizar":
+        r = actualizar(base, clases.ahora(), aplicar="--aplicar" in args)
+        print(("APLICADO" if r["aplicado"] else "PLAN (no se escribió nada; para aplicarlo: --aplicar)") + f" — {NOMBRE}:")
+        print(f"  asistencias pendientes que se completan: {r['asistencias']} (ausentes: "
+              + ", ".join(f"{m.split('.')[0]} {f.day}/{f.month}" for f, m in r["ausentes"]) + ")")
+        print(f"  queda sin registrar: Sabrina {r['sin_registrar_queda'].day}/{r['sin_registrar_queda'].month}" if r["sin_registrar_queda"]
+              else "  queda sin registrar: ninguna")
+        print(f"  clases nuevas: {r['clases_nuevas']} · reservas nuevas: {r['reservas']} · lista de espera: "
+              + (", ".join(f"jueves {f.day}/{f.month}" for f in r["espera"]) or "sin cambios"))
+        for a in r["avisos"]:
+            print("  aviso:", a)
     else:
         borrar(base)
         print(f"Empresa {NOMBRE} borrada (Just Show Up y la alumna compartida no se tocaron).")
