@@ -757,8 +757,9 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
-- **Correcciones de asistencia (rama `asistencias-correcciones`; migración `20261104000000_asistencias_correcciones.sql` SIN
-  APLICAR en Supabase)**: la profesora sigue marcando solo mientras dura la clase (`marcar_asistencia`, mismas reglas). La
+- **Correcciones de asistencia (rama `asistencias-correcciones`, PR #34; migración `20261104000000_asistencias_correcciones.sql`
+  APLICADA en Supabase el 03/11 como `20261103131731 asistencias_correcciones`, con respaldo previo `2026-11-03 antes de
+  correcciones de asistencia`; estructura igual a la esperada, datos idénticos y las 74 pendientes intactas)**: la profesora sigue marcando solo mientras dura la clase (`marcar_asistencia`, mismas reglas). La
   administradora completa o corrige asistencias de clases **ya terminadas** con `corregir_asistencias(cambios, motivo)`:
   motivo obligatorio, solo presente/ausente (no vuelve a «sin registrar»), todo o nada, nunca en clases canceladas ni en
   reservas de un mes cuya factura de esa alumna esté **confirmada** (se libera si se anula y la reemitida está en
