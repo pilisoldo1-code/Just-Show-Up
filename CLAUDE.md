@@ -28,9 +28,10 @@ Mercado Pago y Videos On Demand y las ideas a evaluar. **Orden de trabajo (actua
 4. Videos On Demand: Zoom gratuito (~40 min, carga manual) + Mux gratuito si pasa la prueba de
    reproducción firmada.
 
-Ideas pendientes **para evaluar (no aprobadas)**: cobro del 25 % por inasistencia, notificaciones
-de cancelación, magic links, gráficas en Estadísticas, revisión integral para celulares
-(`CONTINUIDAD_PROYECTO.md` §11).
+Ideas pendientes **para evaluar (no aprobadas)**: notificaciones de cancelación, magic links, gráficas en
+Estadísticas, revisión integral para celulares (`CONTINUIDAD_PROYECTO.md` §11). El cobro del 25 % por inasistencia ya
+está hecho (PR #35). **Desde el 03/11 theta tiene dos empresas** (Just Show Up y Pilates Centro, de demostración) y una
+superadministradora: ver Gotchas.
 
 **Todo push o merge a `main` despliega solo en theta: consultar antes.**
 
@@ -873,9 +874,26 @@ Para cada módulo, en este orden:
   siguen funcionando las pruebas viejas.
 - **`tests/base_local/clientefalso.py`** pasa las listas de `rpc` como literal de arreglo (como PostgREST), así toman el
   tipo del parámetro (`uuid[]`, `bigint[]`).
-- **`scripts/empresa_demo.py`** crea/borra la Empresa 2 de demostración con la clave de administrador del `.env`:
-  correrlo contra Supabase escribe en producción (necesita autorización). Se prueba con
-  `tests/base_local/test_empresa_demo_base.py "<respaldo>"`.
+- **Pilates Centro y superadministradora en producción (03/11)**: `superadmin@prueba.invalid` (la creó Julieta con
+  `scripts/crear_superadmin.py`; la contraseña es solo de ella) y «Pilates Centro» (PIL) creada con
+  `scripts/empresa_demo.py crear --produccion`, con respaldo previo `2026-11-03 antes de Pilates Centro` y
+  `scripts/verificar_despliegue.py` TODO OK antes y después. Escenario fijo (docstring del script): Lucía Bentancor
+  (administradora, lunes y miércoles), Carolina Méndez (profesora común, martes y jueves), 5 alumnas `@demo.invalid`
+  (Inés: ausente en octubre al 100 % y en noviembre al 25 %; Julia: cancelación a tiempo; Sabrina: sin registrar;
+  Noelia: lista de espera) y `alumna@prueba.invalid` compartida con Just Show Up. Facturas de octubre PIL-2026-10-0001…
+  0005 (la de Rocío pagada). Mercado Pago apagado en PIL. Contraseñas de Lucía, Carolina, Rocío e Inés en
+  `.env.cuentas-prueba`. **No usar `borrar` + `crear` sin autorización** (borra lo hecho en Pilates y renumera sus
+  facturas).
+- **`scripts/empresa_demo.py`**: por defecto se niega a correr fuera de localhost; contra producción exige `--produccion`
+  (y autorización). `crear` no hace nada si PIL ya existe; `borrar` elimina solo lo de PIL (incluidos historial,
+  desactivaciones y sesiones) y las cuentas que pertenecen solo a PIL y son `.invalid` (si encuentra otra, no borra
+  nada); la alumna compartida y Just Show Up no se tocan. En local las contraseñas van a `.env.cuentas-local`.
+  Pruebas: `tests/base_local/test_empresa_demo_base.py "<respaldo>" [AAAA-MM-DD]`, `tests/supabase_local/prueba_empresa2_reales.py`,
+  `tests.test_empresa_demo`.
+- **Con dos empresas, `_empresa_unica()` devuelve NULL**: toda fila nueva necesita `id_empresa`. `scripts/factura_demo_mp.py`
+  y `scripts/datos_demo.py` no lo indican y fallarían en producción: ajustarlos antes de volver a usarlos.
+- **Un inicio de sesión rechazado responde 401** (no redirige) con el mensaje genérico y sin cookies: las pruebas que
+  comprueban que alguien NO entra tienen que mirar el código 401 o la ausencia de cookies, no una redirección.
 
 - **PENDIENTE DE SEGURIDAD — rotar las claves de Supabase antes de cargar
   alumnas reales.** La `service_role` legacy fue pegada en el chat el 2026-10-06:
