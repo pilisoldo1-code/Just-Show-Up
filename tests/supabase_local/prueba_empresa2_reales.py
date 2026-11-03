@@ -183,8 +183,12 @@ with mock.patch("builtins.print"):
     creada = empresa_demo.crear(db, hoy, guardar_contrasenas=False)
 PIL = creada["empresa"]
 CL = creada["contrasenas"]
-ok("empresa_demo.py crear: Pilates Centro con cuentas, clases, reservas y asistencias",
-   creada["clases"] > 0 and creada["reservas"] > 0 and creada["asistencias"] > 0, creada)
+ok("empresa_demo.py crear: Pilates Centro con el escenario fijo (cuentas, clases, reservas, asistencias y facturas)",
+   creada["clases"] > 0 and creada["reservas"] > 0 and creada["asistencias"] > 0 and creada["facturas"] > 0, creada)
+with mock.patch("builtins.print"):
+    otra = empresa_demo.crear(db, hoy, guardar_contrasenas=False)
+ok("crear otra vez no hace nada (sin duplicados)", otra == {"ya_existia": True}
+   and sql("select count(*) n from empresa where codigo = 'PIL'", uno=True)["n"] == 1)
 ok("…crear no cambió nada de Just Show Up", huella_empresa(JSU) == FOTO_JSU)
 uid = lambda m: sql("select id::text from profiles where mail = %s", (m,), True)["id"]
 ADM_P, PROF_P, ALU_P = uid("admin.pilates@demo.invalid"), uid("profe.pilates@demo.invalid"), uid("rocio.pilates@demo.invalid")
@@ -195,8 +199,9 @@ ok("panel: las dos empresas con sus cifras", "Just Show Up" in lista and "Pilate
 ok("panel: sin datos operativos ni personales (no muestra alumnas, cédulas ni facturas)",
    "rocio.pilates" not in lista and "Factura" not in lista)
 g = texto(SA.get(f"/admin/empresas/{PIL}").text)
-ok("Gestionar Pilates Centro: administradora y sección de cobro por inasistencia (sin aplicar)",
-   "Lucía Bentancor" in g and "Cobro por inasistencia" in g and "No se aplica" in g)
+ok("Gestionar Pilates Centro: administradora y vigencia del 25 % desde el 1° de este mes",
+   "Lucía Bentancor" in g and "Cobro por inasistencia" in g
+   and f"Rige desde el <strong>1/{hoy.month}/{hoy.year}</strong>" in g)
 r = SA.post(f"/admin/empresas/{PIL}/editar", data={"nombre": "Pilates Centro Demo", "codigo": "PIL"}, follow_redirects=False)
 ok("editar el nombre de la empresa", "ok=1" in r.headers["location"]
    and sql("select nombre from empresa where id = %s", (PIL,), True)["nombre"] == "Pilates Centro Demo")
@@ -222,7 +227,7 @@ ok("desactivar una administradora con vista previa (queda inactiva y registrada)
    "select activa from membresia where id_usuario = %s and id_empresa = %s", (ADM2_P, PIL), True)["activa"] is False
    and sql("select count(*) n from baja_docente where id_empresa = %s", (PIL,), True)["n"] == 1, r.headers.get("location"))
 r = SA.post(f"/admin/empresas/{PIL}/cobro-inasistencia", data={"desde": hoy.replace(day=1).isoformat()}, follow_redirects=False)
-ok("vigencia del 25 % para Pilates Centro desde el 1° del mes en curso", "ok=1" in r.headers["location"]
+ok("la superadministradora confirma la vigencia (misma fecha: sin cambios)", "ok=1" in r.headers["location"]
    and sql("select cobro_inasistencia_desde d from empresa where id = %s", (PIL,), True)["d"] == hoy.replace(day=1))
 r = SA.post(f"/admin/empresas/{PIL}/estado", data={"activa": 0}, follow_redirects=False)
 ok("desactivar la empresa: sus usuarias no pueden entrar", "ok=1" in r.headers["location"]
@@ -294,26 +299,25 @@ ok("Pilates: el historial lo ve su administradora y no la de JSU",
    and not any(h["id_reserva"] == r_pas["id"] for h in api(AJ).table("asistencia_historial").select("id_reserva").execute().data))
 pv = texto(AP.get("/profesora/resumenes").text)
 ok("Pilates: el provisorio del mes muestra la inasistencia al 25 % (vigencia de su empresa)", "Inasistencia · 25 %" in pv)
-# para facturar un mes cerrado con el 25 % se adelanta la vigencia SOLO en esta base local (el panel no deja ir hacia atrás)
-sql("update empresa set cobro_inasistencia_desde = '2026-10-01' where id = %s", (PIL,))
-AP.get("/profesora/resumenes?mes=10&anio=2026")
-borr = sql("select * from resumen_mensual where id_empresa = %s and mes = 10 order by total desc", (PIL,))
-lineas25 = sql("select count(*) n from resumen_mensual_detalle d join resumen_mensual f on f.id = d.id_resumen_mensual "
-               "where f.id_empresa = %s and d.porcentaje = 25", (PIL,), True)["n"]
-aus_oct = sql("select count(*) n from asistencia a join reserva r on r.id = a.id_reserva join clase c on c.id = r.id_clase "
-              "where c.id_empresa = %s and a.estado = 'ausente' and c.fecha between '2026-10-01' and '2026-10-31'", (PIL,), True)["n"]
-ok("Pilates: borradores de octubre; cada ausencia de octubre al 25 %", borr and lineas25 == aus_oct, (len(borr), lineas25, aus_oct))
-ok("…y Just Show Up no tiene ninguna línea al 25 % (su vigencia sigue en 1/11)",
+# las facturas del mes anterior las armó el escenario (confirmadas, con la regla anterior a la vigencia)
+MA = hoy.replace(day=1) - timedelta(days=1)
+AP.get(f"/profesora/resumenes?mes={MA.month}&anio={MA.year}")  # abrir un mes ya confirmado no cambia nada
+fac = sql("select f.*, p.mail from resumen_mensual f join profiles p on p.id = f.id_alumna where f.id_empresa = %s and f.mes = %s",
+          (PIL, MA.month))
+ok("Pilates: facturas del mes anterior confirmadas con su propia numeración (PIL-…)", fac and all(
+   f["estado_factura"] == "confirmada" and f["numero"].startswith(f"PIL-{MA.year}-{MA.month:02d}-") for f in fac),
+   [(f["numero"], f["estado_factura"]) for f in fac])
+ines = sql("select d.porcentaje, d.importe_final, d.precio_original from resumen_mensual_detalle d join resumen_mensual f "
+           "on f.id = d.id_resumen_mensual join profiles p on p.id = f.id_alumna where p.mail = %s and d.asistencia = 'ausente'",
+           (empresa_demo.INES,))
+ok("Pilates: la inasistencia de Inés del mes anterior se cobró al 100 % (antes de la vigencia)", ines and all(
+   x["porcentaje"] == 100 and x["importe_final"] == x["precio_original"] for x in ines), ines)
+fp = next(f for f in fac if f["mail"] == empresa_demo.ROCIO)
+ok("Pilates: la factura de Rocío pagada por transferencia, en su empresa", fp["estado_pago"] == "pagado" and sql(
+   "select id_empresa, medio_pago from pago where id_resumen_mensual = %s and estado = 'vigente'", (fp["id"],), True)
+   == {"id_empresa": PIL, "medio_pago": "transferencia"})
+ok("…y Just Show Up no tiene ninguna línea al 25 % (sus meses facturados son anteriores a su vigencia)",
    sql("select count(*) n from resumen_mensual_detalle where id_empresa = %s and porcentaje = 25", (JSU,), True)["n"] == 0)
-fp = borr[0]
-r = AP.post(f"/profesora/resumenes/{fp['id']}/confirmar", data={"version": fp["version"]}, follow_redirects=False)
-fp = sql("select * from resumen_mensual where id = %s", (fp["id"],), True)
-ok("Pilates: factura confirmada con su propia numeración (PIL-2026-10-…)", fp["numero"] and fp["numero"].startswith("PIL-2026-10-"),
-   fp["numero"])
-AP.post(f"/profesora/resumenes/{fp['id']}/pagar", data={"monto": str(fp["total"]), "medio_pago": "transferencia",
-                                                        "fecha": hoy.isoformat()})
-ok("Pilates: pago registrado en su empresa", sql("select id_empresa from pago where id_resumen_mensual = %s", (fp["id"],), True)
-   == {"id_empresa": PIL})
 ok("la administradora de JSU no abre la factura de Pilates", AJ.get(f"/profesora/resumenes/{fp['id']}", follow_redirects=False)
    .status_code == 303 or "PIL-" not in AJ.get(f"/profesora/resumenes/{fp['id']}").text)
 cp_mf, cj_mf = texto(CP.get("/mis-facturas").text), texto(CJ.get("/mis-facturas").text)
