@@ -16,15 +16,15 @@
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
-        <div class="semana-nav">
-            <a class="btn btn-secundario" href="/profesora/resumenes?mes={{ ant_mes }}&anio={{ ant_anio }}">‹ Mes anterior</a>
-            <span class="semana-rango">{{ mes_txt }}</span>
+        <nav class="semana-nav" aria-label="Cambiar de mes">
+            <a class="btn btn-secundario semana-flecha" href="/profesora/resumenes?mes={{ ant_mes }}&anio={{ ant_anio }}" aria-label="Mes anterior">‹<span class="semana-texto"> Mes anterior</span></a>
+            <span class="semana-rango"><span class="rango-largo">{{ mes_txt }}</span><span class="rango-corto">{{ mes_txt }}</span></span>
             {% if hay_siguiente %}
-            <a class="btn btn-secundario" href="/profesora/resumenes?mes={{ sig_mes }}&anio={{ sig_anio }}">Mes siguiente ›</a>
+            <a class="btn btn-secundario semana-flecha" href="/profesora/resumenes?mes={{ sig_mes }}&anio={{ sig_anio }}" aria-label="Mes siguiente"><span class="semana-texto">Mes siguiente </span>›</a>
             {% else %}
-            <span class="btn btn-secundario btn-disabled">Mes siguiente ›</span>
+            <span class="btn btn-secundario btn-disabled semana-flecha" role="link" aria-disabled="true" aria-label="Mes siguiente"><span class="semana-texto">Mes siguiente </span>›</span>
             {% endif %}
-        </div>
+        </nav>
 
         {% if not en_revision %}
         <section class="panel">
