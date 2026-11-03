@@ -39,8 +39,8 @@
             <li class="resumen-item">
                 <div class="lc-fecha"><strong>{{ a.alumna }}</strong></div>
                 <div class="lc-detalle">
-                    Hasta hoy: {{ a.dictadas }} {{ 'clase' if a.dictadas == 1 else 'clases' }} · ${{ a.total_dictadas }}{% if a.inasistencias %} · {{ a.inasistencias }} {{ 'inasistencia' if a.inasistencias == 1 else 'inasistencias' }} al {{ porcentaje_inasistencia }} %{% endif %}
-                    {% if a.proximas %}<br />Reservadas para lo que queda del mes: {{ a.proximas }} · ${{ a.total_proximas }}{% endif %}
+                    Hasta hoy: {{ a.dictadas }} {{ 'clase' if a.dictadas == 1 else 'clases' }} · {{ a.total_dictadas|pesos }}{% if a.inasistencias %} · {{ a.inasistencias }} {{ 'inasistencia' if a.inasistencias == 1 else 'inasistencias' }} al {{ porcentaje_inasistencia }} %{% endif %}
+                    {% if a.proximas %}<br />Reservadas para lo que queda del mes: {{ a.proximas }} · {{ a.total_proximas|pesos }}{% endif %}
                 </div>
                 <details class="resumen-detalle">
                     <summary>Ver clases</summary>
@@ -51,7 +51,7 @@
                             <tr{% if not d.dictada %} class="detalle-proxima"{% endif %}>
                                 <td>{{ d.fecha_txt }} · {{ d.hora }}</td>
                                 <td>{{ d.tipo }}{% if not d.dictada %} (todavía no se dictó){% endif %}{% if d.inasistencia %}<br /><span class="etiqueta-inasistencia">Inasistencia · {{ porcentaje_inasistencia }} %</span>{% endif %}</td>
-                                <td class="num">{% if d.inasistencia %}<s class="precio-tachado">${{ d.precio }}</s><br />${{ d.importe }}{% else %}${{ d.precio }}{% endif %}</td>
+                                <td class="num">{% if d.inasistencia %}<s class="precio-tachado">{{ d.precio|pesos }}</s><span class="precio-base">{{ d.importe|pesos }}</span>{% else %}{{ d.precio|pesos }}{% endif %}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -89,8 +89,8 @@
                 <div class="lc-fecha"><strong>{{ f.alumna }}</strong>{% if f.numero %}<br /><span class="nota-chica">{{ f.numero }}</span>{% endif %}
                     {% if not f.cedula_txt %}<br /><span class="nota-chica">Sin cédula</span>{% endif %}</div>
                 <div class="lc-detalle">
-                    {{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · <strong>${{ f.total }}</strong>
-                    {% if f.total != f.subtotal_original %}<br /><span class="nota-chica">Original: ${{ f.subtotal_original }}</span>{% endif %}
+                    {{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · <strong>{{ f.total|pesos }}</strong>
+                    {% if f.total != f.subtotal_original %}<br /><span class="nota-chica">Original: {{ f.subtotal_original|pesos }}</span>{% endif %}
                 </div>
                 <span class="badge {{ 'badge-espera' if f.estado_factura == 'borrador' else ('badge-off' if f.estado_factura == 'anulada' else 'badge-on') }}">{{ f.estado_factura_txt }}</span>
                 {% if f.estado_factura == 'confirmada' %}

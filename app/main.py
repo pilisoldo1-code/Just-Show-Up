@@ -24,6 +24,7 @@ app = FastAPI(title="Just Show Up - Horarios")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 templates.env.filters["nombre_dia"] = clases.nombre_dia
+templates.env.filters["pesos"] = facturas.pesos
 templates.env.globals["porcentaje_inasistencia"] = facturas.PORCENTAJE_INASISTENCIA
 
 TABLE = "horario"
@@ -407,8 +408,9 @@ def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
     if any(c["estado_txt"] == "Ausente" for c in historial):
         desde = facturas.cobro_inasistencia_desde(sb, [usuario.empresa_id]).get(usuario.empresa_id)
         for c in historial:
-            c["cobro_reducido"] = c["estado_txt"] == "Ausente" and \
-                facturas.porcentaje_cobro(c["fecha"], "ausente", desde) != 100
+            pct = facturas.porcentaje_cobro(c["fecha"], "ausente", desde) if c["estado_txt"] == "Ausente" else 100
+            c["cobro_reducido"] = pct != 100
+            c["importe_estimado"] = facturas.importe_base(c["precio"], pct)
     return _render(
         request, "mi_historial.html", usuario, historial=historial, aviso=aviso, aviso_ok=False,
         presentes=sum(c["estado_txt"] == "Presente" for c in historial),

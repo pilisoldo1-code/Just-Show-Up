@@ -11,9 +11,9 @@
             <td class="ft-clase">{{ l.tipo }}{% if l.profesora %}<br /><span class="nota-chica">{{ l.profesora }}</span>{% endif %}
                 {% if l.inasistencia %}<br /><span class="etiqueta-inasistencia">{{ 'Inasistencia · ' ~ l.porcentaje ~ ' %' if interno else 'Inasistencia (' ~ l.porcentaje ~ ' %)' }}</span>
                 {% elif interno %}<br /><span class="nota-chica">{{ l.asistencia_txt }}</span>{% endif %}</td>
-            <td class="num ft-precio{{ '' if l.inasistencia else ' ft-sin-dato' }}" data-label="Precio">{% if l.inasistencia %}<s class="precio-tachado" aria-label="precio ${{ l.precio_original }}">${{ l.precio_original }}</s><br />${{ l.importe_base }}{% else %}${{ l.precio_original }}{% endif %}</td>
-            <td class="num ft-ajuste{{ '' if l.ajuste_tipo != 'ninguno' else ' ft-sin-dato' }}" data-label="Ajuste">{% if l.ajuste_tipo != 'ninguno' %}{{ l.ajuste_txt }}{% if l.ajuste_tipo == 'importe' %} −${{ -l.ajuste }}{% endif %}{% if interno and l.motivo %}<br /><span class="nota-chica">«{{ l.motivo }}»</span>{% endif %}{% else %}—{% endif %}</td>
-            <td class="num ft-importe">${{ l.importe_final }}</td>
+            <td class="num ft-precio{{ '' if l.inasistencia else ' ft-sin-dato' }}" data-label="Precio">{% if l.inasistencia %}<s class="precio-tachado" aria-label="precio original {{ l.precio_original|pesos }}">{{ l.precio_original|pesos }}</s><span class="precio-base">{{ l.importe_base|pesos }}</span>{% else %}{{ l.precio_original|pesos }}{% endif %}</td>
+            <td class="num ft-ajuste{{ '' if l.ajuste_tipo != 'ninguno' else ' ft-sin-dato' }}" data-label="Ajuste">{% if l.ajuste_tipo != 'ninguno' %}{{ l.ajuste_txt }}{% if l.ajuste_tipo == 'importe' %} −{{ (-l.ajuste)|pesos }}{% endif %}{% if interno and l.motivo %}<br /><span class="nota-chica">«{{ l.motivo }}»</span>{% endif %}{% else %}—{% endif %}</td>
+            <td class="num ft-importe">{{ l.importe_final|pesos }}</td>
             {% if editable %}
             <td class="num ft-acciones">
                 <button type="button" class="btn btn-chico btn-secundario" onclick="document.getElementById('ajustar-{{ l.id }}').showModal()">Ajustar</button>
@@ -21,12 +21,12 @@
                     <form action="/profesora/resumenes/{{ f.id }}/lineas/{{ l.id }}/ajustar" method="post" class="horario-form"
                           onsubmit="this.querySelector('button[type=submit]').disabled = true">
                         <h2>Ajustar clase</h2>
-                        <p class="modal-clase">{{ l.fecha_txt }} · {{ l.hora }} · {{ l.tipo }} · {% if l.inasistencia %}inasistencia: ${{ l.importe_base }} ({{ l.porcentaje }} % de ${{ l.precio_original }}){% else %}precio original ${{ l.precio_original }}{% endif %}</p>
+                        <p class="modal-clase">{{ l.fecha_txt }} · {{ l.hora }} · {{ l.tipo }} · {% if l.inasistencia %}inasistencia: {{ l.importe_base|pesos }} ({{ l.porcentaje }} % de {{ l.precio_original|pesos }}){% else %}precio original {{ l.precio_original|pesos }}{% endif %}</p>
                         <input type="hidden" name="version" value="{{ f.version }}" />
                         <label class="opcion"><input type="radio" name="tipo" value="bonificada" required /> Bonificar la clase (importe $0)</label>
                         <label class="opcion"><input type="radio" name="tipo" value="importe" /> Cobrar otro importe</label>
                         <label>
-                            Importe nuevo (menor que ${{ l.importe_base }})
+                            Importe nuevo (menor que {{ l.importe_base|pesos }})
                             <input type="number" name="importe" min="0" max="{{ l.importe_base }}" step="0.01" inputmode="decimal" />
                         </label>
                         <label>
@@ -45,7 +45,7 @@
                     <form action="/profesora/resumenes/{{ f.id }}/lineas/{{ l.id }}/quitar-ajuste" method="post" class="horario-form"
                           onsubmit="this.querySelector('button[type=submit]').disabled = true">
                         <h2>Quitar ajuste</h2>
-                        <p class="modal-clase">{{ l.fecha_txt }} · {{ l.hora }}: vuelve a ${{ l.importe_base }}</p>
+                        <p class="modal-clase">{{ l.fecha_txt }} · {{ l.hora }}: vuelve a {{ l.importe_base|pesos }}</p>
                         <input type="hidden" name="version" value="{{ f.version }}" />
                         <label>
                             Motivo
@@ -65,13 +65,13 @@
     </tbody>
     <tfoot>
         {% if f.inasistencias and interno %}
-        <tr class="fila-inasistencias"><td colspan="4">Incluye {{ f.inasistencias }} {{ 'inasistencia' if f.inasistencias == 1 else 'inasistencias' }} al {{ porcentaje_inasistencia }} % (−${{ f.descuento_inasistencias }} sobre el precio)</td><td class="num"></td>{% if editable %}<td></td>{% endif %}</tr>
+        <tr class="fila-inasistencias"><td colspan="4">Incluye {{ f.inasistencias }} {{ 'inasistencia' if f.inasistencias == 1 else 'inasistencias' }} al {{ porcentaje_inasistencia }} % (−{{ f.descuento_inasistencias|pesos }} sobre el precio)</td><td class="num"></td>{% if editable %}<td></td>{% endif %}</tr>
         {% endif %}
-        <tr><td colspan="4">Subtotal ({{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }})</td><td class="num">${{ f.total_lineas }}</td>{% if editable %}<td></td>{% endif %}</tr>
+        <tr><td colspan="4">Subtotal ({{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }})</td><td class="num">{{ f.total_lineas|pesos }}</td>{% if editable %}<td></td>{% endif %}</tr>
         {% if f.descuento_tipo %}
-        <tr><td colspan="4">Descuento general ({{ f.descuento_txt }}){% if interno and f.descuento_motivo %} <span class="nota-chica">«{{ f.descuento_motivo }}»</span>{% endif %}</td><td class="num">−${{ f.descuento_monto }}</td>{% if editable %}<td></td>{% endif %}</tr>
+        <tr><td colspan="4">Descuento general ({{ f.descuento_txt }}){% if interno and f.descuento_motivo %} <span class="nota-chica">«{{ f.descuento_motivo }}»</span>{% endif %}</td><td class="num">−{{ f.descuento_monto|pesos }}</td>{% if editable %}<td></td>{% endif %}</tr>
         {% endif %}
-        <tr class="factura-total"><td colspan="4">Total</td><td class="num">${{ f.total }}</td>{% if editable %}<td></td>{% endif %}</tr>
+        <tr class="factura-total"><td colspan="4">Total</td><td class="num">{{ f.total|pesos }}</td>{% if editable %}<td></td>{% endif %}</tr>
     </tfoot>
 </table>
 </div>

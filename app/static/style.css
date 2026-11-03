@@ -3408,6 +3408,12 @@ main.baja-pagina h1 {
     font-size: 0.85em;
 }
 
+.precio-base {
+    display: block;
+    margin-top: 6px;
+    font-weight: 600;
+}
+
 .fila-inasistencias td {
     color: var(--muted);
     font-size: 0.85rem;
@@ -3446,9 +3452,29 @@ main.baja-pagina h1 {
 }
 
 .historial-cobro {
-    margin: 4px 0 0;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-left: 3px solid rgba(250, 204, 21, 0.6);
+    border-radius: 6px;
+    background: rgba(250, 204, 21, 0.06);
+}
+
+.historial-cobro p {
+    margin: 0;
     color: #facc15;
-    font-size: 0.85rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.historial-cobro .nota-chica {
+    margin-top: 2px;
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.historial-precio-original {
+    color: var(--muted);
+    font-weight: 400;
 }
 
 .cobro-form {
@@ -3465,7 +3491,7 @@ main.baja-pagina h1 {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         column-gap: 12px;
-        padding: 10px 0;
+        padding: 8px 0;
         border-bottom: 1px solid #2a2e37;
     }
 
@@ -3494,11 +3520,22 @@ main.baja-pagina h1 {
     .factura-tabla tbody .ft-ajuste,
     .factura-tabla tbody .ft-acciones {
         grid-column: 1 / -1;
-        margin-top: 4px;
+        margin-top: 2px;
     }
 
-    .factura-tabla tbody .ft-precio br {
-        display: none;
+    .factura-tabla tbody .ft-clase .etiqueta-inasistencia {
+        margin-top: 2px;
+    }
+
+    .factura-tabla tbody .ft-precio .precio-base {
+        display: inline;
+        margin: 0 0 0 10px;
+    }
+
+    .factura-tabla tbody .ft-precio .precio-base::before {
+        content: "→ ";
+        color: var(--muted);
+        font-weight: 400;
     }
 
     .factura-tabla tbody .ft-precio::before,

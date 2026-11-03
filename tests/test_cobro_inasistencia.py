@@ -85,7 +85,7 @@ class Calculo(unittest.TestCase):
         t = facturas._historial_txt({"accion": "cambio_asistencia", "detalle": {
             "fecha": "2026-11-03", "hora": "08:00:00", "asistencia_antes": None, "asistencia_despues": "ausente",
             "porcentaje_antes": 100, "porcentaje_despues": 25, "antes": 800, "despues": 200}})
-        self.assertEqual(t, "Martes 3/11 08:00: Sin registrar → Ausente · 100 % → 25 % · $800.00 → $200.00")
+        self.assertEqual(t, "Martes 3/11 08:00: Sin registrar → Ausente · 100 % → 25 % · $800,00 → $200,00")
 
 
 class Pantallas(Base):
@@ -97,11 +97,11 @@ class Pantallas(Base):
 
     def test_detalle_de_la_administradora(self):
         t = self.ver_admin(con_lineas())
-        for texto in ("Inasistencia · 25 %", '<s class="precio-tachado"', "$800.00</s><br />$200.00",
+        for texto in ("Inasistencia · 25 %", '<s class="precio-tachado"', '$800,00</s><span class="precio-base">$200,00</span>',
                       "1 presente · 2 inasistencias (25 %) · 1 sin registrar",
-                      "Incluye 2 inasistencias al 25 % (−$1237.50 sobre el precio)",
-                      "1 clase tiene la asistencia sin registrar", "/profesora/clases?mes=2026-11&filtro=pendientes#terminadas",
-                      "Importe nuevo (menor que $200.00)", "vuelve a $212.50", "Sin registrar", "Presente"):
+                      "Incluye 2 inasistencias al 25 % (−$1.237,50 sobre el precio)",
+                      "1 sin registrar: se cobra al 100 %", "/profesora/clases?mes=2026-11&filtro=pendientes#terminadas",
+                      "Importe nuevo (menor que $200,00)", "vuelve a $212,50", "Sin registrar", "Presente"):
             self.assertIn(texto, t)
 
     def test_confirmada_sin_aviso_de_pendientes(self):
@@ -114,7 +114,7 @@ class Pantallas(Base):
         f = con_lineas(estado_factura="confirmada", numero="JSU-2026-11-0001")
         with mock.patch.object(facturas, "mis_facturas", return_value=[f]):
             t = self.client.get("/mis-facturas").text
-        for texto in ("Inasistencia (25 %)", "$800.00</s><br />$200.00",
+        for texto in ("Inasistencia (25 %)", '$800,00</s><span class="precio-base">$200,00</span>',
                       "Inasistencia (25 %): clase reservada que no se canceló a tiempo y a la que no asististe"):
             self.assertIn(texto, t)
         for interno in ("Sin registrar", "Incluye 2 inasistencias", "Completar asistencias", "Inasistencia · 25 %"):
@@ -159,7 +159,7 @@ class Pantallas(Base):
         for t in self._mes([3, 0, 2]):
             self.assertIn("<strong>5 asistencias sin registrar</strong>", t)
             self.assertIn("en 2 clases de Junio 2026", t)
-            self.assertIn("marcala ausente para cobrarle el 25 %", t)
+            self.assertIn("marcala ausente (25 %). Podés confirmar igual", t)
             self.assertIn('href="/profesora/clases?mes=2026-06&amp;filtro=pendientes#terminadas">Completar asistencias', t)
         mes, previa = self._mes([1])
         self.assertIn("1 asistencia sin registrar</strong>", previa)
@@ -179,7 +179,10 @@ class Pantallas(Base):
         with mock.patch.object(clases, "mis_inscripciones", return_value={"historial": hist}), \
                 mock.patch.object(facturas, "cobro_inasistencia_desde", return_value={None: date(2026, 11, 1)}):
             t = self.client.get("/mi-historial").text
-        self.assertEqual(t.count("Se factura el 25 %"), 1)  # solo la ausencia desde la fecha de inicio
+        t = " ".join(t.split())
+        self.assertEqual(t.count("Inasistencia: se factura el 25 % ($200,00)"), 1)  # solo la ausencia desde la fecha de inicio
+        self.assertIn("Precio de la clase: $800,00", t)
+        self.assertIn("Importe estimado: el definitivo figura en Mis facturas.", t)
 
 
 class FechaPorEmpresa(Base):

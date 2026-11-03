@@ -103,7 +103,8 @@ as $$
 $$;
 
 -- Igual que antes; además actualiza las líneas cuya asistencia (o porcentaje) cambió: sin ajuste, cobran el importe
--- base nuevo; bonificadas siguen en 0; «cobrar menos» se baja al tope si lo supera. Queda en el historial.
+-- base nuevo; bonificadas siguen en 0; «cobrar menos» se baja al tope si lo supera. Cada línea que cambia deja una
+-- entrada en el historial, aunque el importe no cambie (auditoría completa; sin cambio, no se registra nada).
 create or replace function public.sincronizar_borradores(p_mes integer, p_anio integer)
 returns jsonb
 language plpgsql
@@ -196,7 +197,7 @@ begin
                                       'porcentaje_antes', x.antes_pct, 'porcentaje_despues', x.porcentaje,
                                       'antes', x.antes_importe, 'despues', x.importe_final),
                    auth.uid()
-            from cambiadas x where x.antes_importe <> x.importe_final
+            from cambiadas x
         )
         select count(*) into v_cambiadas from cambiadas;
 

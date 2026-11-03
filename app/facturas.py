@@ -87,6 +87,16 @@ def plata(valor) -> Decimal:
     return Decimal(str(valor)).quantize(Decimal("0.01"))
 
 
+def pesos(valor) -> str:
+    """Formato uruguayo para mostrar: $1.237,50 (negativos con «−»)."""
+    try:
+        d = plata(valor)
+    except InvalidOperation:
+        return ""
+    texto = f"{abs(d):,.2f}".replace(",", " ").replace(".", ",").replace(" ", ".")
+    return ("−" if d < 0 else "") + "$" + texto
+
+
 def importe_base(precio, porcentaje: int) -> Decimal:
     """Lo que se cobra de una clase antes de ajustes (igual que public._importe_base: redondeo a centésimos)."""
     return (Decimal(str(precio)) * porcentaje / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -275,7 +285,7 @@ def _descuento_txt(f: dict) -> str:
         return ""
     if f["descuento_tipo"] == "porcentaje":
         return f"{plata(f['descuento_valor']).normalize():f}%"
-    return f"${plata(f['descuento_valor'])}"
+    return pesos(f["descuento_valor"])
 
 
 def _linea(l: dict) -> dict:
@@ -324,21 +334,21 @@ def _historial_txt(h: dict) -> str:
     d = h.get("detalle") or {}
     clase = f"{_dia_txt(d['fecha'])} {str(d.get('hora', ''))[:5]}" if d.get("fecha") else ""
     if h["accion"] in ("ajuste_linea", "ajuste_quitado"):
-        return f"{clase}: ${plata(d['antes'])} → ${plata(d['despues'])}"
+        return f"{clase}: {pesos(d['antes'])} → {pesos(d['despues'])}"
     if h["accion"] == "cambio_asistencia":
         antes, despues = ASISTENCIAS.get(d.get("asistencia_antes"), ""), ASISTENCIAS.get(d.get("asistencia_despues"), "")
         return (f"{clase}: {antes} → {despues} · {d.get('porcentaje_antes')} % → {d.get('porcentaje_despues')} % · "
-                f"${plata(d['antes'])} → ${plata(d['despues'])}")
+                f"{pesos(d['antes'])} → {pesos(d['despues'])}")
     if h["accion"] == "linea_quitada":
-        return f"{clase} ya no se cobra (tenía un ajuste: ${plata(d['importe_final'])})"
+        return f"{clase} ya no se cobra (tenía un ajuste: {pesos(d['importe_final'])})"
     if h["accion"] in ("descuento_general", "descuento_quitado"):
         def txt(x):
             if not x or not x.get("tipo"):
                 return "sin descuento"
-            return f"{plata(x['valor']).normalize():f}%" if x["tipo"] == "porcentaje" else f"${plata(x['valor'])}"
+            return f"{plata(x['valor']).normalize():f}%" if x["tipo"] == "porcentaje" else pesos(x["valor"])
         return f"{txt(d.get('antes'))} → {txt(d.get('despues'))}"
     if h["accion"] == "confirmada":
-        texto = f"Total ${plata(d.get('total', 0))}"
+        texto = f"Total {pesos(d.get('total', 0))}"
         if d.get("vence_el"):
             texto += f" · vence el {_fecha_txt(_a_fecha(d['vence_el']))}"
             regla = _REGLAS_VENCIMIENTO.get(d.get("regla_vencimiento"), "")
@@ -514,7 +524,7 @@ def confirmar_mes(sb: Client, mes: int, anio: int, firma: str):
     r = _codigo(sb, "confirmar_facturas_mes", {"p_mes": mes, "p_anio": anio, "p_firma": firma})
     if r.get("resultado") == "ok":
         n = r["confirmadas"]
-        return True, f"{n} {'factura confirmada' if n == 1 else 'facturas confirmadas'} por ${plata(r['total'])}."
+        return True, f"{n} {'factura confirmada' if n == 1 else 'facturas confirmadas'} por {pesos(r['total'])}."
     return False, mensaje(r.get("resultado", ""))
 
 

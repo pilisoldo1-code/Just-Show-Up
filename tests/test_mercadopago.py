@@ -403,7 +403,7 @@ class Rutas(Base):
         self.assertRegex(html, r'Pagar con Mercado Pago</span>\s*<img class="btn-mp-logo" src="/static/img/mercado-pago-logo.svg"')
         self.assertIn("Pagar con Mercado Pago", html)
         # orden: mes, PDF y estado arriba; total; botón de Mercado Pago; aclaración
-        orden = [html.index(x) for x in ("Octubre 2026</h2>", "Descargar PDF", "Pendiente de pago", "$1600.00",
+        orden = [html.index(x) for x in ("Octubre 2026</h2>", "Descargar PDF", "Pendiente de pago", "$1.600,00",
                                          "btn-mercado-pago", "dinero ficticio")]
         self.assertEqual(orden, sorted(orden))
         r = self.client.get("/static/img/mercado-pago-logo.svg")

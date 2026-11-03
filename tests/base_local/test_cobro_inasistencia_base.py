@@ -319,7 +319,17 @@ ok("el total siempre es la suma de las líneas menos el descuento",
 ok("con el descuento en monto mayor que las líneas, el descuento tiene tope (nunca negativo)", f["total"] >= 0)
 cambios = q(su, "select count(*) n from factura_historial where id_resumen_mensual = %s and accion = 'cambio_asistencia'",
             (F2["id"],), True)["n"]
-ok("cada cambio de importe por asistencia quedó en el historial (4; los que no cambian el importe, no)", cambios == 4, cambios)
+ok("cada cambio de asistencia de una línea quedó en el historial (6), también los que no cambian el importe",
+   cambios == 6, cambios)
+hb = q(su, "select detalle from factura_historial where id_resumen_mensual = %s and accion = 'cambio_asistencia' "
+           "and id_linea = %s", (F2["id"], L[R["850"]]["id"]), True)
+ok("…la línea bonificada (ausente → presente, sigue en $0) también tiene su entrada",
+   hb and hb["detalle"]["asistencia_antes"] == "ausente" and hb["detalle"]["asistencia_despues"] == "presente"
+   and Decimal(str(hb["detalle"]["antes"])) == 0 == Decimal(str(hb["detalle"]["despues"])), hb)
+rpc(A2, "sincronizar_borradores", p_mes=MES, p_anio=ANIO)
+ok("…y sincronizar otra vez sin cambios no agrega entradas (sin duplicados)",
+   q(su, "select count(*) n from factura_historial where id_resumen_mensual = %s and accion = 'cambio_asistencia'",
+     (F2["id"],), True)["n"] == 6)
 
 # ---------- 6) confirmar: la factura confirmada nunca cambia ----------
 r = rpc(A2, "confirmar_factura", p_id=F2["id"], p_version=v())

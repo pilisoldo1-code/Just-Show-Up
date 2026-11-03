@@ -21,8 +21,8 @@
         {% if not f.identificacion_fija %}
         <p class="nota">En borrador se muestran los datos actuales del perfil; al confirmar quedan fijos en la factura.</p>
         {% if not f.cedula_txt %}
-        <p class="aviso aviso-error">La alumna no tiene cédula registrada. Podés confirmar igual (la factura dirá "no registrada")
-            o <a class="lc-accion" href="/profesora/alumnas">cargarla en Alumnas</a> antes de confirmar.</p>
+        <p class="aviso aviso-error">Sin cédula registrada: la factura dirá «no registrada».
+            <a class="lc-accion" href="/profesora/alumnas">Cargarla en Alumnas</a></p>
         {% endif %}
         {% endif %}
 
@@ -52,8 +52,7 @@
             {{ f.sin_registrar }} sin registrar</p>
         {% endif %}
         {% if f.estado_factura == 'borrador' and f.sin_registrar %}
-        <p class="aviso-suave aviso-pendientes">{{ f.sin_registrar }} {{ 'clase tiene' if f.sin_registrar == 1 else 'clases tienen' }} la asistencia sin registrar:
-            se {{ 'cobra completa' if f.sin_registrar == 1 else 'cobran completas' }}.
+        <p class="aviso-suave aviso-pendientes">{{ f.sin_registrar }} sin registrar: se {{ 'cobra' if f.sin_registrar == 1 else 'cobran' }} al 100 %.
             <a href="/profesora/clases?mes={{ '%04d-%02d' % (f.anio, f.mes) }}&filtro=pendientes#terminadas">Completar asistencias</a></p>
         {% endif %}
 
@@ -65,7 +64,7 @@
         <section class="panel">
             <h2>Descuento general</h2>
             {% if f.descuento_tipo %}
-            <p>Aplicado: {{ f.descuento_txt }} (−${{ f.descuento_monto }}){% if f.descuento_motivo %} · «{{ f.descuento_motivo }}»{% endif %}</p>
+            <p>Aplicado: {{ f.descuento_txt }} (−{{ f.descuento_monto|pesos }}){% if f.descuento_motivo %} · «{{ f.descuento_motivo }}»{% endif %}</p>
             {% endif %}
             <form action="/profesora/resumenes/{{ f.id }}/descuento" method="post" class="horario-form form-en-linea"
                   onsubmit="this.querySelector('button[type=submit]').disabled = true">
@@ -106,8 +105,8 @@
                       onsubmit="this.querySelector('button[type=submit]').disabled = true">
                     <h2>Confirmar factura</h2>
                     <p class="modal-clase">{{ f.alumna }} · {{ f.mes_txt }}</p>
-                    <p>{{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · total <strong>${{ f.total }}</strong></p>
-                    {% if f.sin_registrar %}<p class="aviso-suave">{{ f.sin_registrar }} sin registrar: se {{ 'cobra completa' if f.sin_registrar == 1 else 'cobran completas' }}.
+                    <p>{{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · total <strong>{{ f.total|pesos }}</strong></p>
+                    {% if f.sin_registrar %}<p class="aviso-suave">{{ f.sin_registrar }} sin registrar: se {{ 'cobra' if f.sin_registrar == 1 else 'cobran' }} al 100 %.
                         <a href="/profesora/clases?mes={{ '%04d-%02d' % (f.anio, f.mes) }}&filtro=pendientes#terminadas">Completar antes</a></p>{% endif %}
                     <input type="hidden" name="version" value="{{ f.version }}" />
                     <div class="modal-botones">
@@ -130,7 +129,7 @@
             <div class="pago-resumen">
                 <div class="pago-importe">
                     <span class="pago-etiqueta">Importe pagado</span>
-                    <strong>${{ f.pago.monto }}</strong>
+                    <strong>{{ f.pago.monto|pesos }}</strong>
                 </div>
                 <dl class="pago-datos">
                     <div><dt>Medio</dt><dd>{{ f.pago.medio }}</dd></div>
@@ -147,7 +146,7 @@
                 <form action="/profesora/resumenes/{{ f.id }}/pagos/{{ f.pago.id }}/anular" method="post" class="horario-form"
                       onsubmit="this.querySelector('button[type=submit]').disabled = true">
                     <h2>Anular pago #{{ f.pago.id }}</h2>
-                    <p class="modal-clase">${{ f.pago.monto }} · {{ f.pago.medio }} · {{ f.pago.fecha }}</p>
+                    <p class="modal-clase">{{ f.pago.monto|pesos }} · {{ f.pago.medio }} · {{ f.pago.fecha }}</p>
                     <p>El pago no se borra: queda en el historial como anulado, con el motivo, la fecha y quién lo anuló.
                         La factura vuelve a <strong>pendiente de pago</strong>.</p>
                     <label>
@@ -168,7 +167,7 @@
                 <input type="hidden" name="monto" value="{{ f.total }}" />
                 <div class="pago-importe">
                     <span class="pago-etiqueta">Importe a cobrar</span>
-                    <strong>${{ f.total }}</strong>
+                    <strong>{{ f.total|pesos }}</strong>
                     <span class="nota-chica">El total de la factura (no hay pagos parciales)</span>
                     {% if f.vence_txt %}<span class="nota-chica vence-linea{% if f.vencida %} vence-vencida{% endif %}">{% if f.vencida %}Venció el {{ f.vence_txt }}: se puede cobrar igual{% else %}Vence el {{ f.vence_txt }}{% endif %}</span>{% endif %}
                 </div>
@@ -201,7 +200,7 @@
                     {% for p in f.pagos_anulados %}
                     <li>
                         <div class="fila-compacta">
-                            <span class="fila-principal">Pago #{{ p.id }} · ${{ p.monto }} · {{ p.medio }}</span>
+                            <span class="fila-principal">Pago #{{ p.id }} · {{ p.monto|pesos }} · {{ p.medio }}</span>
                             <span class="badge badge-rojo">Anulado</span>
                         </div>
                         <p class="fila-detalle">Pagado el {{ p.fecha }}{% if p.operacion %} · operación {{ p.operacion }}{% endif %} ·
@@ -228,7 +227,7 @@
                     {% set estilo = estilo_intento.get(i.estado, ('badge-off', 'Sin completar')) %}
                     <li>
                         <div class="fila-compacta">
-                            <span class="fila-principal">{{ i.en }} · ${{ i.monto }}</span>
+                            <span class="fila-principal">{{ i.en }} · {{ i.monto|pesos }}</span>
                             <span class="badge {{ estilo[0] }}">{{ estilo[1] }}</span>
                         </div>
                         {% if i.operacion or (i.a_revisar and i.detalle) %}
@@ -270,7 +269,7 @@
                 <form action="/profesora/resumenes/{{ f.id }}/anular" method="post" class="horario-form"
                       onsubmit="this.querySelector('button[type=submit]').disabled = true">
                     <h2>Anular la factura {{ f.numero }}</h2>
-                    <p class="modal-clase">{{ f.alumna }} · {{ f.mes_txt }} · ${{ f.total }}</p>
+                    <p class="modal-clase">{{ f.alumna }} · {{ f.mes_txt }} · {{ f.total|pesos }}</p>
                     <p>La factura queda anulada (no se borra) y se crea un borrador que la reemplaza.</p>
                     <fieldset class="tipo-reemision">
                         <legend>¿Por qué se reemite?</legend>

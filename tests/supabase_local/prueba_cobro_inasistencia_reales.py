@@ -158,9 +158,9 @@ F = sql("select * from resumen_mensual where id_alumna = %s and mes = %s and ani
 ok("total de Ana: 200 + 800 + 212,50 + 800 = 2.012,50", F["total"] == 2012.5, F["total"])
 d = texto(A.get(f"/profesora/resumenes/{F['id']}").text)
 ok("detalle: «Inasistencia · 25 %», precio tachado y el resumen de asistencia",
-   d.count("Inasistencia · 25 %") == 2 and "$800.00</s><br />$200.00" in d and "$850.00</s><br />$212.50" in d
+   d.count("Inasistencia · 25 %") == 2 and '$800,00</s><span class="precio-base">$200,00</span>' in d and '$850,00</s><span class="precio-base">$212,50</span>' in d
    and "1 presente · 2 inasistencias (25 %) · 1 sin registrar" in d)
-ok("detalle: aviso de la clase sin registrar con enlace", "1 clase tiene la asistencia sin registrar" in d)
+ok("detalle: aviso de la clase sin registrar con enlace", "1 sin registrar: se cobra al 100 %" in d)
 pv = texto(A.get(f"/profesora/resumenes/confirmar-mes?mes={MES}&anio={ANIO}").text)
 ok("vista previa del mes: el mismo aviso", "<strong>1 asistencia sin registrar</strong>" in pv and "Confirmar 2 facturas" in pv)
 
@@ -197,15 +197,17 @@ ok("con la factura confirmada no se corrige su asistencia", "ok=0" in r.headers[
 # lo que ve la alumna (el mes ya está publicado)
 mf = texto(AL.get("/mis-facturas").text)
 ok("Mis facturas: «Inasistencia (25 %)», precio tachado y la nota al pie",
-   mf.count("Inasistencia (25 %)") >= 3 and "$800.00</s><br />$200.00" in mf
+   mf.count("Inasistencia (25 %)") >= 3 and '$800,00</s><span class="precio-base">$200,00</span>' in mf
    and "clase reservada que no se canceló a tiempo y a la que no asististe" in mf)
 ok("…sin motivos ni datos internos", all(x not in mf for x in ("Promo", "Planilla", "Sin registrar", "Inasistencia · 25 %")))
 pdf = texto_pdf(AL.get(f"/mis-facturas/{F['id']}/pdf").content)
 ok("PDF: marca, explicación y fila de inasistencias", "Pilates mat *" in pdf and "Inasist. 25 %" in pdf
    and "Inasistencias \\(3\\) al 25 %" in pdf and "* Inasistencia \\(25 %\\)" in pdf)
-ok("Mi historial: «Se factura el 25 %» en sus 3 ausencias", texto(AL.get("/mi-historial").text).count("Se factura el 25 %") == 3)
+ok("Mi historial: precio de la clase y el 25 % estimado en sus 3 ausencias",
+   texto(AL.get("/mi-historial").text).count("Inasistencia: se factura el 25 %") == 3
+   and "Importe estimado: el definitivo figura en Mis facturas." in AL.get("/mi-historial").text)
 ok("Eva (presente) no ve nada de inasistencias", "Inasistencia" not in EV.get("/mis-facturas").text
-   and "Se factura" not in EV.get("/mi-historial").text)
+   and "se factura el 25" not in EV.get("/mi-historial").text)
 api_eva = auth.cliente_con_token(EV.cookies.get("sb_acceso"))
 ok("Eva no lee las líneas de Ana por la API", api_eva.table("resumen_mensual_detalle").select("id")
    .eq("id_resumen_mensual", F["id"]).execute().data == [])

@@ -3,8 +3,7 @@
 <div class="aviso-pendientes-factura" role="status">
     <p><strong>{{ pendientes.asistencias }} {{ 'asistencia sin registrar' if pendientes.asistencias == 1 else 'asistencias sin registrar' }}</strong>
         en {{ pendientes.clases }} {{ 'clase' if pendientes.clases == 1 else 'clases' }} de {{ mes_txt }}.</p>
-    <p>Se cobran completas. Si alguna alumna faltó, marcala ausente para cobrarle el {{ porcentaje_inasistencia }} %.
-        Podés confirmar igual; después ya no se puede corregir sin anular la factura.</p>
+    <p>Se cobran al 100 %. Si alguna alumna faltó, marcala ausente ({{ porcentaje_inasistencia }} %). Podés confirmar igual; después, corregir exige anular la factura.</p>
     <a class="btn btn-chico" href="{{ pendientes.enlace }}">Completar asistencias</a>
 </div>
 {% endif %}
