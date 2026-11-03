@@ -132,7 +132,34 @@ ok("Just Show Up: factura confirmada (JSU-2026-10-…) y pagada", FJ["numero"].s
    and sql("select count(*) n from pago where id_resumen_mensual = %s and estado = 'vigente'", (FJ["id"],), True)["n"] == 1)
 prov = texto(AJ.get("/profesora/resumenes").text)
 ok("Just Show Up: noviembre provisorio con la inasistencia al 25 % (rige desde el 1/11)", "Inasistencia · 25 %" in prov)
+# Just Show Up también con historial de asistencia, una desactivación y sesiones (las tablas que borra el script)
+r = AJ.post(f"/profesora/clases/{C_J_NOV}/corregir", data={f"estado_{R_J['nov_aus']}": "presente", "motivo": "Ensayo JSU"},
+            follow_redirects=False)
+BAJA_J = cuenta("baja.jsu@prueba.invalid", "Bea", "profesora")
+prev = AJ.get(f"/profesora/profesoras/{BAJA_J}/baja").text
+firma = re.search(r'name="firma" value="([^"]*)"', prev)
+AJ.post(f"/profesora/profesoras/{BAJA_J}/baja", data={"motivo": "Ensayo JSU", "firma": firma and firma.group(1)})
+JSU_PROPIAS = lambda: {t: sql(f"select count(*) n from public.{t} where id_empresa = %s", (JSU,), True)["n"]
+                       for t in ("asistencia_historial", "baja_docente", "sesion_empresa")}
+ok("Just Show Up tiene filas propias en historial de asistencia, desactivaciones y sesiones",
+   all(JSU_PROPIAS().values()), JSU_PROPIAS())
 FOTO_JSU = huella_empresa(JSU)
+
+# «respaldo» local (mismo formato que datos.json) para probar scripts/verificar_despliegue.py con varias empresas
+import tempfile  # noqa: E402
+RESPALDO_LOCAL = tempfile.mkdtemp(prefix="jsu-respaldo-local-")
+_adm = auth.cliente_admin()
+json.dump({t: _adm.table(t).select("*").execute().data for t in
+           ["empresa", "membresia", "profiles", "tipo_clase", "horario", "clase", "reserva", "listadeespera", "asistencia",
+            "bloqueo", "resumen_mensual", "resumen_mensual_detalle", "factura_historial", "pago", "pago_anulacion", "mp_intento",
+            "mp_evento", "mp_configuracion"]}, open(os.path.join(RESPALDO_LOCAL, "datos.json"), "w"), default=str)
+
+
+def verificar():
+    """scripts/verificar_despliegue.py contra la base LOCAL (las variables ya apuntan a localhost)."""
+    r = subprocess.run([sys.executable, os.path.join(RAIZ, "scripts", "verificar_despliegue.py"), RESPALDO_LOCAL],
+                       capture_output=True, text=True, env=os.environ.copy())
+    return r.returncode == 0 and "TODO OK" in r.stdout, [l for l in r.stdout.splitlines() if l.startswith("FALLA")]
 
 # ---------- 2) superadministradora con el script real ----------
 CLAVE_SA = "Super-" + uuid.uuid4().hex[:10]
@@ -296,6 +323,19 @@ ok("Just Show Up sigue idéntico después de operar Pilates (clases, reservas, a
    huella_empresa(JSU) == FOTO_JSU, [t for t, v in huella_empresa(JSU).items() if v != FOTO_JSU[t]])
 
 # ---------- 7) borrar la Empresa 2 con el script real: sin efectos en JSU y sin huérfanos ----------
+bien, detalle = verificar()
+ok("verificar_despliegue.py con dos empresas: TODO OK (Just Show Up intacta, Pilates informada aparte)", bien, detalle)
+sql("update clase set precio = precio + 1 where id = %s", (C_J_OCT,))
+bien, detalle = verificar()
+ok("…y detecta un cambio en una fila de Just Show Up", not bien and any(l.startswith("FALLA clase") for l in detalle), detalle)
+sql("update clase set precio = precio - 1 where id = %s", (C_J_OCT,))
+sql("insert into membresia (id_usuario, id_empresa, es_alumna) values (%s, %s, true)", (ALU_J, PIL))
+ok("una alumna de Just Show Up también se suma a Pilates (cuenta compartida)",
+   sql("select count(*) n from membresia where id_usuario = %s", (ALU_J,), True)["n"] == 2)
+propias_antes = JSU_PROPIAS()
+pil_propias = {t: sql(f"select count(*) n from public.{t} where id_empresa = %s", (PIL,), True)["n"]
+               for t in ("asistencia_historial", "baja_docente", "sesion_empresa")}
+ok("Pilates también tiene filas en esas tres tablas antes de borrar", all(pil_propias.values()), pil_propias)
 REAL = auth.crear_cuenta("persona.real@ejemplo.com", "Persona", "Real", rol="alumna", contrasena=CLAVE, id_empresa=PIL,
                          rol_empresa="alumna")[0]
 foto_pil = huella_empresa(PIL)
@@ -326,6 +366,14 @@ ok("…sin perfiles sin empresa ni sesiones colgadas", sql(
    "select count(*) n from profiles p where not p.es_superadmin and not exists (select 1 from membresia m where m.id_usuario = p.id)",
    uno=True)["n"] == 0 and sql("select count(*) n from profiles where empresa_activa is not null and empresa_activa not in "
                                "(select id from empresa)", uno=True)["n"] == 0)
+ok("…historial de asistencia, desactivaciones y sesiones de Just Show Up intactos", JSU_PROPIAS() == propias_antes,
+   (JSU_PROPIAS(), propias_antes))
+ok("…la alumna de JSU que también estaba en Pilates sigue, con su membresía de JSU",
+   sql("select count(*) n from profiles where id = %s", (ALU_J,), True)["n"] == 1
+   and sql("select id_empresa from membresia where id_usuario = %s", (ALU_J,)) == [{"id_empresa": JSU}]
+   and entrar("Just Show Up", "alu.jsu@prueba.invalid", CLAVE) is not None)
+bien, detalle = verificar()
+ok("verificar_despliegue.py después de borrar la Empresa 2: TODO OK", bien, detalle)
 ok("…la alumna compartida sigue en Just Show Up y entra", entrar("Just Show Up", "alumna@prueba.invalid", CLAVE) is not None
    and sql("select count(*) n from membresia where id_usuario = %s", (COMPARTIDA,), True)["n"] == 1)
 ok("…Just Show Up idéntico a antes de crear la Empresa 2", huella_empresa(JSU) == FOTO_JSU,
