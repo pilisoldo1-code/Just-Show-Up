@@ -883,7 +883,13 @@ Para cada módulo, en este orden:
   Noelia: lista de espera) y `alumna@prueba.invalid` compartida con Just Show Up. Facturas de octubre PIL-2026-10-0001…
   0005 (la de Rocío pagada). Mercado Pago apagado en PIL. Contraseñas de Lucía, Carolina, Rocío e Inés en
   `.env.cuentas-prueba`. **No usar `borrar` + `crear` sin autorización** (borra lo hecho en Pilates y renumera sus
-  facturas).
+  facturas). Para mantener la demostración hasta el 17/11 se usa **`empresa_demo.py actualizar --produccion`** (sin
+  `--aplicar` solo muestra el plan): solo agrega asistencias pendientes de clases dictadas (presente; Inés ausente si no
+  tiene una este mes; la última de Sabrina queda sin registrar), reservas del patrón en las próximas clases y la clase
+  completa con lista de espera; conserva los ensayos y no toca facturas confirmadas, pagos ni Just Show Up. Las
+  asistencias que completa quedan en el historial a nombre de la cuenta técnica `escenario.sistema@demo.invalid`
+  («Carga automática (script de demostración)», sin empresa ni rol), nunca de Lucía. Prueba:
+  `tests/base_local/test_empresa_actualizar_base.py "<respaldo>"` (30).
 - **`scripts/empresa_demo.py`**: por defecto se niega a correr fuera de localhost; contra producción exige `--produccion`
   (y autorización). `crear` no hace nada si PIL ya existe; `borrar` elimina solo lo de PIL (incluidos historial,
   desactivaciones y sesiones) y las cuentas que pertenecen solo a PIL y son `.invalid` (si encuentra otra, no borra
