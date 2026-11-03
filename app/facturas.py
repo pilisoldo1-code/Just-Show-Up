@@ -7,7 +7,7 @@ anular_factura), que validan el rol, las fechas, la versión y los importes. Las
 usan consultas simples (sin "embeds") con la sesión de cada usuaria: RLS decide qué ve.
 """
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from supabase import Client
 
@@ -32,6 +32,10 @@ VENCIDA_TXT = "Vencida — deuda pendiente"
 TIPOS_REEMISION = {"correccion": "Corrección de un error de facturación", "administrativa": "Reemisión administrativa"}
 MAX_PLAZOS_CORRECCION = 2
 MOTIVO_MIN, MOTIVO_MAX = 3, 300
+# Inasistencia sin cancelación: se cobra este porcentaje desde la fecha de inicio de cada empresa
+# (empresa.cobro_inasistencia_desde). Presente y sin registrar se cobran completos.
+PORCENTAJE_INASISTENCIA = 25
+ASISTENCIAS = {"presente": "Presente", "ausente": "Ausente", None: "Sin registrar"}
 
 
 # ---------- fechas (iguales a las funciones de la base) ----------
@@ -83,6 +87,18 @@ def plata(valor) -> Decimal:
     return Decimal(str(valor)).quantize(Decimal("0.01"))
 
 
+def importe_base(precio, porcentaje: int) -> Decimal:
+    """Lo que se cobra de una clase antes de ajustes (igual que public._importe_base: redondeo a centésimos)."""
+    return (Decimal(str(precio)) * porcentaje / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def porcentaje_cobro(fecha_clase, asistencia: str | None, desde) -> int:
+    """Misma regla que _cobrables: ausente desde la fecha de inicio de la empresa → 25 %; si no, 100 %."""
+    if asistencia == "ausente" and desde and _a_fecha(fecha_clase) >= _a_fecha(desde):
+        return PORCENTAJE_INASISTENCIA
+    return 100
+
+
 def _fecha_txt(iso: str | None) -> str:
     if not iso:
         return ""
@@ -125,7 +141,7 @@ def _codigo(sb: Client, funcion: str, params: dict) -> dict:
 def _reservas_del_mes(sb: Client, mes: int, anio: int, alumna_id: str | None) -> list[dict]:
     inicio, fin = date(anio, mes, 1), primer_dia_siguiente(mes, anio)
     clases = {c["id"]: c for c in (
-        sb.table("clase").select("id, fecha, hora_inicio, precio, estado, id_tipo_clase")
+        sb.table("clase").select("id, fecha, hora_inicio, precio, estado, id_tipo_clase, id_empresa")
         .gte("fecha", inicio.isoformat()).lt("fecha", fin.isoformat()).execute().data)}
     if not clases:
         return []
@@ -136,14 +152,31 @@ def _reservas_del_mes(sb: Client, mes: int, anio: int, alumna_id: str | None) ->
     reservas = consulta.execute().data
     tipos = {t["id"]: t["nombre"] for t in sb.table("tipo_clase").select("id, nombre").execute().data}
     nombres = _nombres(sb, (r["id_alumna"] for r in reservas))
+    asistencias = {a["id_reserva"]: a["estado"] for a in (
+        sb.table("asistencia").select("id_reserva, estado").in_("id_reserva", [r["id"] for r in reservas]).execute().data
+        if reservas else [])}
+    desde = cobro_inasistencia_desde(sb, {c.get("id_empresa") for c in clases.values()})
     filas = []
     for r in reservas:
         c = clases[r["id_clase"]]
         filas.append({
             "id_alumna": r["id_alumna"], "estado": r["estado"], "alumna": nombres.get(r["id_alumna"], ""),
             "clase": {**c, "tipo_nombre": tipos.get(c.get("id_tipo_clase"))},
+            "asistencia": asistencias.get(r["id"]), "cobro_desde": desde.get(c.get("id_empresa")),
         })
     return filas
+
+
+def cobro_inasistencia_desde(sb: Client, ids_empresa) -> dict:
+    """id de empresa -> fecha desde la que se cobra el 25 % por inasistencia (o None)."""
+    ids = sorted(i for i in ids_empresa if i)
+    if not ids:
+        return {}
+    try:
+        filas = sb.table("empresa").select("id, cobro_inasistencia_desde").in_("id", ids).execute().data
+    except Exception:  # base sin la migración del cobro por inasistencia
+        return {}
+    return {e["id"]: _a_fecha(e.get("cobro_inasistencia_desde")) for e in filas}
 
 
 def armar_provisorio(filas: list[dict], ahora: datetime) -> list[dict]:
@@ -158,14 +191,19 @@ def armar_provisorio(filas: list[dict], ahora: datetime) -> list[dict]:
         dictada = inicio <= ahora
         a = por_alumna.setdefault(r["id_alumna"], {
             "id_alumna": r["id_alumna"], "alumna": r.get("alumna", ""),
-            "dictadas": 0, "total_dictadas": Decimal("0"), "proximas": 0, "total_proximas": Decimal("0"), "detalle": [],
+            "dictadas": 0, "total_dictadas": Decimal("0"), "proximas": 0, "total_proximas": Decimal("0"),
+            "inasistencias": 0, "detalle": [],
         })
+        pct = porcentaje_cobro(c["fecha"], r.get("asistencia"), r.get("cobro_desde")) if dictada else 100
+        importe = importe_base(c["precio"], pct)
         clave = "dictadas" if dictada else "proximas"
         a[clave] += 1
-        a["total_" + clave] += plata(c["precio"])
+        a["total_" + clave] += importe
+        a["inasistencias"] += pct != 100
         a["detalle"].append({
             "orden": (c["fecha"], c["hora_inicio"]), "fecha_txt": _dia_txt(c["fecha"]), "hora": c["hora_inicio"][:5],
-            "tipo": c.get("tipo_nombre") or "Clase", "precio": plata(c["precio"]), "dictada": dictada,
+            "tipo": c.get("tipo_nombre") or "Clase", "precio": plata(c["precio"]), "importe": importe,
+            "inasistencia": pct != 100, "dictada": dictada,
         })
     for a in por_alumna.values():
         a["detalle"].sort(key=lambda d: d["orden"])
@@ -242,13 +280,27 @@ def _descuento_txt(f: dict) -> str:
 
 def _linea(l: dict) -> dict:
     precio, importe = plata(l["precio_original"]), plata(l["importe_final"])
+    pct = int(l.get("porcentaje") or 100)
+    base = importe_base(precio, pct)
     return {
         "id": l["id"], "orden": (l["fecha"], l["hora_inicio"]),
         "fecha_txt": _dia_txt(l["fecha"]), "fecha_corta": _fecha_txt(l["fecha"]), "hora": l["hora_inicio"][:5],
         "tipo": l.get("tipo_nombre") or "Clase", "profesora": l.get("profesora_nombre") or "", "precio_original": precio,
-        "ajuste_tipo": l["ajuste_tipo"], "importe_final": importe, "ajuste": importe - precio,
+        "porcentaje": pct, "inasistencia": pct != 100, "importe_base": base,
+        "asistencia_txt": ASISTENCIAS.get(l.get("asistencia"), "Sin registrar"),
+        "ajuste_tipo": l["ajuste_tipo"], "importe_final": importe, "ajuste": importe - base,
         "ajuste_txt": {"ninguno": "", "bonificada": "Bonificada", "importe": "Descuento"}[l["ajuste_tipo"]],
     }
+
+
+def _con_lineas(dato: dict, lineas: list[dict]) -> dict:
+    dato["lineas"] = lineas
+    inas = [l for l in lineas if l["inasistencia"]]
+    dato["inasistencias"] = len(inas)
+    dato["descuento_inasistencias"] = sum((l["precio_original"] - l["importe_base"] for l in inas), Decimal("0.00"))
+    dato["presentes"] = sum(l["asistencia_txt"] == "Presente" for l in lineas)
+    dato["sin_registrar"] = sum(l["asistencia_txt"] == "Sin registrar" for l in lineas)
+    return dato
 
 
 def facturas_del_mes(sb: Client, mes: int, anio: int) -> list[dict]:
@@ -264,6 +316,7 @@ _ACCIONES = {
     "ajuste_linea": "Ajuste de clase", "ajuste_quitado": "Ajuste quitado", "linea_quitada": "Clase quitada",
     "descuento_general": "Descuento general", "descuento_quitado": "Descuento general quitado",
     "confirmada": "Factura confirmada", "anulada": "Factura anulada", "reemision": "Reemisión",
+    "cambio_asistencia": "Cambio de asistencia",
 }
 
 
@@ -272,6 +325,10 @@ def _historial_txt(h: dict) -> str:
     clase = f"{_dia_txt(d['fecha'])} {str(d.get('hora', ''))[:5]}" if d.get("fecha") else ""
     if h["accion"] in ("ajuste_linea", "ajuste_quitado"):
         return f"{clase}: ${plata(d['antes'])} → ${plata(d['despues'])}"
+    if h["accion"] == "cambio_asistencia":
+        antes, despues = ASISTENCIAS.get(d.get("asistencia_antes"), ""), ASISTENCIAS.get(d.get("asistencia_despues"), "")
+        return (f"{clase}: {antes} → {despues} · {d.get('porcentaje_antes')} % → {d.get('porcentaje_despues')} % · "
+                f"${plata(d['antes'])} → ${plata(d['despues'])}")
     if h["accion"] == "linea_quitada":
         return f"{clase} ya no se cobra (tenía un ajuste: ${plata(d['importe_final'])})"
     if h["accion"] in ("descuento_general", "descuento_quitado"):
@@ -333,7 +390,7 @@ def factura(sb: Client, factura_id: int) -> dict | None:
             motivos[h["id_linea"]] = h["motivo"]
         elif h["accion"] == "ajuste_quitado":
             motivos.pop(h["id_linea"], None)
-    salida["lineas"] = sorted(({**_linea(l), "motivo": motivos.get(l["id"], "")} for l in lineas), key=lambda l: l["orden"])
+    _con_lineas(salida, sorted(({**_linea(l), "motivo": motivos.get(l["id"], "")} for l in lineas), key=lambda l: l["orden"]))
     salida["descuento_motivo"] = next((h["motivo"] for h in historial if h["accion"] == "descuento_general"), "") \
         if f["descuento_tipo"] else ""
     salida["pago"], salida["pagos_anulados"] = None, []
@@ -499,8 +556,8 @@ def mis_facturas(sb: Client, alumna_id: str) -> list[dict]:
     salida = []
     for f in filas:
         dato = _factura(f, {})
-        dato["lineas"] = sorted((_linea(l) for l in lineas if l["id_resumen_mensual"] == f["id"]),
-                                key=lambda l: l["orden"])
+        _con_lineas(dato, sorted((_linea(l) for l in lineas if l["id_resumen_mensual"] == f["id"]),
+                                 key=lambda l: l["orden"]))
         pago = next((p for p in pagos if p["id_resumen_mensual"] == f["id"]), None)
         dato["pago"] = {"monto": plata(pago["monto"]), "medio": NOMBRES_MEDIO.get(pago["medio_pago"], ""),
                         "fecha": _fecha_txt(pago["fecha"])} if pago else None

@@ -31,6 +31,7 @@
                     <span class="historial-fecha">{{ c.dia }} {{ c.fecha_txt }}</span>
                     <span class="badge {{ c.badge }}">{{ c.estado_txt }}</span>
                 </div>
+                {% if c.cobro_reducido %}<p class="historial-cobro">Se factura el {{ porcentaje_inasistencia }} %</p>{% endif %}
                 <div class="historial-detalle">
                     <span>{{ c.hora }} · {{ c.duracion }} min</span>
                     {% if not cancelada %}<span class="historial-precio">${{ '%g'|format(c.precio) }}</span>{% endif %}

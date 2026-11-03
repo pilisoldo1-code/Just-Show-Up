@@ -39,7 +39,7 @@
             <li class="resumen-item">
                 <div class="lc-fecha"><strong>{{ a.alumna }}</strong></div>
                 <div class="lc-detalle">
-                    Hasta hoy: {{ a.dictadas }} {{ 'clase' if a.dictadas == 1 else 'clases' }} · ${{ a.total_dictadas }}
+                    Hasta hoy: {{ a.dictadas }} {{ 'clase' if a.dictadas == 1 else 'clases' }} · ${{ a.total_dictadas }}{% if a.inasistencias %} · {{ a.inasistencias }} {{ 'inasistencia' if a.inasistencias == 1 else 'inasistencias' }} al {{ porcentaje_inasistencia }} %{% endif %}
                     {% if a.proximas %}<br />Reservadas para lo que queda del mes: {{ a.proximas }} · ${{ a.total_proximas }}{% endif %}
                 </div>
                 <details class="resumen-detalle">
@@ -50,8 +50,8 @@
                             {% for d in a.detalle %}
                             <tr{% if not d.dictada %} class="detalle-proxima"{% endif %}>
                                 <td>{{ d.fecha_txt }} · {{ d.hora }}</td>
-                                <td>{{ d.tipo }}{% if not d.dictada %} (todavía no se dictó){% endif %}</td>
-                                <td class="num">${{ d.precio }}</td>
+                                <td>{{ d.tipo }}{% if not d.dictada %} (todavía no se dictó){% endif %}{% if d.inasistencia %}<br /><span class="etiqueta-inasistencia">Inasistencia · {{ porcentaje_inasistencia }} %</span>{% endif %}</td>
+                                <td class="num">{% if d.inasistencia %}<s class="precio-tachado">${{ d.precio }}</s><br />${{ d.importe }}{% else %}${{ d.precio }}{% endif %}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -72,6 +72,7 @@
             {% endif %}
             <p class="nota">Las alumnas ven sus facturas confirmadas desde el {{ publica_txt }}{% if publicada %} (ya publicadas){% endif %}.
                 Los borradores nunca se les muestran.</p>
+            {% include "_aviso_pendientes_factura.html" %}
             {% if previa and previa.cantidad %}
             {% if previa.periodo_finalizado %}
             <a class="btn" href="/profesora/resumenes/confirmar-mes?mes={{ mes }}&anio={{ anio }}">Confirmar todas las facturas del mes ({{ previa.cantidad }})</a>

@@ -3389,3 +3389,143 @@ main.baja-pagina h1 {
         overflow-wrap: anywhere;
     }
 }
+
+/* ---------- cobro por inasistencia ---------- */
+.etiqueta-inasistencia {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: rgba(250, 204, 21, 0.15);
+    color: #facc15;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.precio-tachado {
+    color: var(--muted);
+    font-size: 0.85em;
+}
+
+.fila-inasistencias td {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.nota-inasistencia {
+    margin-top: 8px;
+}
+
+.factura-asistencia {
+    margin: 12px 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.aviso-pendientes-factura {
+    margin: 12px 0;
+    padding: 14px 16px;
+    border: 1px solid rgba(250, 204, 21, 0.45);
+    border-left-width: 4px;
+    border-radius: 8px;
+    background: rgba(250, 204, 21, 0.08);
+    color: var(--text);
+}
+
+.aviso-pendientes-factura p {
+    margin: 0 0 6px;
+}
+
+.aviso-pendientes-factura strong {
+    color: #facc15;
+}
+
+.aviso-pendientes-factura .btn {
+    margin-top: 4px;
+}
+
+.historial-cobro {
+    margin: 4px 0 0;
+    color: #facc15;
+    font-size: 0.85rem;
+}
+
+.cobro-form {
+    margin: 8px 0;
+}
+
+/* factura en celular: cada clase es una tarjeta (fecha e importe arriba; clase, precio y ajuste debajo) */
+@media (max-width: 600px) {
+    .factura-tabla thead {
+        display: none;
+    }
+
+    .factura-tabla tbody tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        column-gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid #2a2e37;
+    }
+
+    .factura-tabla tbody td {
+        display: block;
+        padding: 0;
+        border: 0;
+        text-align: left;
+        font-size: 0.9rem;
+    }
+
+    .factura-tabla tbody .ft-fecha {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .factura-tabla tbody .ft-importe {
+        grid-column: 2;
+        grid-row: 1;
+        text-align: right;
+        font-weight: 700;
+    }
+
+    .factura-tabla tbody .ft-clase,
+    .factura-tabla tbody .ft-precio,
+    .factura-tabla tbody .ft-ajuste,
+    .factura-tabla tbody .ft-acciones {
+        grid-column: 1 / -1;
+        margin-top: 4px;
+    }
+
+    .factura-tabla tbody .ft-precio br {
+        display: none;
+    }
+
+    .factura-tabla tbody .ft-precio::before,
+    .factura-tabla tbody .ft-ajuste::before {
+        content: attr(data-label) ": ";
+        color: var(--muted);
+    }
+
+    .factura-tabla tbody .ft-sin-dato {
+        display: none;
+    }
+
+    .factura-tabla tbody td.ft-acciones .btn {
+        margin: 4px 6px 0 0;
+    }
+
+    .factura-tabla tfoot tr {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .factura-tabla tfoot td {
+        padding: 6px 0;
+    }
+
+    .factura-tabla tfoot td:empty {
+        display: none;
+    }
+}

@@ -46,6 +46,17 @@
         {% endif %}
         {% endif %}
 
+        {% if f.lineas %}
+        <p class="factura-asistencia">{{ f.presentes }} {{ 'presente' if f.presentes == 1 else 'presentes' }} ·
+            {{ f.inasistencias }} {{ 'inasistencia' if f.inasistencias == 1 else 'inasistencias' }} ({{ porcentaje_inasistencia }} %) ·
+            {{ f.sin_registrar }} sin registrar</p>
+        {% endif %}
+        {% if f.estado_factura == 'borrador' and f.sin_registrar %}
+        <p class="aviso-suave aviso-pendientes">{{ f.sin_registrar }} {{ 'clase tiene' if f.sin_registrar == 1 else 'clases tienen' }} la asistencia sin registrar:
+            se {{ 'cobra completa' if f.sin_registrar == 1 else 'cobran completas' }}.
+            <a href="/profesora/clases?mes={{ '%04d-%02d' % (f.anio, f.mes) }}&filtro=pendientes#terminadas">Completar asistencias</a></p>
+        {% endif %}
+
         {% set editable = f.estado_factura == 'borrador' %}
         {% set interno = true %}
         {% include "_factura_lineas.html" %}
@@ -96,6 +107,8 @@
                     <h2>Confirmar factura</h2>
                     <p class="modal-clase">{{ f.alumna }} · {{ f.mes_txt }}</p>
                     <p>{{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · total <strong>${{ f.total }}</strong></p>
+                    {% if f.sin_registrar %}<p class="aviso-suave">{{ f.sin_registrar }} sin registrar: se {{ 'cobra completa' if f.sin_registrar == 1 else 'cobran completas' }}.
+                        <a href="/profesora/clases?mes={{ '%04d-%02d' % (f.anio, f.mes) }}&filtro=pendientes#terminadas">Completar antes</a></p>{% endif %}
                     <input type="hidden" name="version" value="{{ f.version }}" />
                     <div class="modal-botones">
                         <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
