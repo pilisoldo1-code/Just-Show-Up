@@ -757,8 +757,9 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
-- **Cobro del 25 % por inasistencia (rama `cobro-inasistencia`, migración `20261105000000_cobro_inasistencia.sql`, SIN
-  aplicar en producción)**: ausente explícita → 25 % de `clase.precio` (redondeo a centésimos, `_importe_base`); presente y
+- **Cobro del 25 % por inasistencia (rama `cobro-inasistencia`, PR #35; migración `20261105000000_cobro_inasistencia.sql`
+  APLICADA en Supabase el 03/11 como `20261103170757 cobro_inasistencia`, con respaldo previo `2026-11-03 antes de cobro por
+  inasistencia`; estructura igual a la esperada, datos idénticos y theta con el código anterior verificada 25/25)**: ausente explícita → 25 % de `clase.precio` (redondeo a centésimos, `_importe_base`); presente y
   sin registrar → 100 %. Rige por empresa desde `empresa.cobro_inasistencia_desde` (Just Show Up: 1/11/2026; empresas
   nuevas sin fecha = no se aplica); solo la superadministradora la configura (`configurar_cobro_inasistencia`, nunca antes
   del 1° del mes en curso ni si ya rige desde un mes anterior). Cada línea guarda `porcentaje` y `asistencia`; los
