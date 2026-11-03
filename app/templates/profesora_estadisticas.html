@@ -10,21 +10,52 @@
     {% include "_menu.html" %}
     <main>
         <h1>Estadísticas</h1>
-        <p class="subtitle">Cómo vienen las asistencias según lo que marcaste en cada clase{% if usuario.empresa_id %} ·
-            {{ 'toda la empresa' if usuario.es_admin else 'solo tus clases' }}{% endif %}.</p>
+        <p class="subtitle">Cómo vienen las asistencias, la ocupación y las clases más elegidas{% if usuario.empresa_id %} ·
+            {% if profesora and profesoras.get(profesora) %}{{ profesoras[profesora] }}{% elif usuario.es_admin %}toda la empresa{% else %}solo tus clases{% endif %}{% endif %}.</p>
 
         <nav class="dias-nav" aria-label="Período">
             {% for clave, texto in periodos.items() %}
-            <a class="dia-chip {{ 'dia-chip-activo' if clave == periodo }}" href="/profesora/estadisticas?periodo={{ clave }}"
+            <a class="dia-chip {{ 'dia-chip-activo' if clave == periodo }}"
+               href="/profesora/estadisticas?periodo={{ clave }}{% if tipo_clase %}&tipo_clase={{ tipo_clase }}{% endif %}{% if profesora %}&profesora={{ profesora }}{% endif %}"
                {% if clave == periodo %}aria-current="page"{% endif %}>{{ texto }}</a>
             {% endfor %}
         </nav>
+
+        {% if tipos or profesoras %}
+        <form method="get" action="/profesora/estadisticas" class="est-filtros">
+            <input type="hidden" name="periodo" value="{{ periodo }}" />
+            {% if tipos %}
+            <label class="est-filtro-campo">
+                Tipo de clase
+                <select name="tipo_clase" onchange="this.form.submit()">
+                    <option value="">Todos</option>
+                    {% for t in tipos %}
+                    <option value="{{ t.id }}" {{ 'selected' if tipo_clase == t.id else '' }}>{{ t.nombre }}{{ '' if t.activo else ' (inactivo)' }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% endif %}
+            {% if profesoras %}
+            <label class="est-filtro-campo">
+                Ver
+                <select name="profesora" onchange="this.form.submit()">
+                    <option value="">Toda la empresa</option>
+                    {% for id, nombre in profesoras.items() %}
+                    <option value="{{ id }}" {{ 'selected' if profesora == id else '' }}>{{ nombre }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            {% endif %}
+            <noscript><button type="submit" class="btn btn-chico">Aplicar</button></noscript>
+        </form>
+        {% endif %}
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
         {% if datos %}
+
         {% if datos.presentes or datos.ausentes %}
         <div class="est-grid">
             <div class="est-tile">
@@ -49,7 +80,92 @@
                 {% if datos.mes %}<span class="est-detalle">{{ datos.mes_cantidad }} {{ 'asistencia' if datos.mes_cantidad == 1 else 'asistencias' }}</span>{% endif %}
             </div>
         </div>
+        {% else %}
+        <p class="vacio vacio-izq">Todavía no hay asistencias marcadas en este período.</p>
+        {% endif %}
 
+        <div class="est-grid est-grid-2">
+            <div class="est-tile {{ '' if datos.ocupacion is not none else 'est-tile-vacio' }}">
+                <span class="est-etiqueta">Ocupación promedio</span>
+                {% if datos.ocupacion is not none %}
+                <span class="est-valor">{{ datos.ocupacion }}%</span>
+                <div class="est-barra"><div class="est-barra-relleno" style="width:{{ datos.ocupacion }}%"></div></div>
+                <span class="est-detalle">del cupo, en las clases ya dadas</span>
+                {% else %}
+                <span class="est-valor est-valor-texto">—</span>
+                <span class="est-detalle">sin clases dadas en este período</span>
+                {% endif %}
+            </div>
+            <div class="est-tile">
+                <span class="est-etiqueta">Pendientes de registrar</span>
+                <span class="est-valor">{{ datos.pendientes.clases }} {{ 'clase' if datos.pendientes.clases == 1 else 'clases' }}</span>
+                <span class="est-detalle">{{ datos.pendientes.asistencias }} {{ 'asistencia' if datos.pendientes.asistencias == 1 else 'asistencias' }} sin registrar{% if not datos.pendientes.clases %} · al día{% endif %}</span>
+            </div>
+        </div>
+
+        {% if datos.grafica_evolucion %}
+        <section class="panel est-panel-grafica">
+            <h2>Evolución mensual</h2>
+            <svg viewBox="0 0 {{ datos.grafica_evolucion.ancho }} {{ datos.grafica_evolucion.alto }}" class="est-svg-linea"
+                 role="img" aria-label="Evolución mensual de presentes y ausentes, por mes">
+                <line x1="0" y1="{{ datos.grafica_evolucion.base_y }}" x2="{{ datos.grafica_evolucion.ancho }}" y2="{{ datos.grafica_evolucion.base_y }}" class="est-eje" />
+                {% for m in datos.grafica_evolucion.marcas_y %}
+                <line x1="0" y1="{{ m.y }}" x2="{{ datos.grafica_evolucion.ancho }}" y2="{{ m.y }}" class="est-grilla" />
+                <text x="2" y="{{ m.y - 3 }}" class="est-eje-texto">{{ m.texto }}</text>
+                {% endfor %}
+                {% if datos.grafica_evolucion.un_mes %}
+                {% set p = datos.grafica_evolucion.puntos_presentes.split(',') %}
+                {% set a = datos.grafica_evolucion.puntos_ausentes.split(',') %}
+                <circle cx="{{ p[0] }}" cy="{{ p[1] }}" r="4" class="est-punto-presentes" />
+                <circle cx="{{ a[0] }}" cy="{{ a[1] }}" r="4" class="est-punto-ausentes" />
+                {% else %}
+                <polyline points="{{ datos.grafica_evolucion.puntos_presentes }}" class="est-linea-presentes" />
+                <polyline points="{{ datos.grafica_evolucion.puntos_ausentes }}" class="est-linea-ausentes" />
+                {% endif %}
+                {% for e in datos.grafica_evolucion.etiquetas %}
+                <text x="{{ e.x }}" y="{{ datos.grafica_evolucion.alto - 6 }}" class="est-eje-texto" text-anchor="middle">{{ e.texto }}</text>
+                {% endfor %}
+            </svg>
+            <div class="est-leyenda">
+                <span><span class="est-punto-leyenda est-punto-presentes"></span>Presentes</span>
+                <span><span class="est-punto-leyenda est-punto-ausentes"></span>Ausentes</span>
+            </div>
+        </section>
+        {% endif %}
+
+        <div class="est-cols-2">
+            <section class="panel">
+                <h2>Distribución</h2>
+                {% if datos.grafica_distribucion %}
+                <svg viewBox="0 0 120 120" class="est-dona" role="img" aria-label="{{ datos.grafica_distribucion.porcentaje }}% de las asistencias fueron presentes">
+                    <circle cx="60" cy="60" r="{{ datos.grafica_distribucion.radio }}" class="est-dona-fondo" />
+                    <circle cx="60" cy="60" r="{{ datos.grafica_distribucion.radio }}" class="est-dona-relleno"
+                            stroke-dasharray="{{ datos.grafica_distribucion.dash_presentes }} {{ datos.grafica_distribucion.circunferencia }}"
+                            transform="rotate(-90 60 60)" />
+                </svg>
+                <p class="est-dona-texto">{{ datos.grafica_distribucion.porcentaje }}% presentes</p>
+                {% else %}
+                <p class="vacio vacio-izq">Sin asistencias registradas en este período.</p>
+                {% endif %}
+            </section>
+            <section class="panel">
+                <h2>Tipos más elegidos</h2>
+                {% if datos.grafica_tipos %}
+                <ul class="est-barras-horiz">
+                    {% for t in datos.grafica_tipos %}
+                    <li>
+                        <div class="est-barra-horiz-fila"><span>{{ t.nombre }}</span><span class="est-detalle">{{ t.cantidad }}</span></div>
+                        <div class="est-barra"><div class="est-barra-relleno" style="width:{{ t.porcentaje }}%"></div></div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="vacio vacio-izq">Sin clases ya dadas con reservas en este período.</p>
+                {% endif %}
+            </section>
+        </div>
+
+        {% if datos.presentes or datos.ausentes %}
         <div class="est-tops">
             <section class="panel">
                 <h2>Más asistencias</h2>
@@ -77,9 +193,8 @@
             </section>
         </div>
         <p class="nota">Se cuentan solo las clases en las que marcaste Presente o Ausente; las que quedaron sin registrar no entran en el porcentaje.</p>
-        {% else %}
-        <p class="vacio vacio-izq">Todavía no hay asistencias marcadas en este período.</p>
         {% endif %}
+
         {% endif %}
     </main>
 </body>
