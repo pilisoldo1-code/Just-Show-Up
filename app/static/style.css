@@ -3221,3 +3221,148 @@ main.baja-pagina h1 {
     line-height: 1.5;
     margin: 20px 0 0;
 }
+
+/* ---------- asistencias: pendientes y correcciones ---------- */
+.asist-filtros {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 12px;
+    margin: 8px 0 12px;
+}
+
+.asist-filtros select {
+    width: auto;
+    min-width: 0;
+}
+
+.asist-chips {
+    display: flex;
+    gap: 6px;
+}
+
+.asist-aviso,
+.panel-aviso {
+    margin: 0 0 16px;
+}
+
+.asist-terminadas {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.asist-fila {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 6px 12px;
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+}
+
+.asist-fila-texto {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.asist-fila-sub {
+    color: var(--muted);
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+}
+
+.asist-estado {
+    white-space: nowrap;
+}
+
+.asist-boton.btn {
+    padding: 5px 12px;
+    font-size: 0.85rem;
+}
+
+.asist-bloqueo {
+    display: block;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.fila-pendiente td:first-child {
+    color: #facc15;
+}
+
+.asist-motivo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 16px 0 12px;
+    font-size: 0.9rem;
+    color: var(--muted);
+    max-width: 520px;
+}
+
+.asist-historial {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-width: 640px;
+}
+
+.asist-historial li {
+    display: grid;
+    gap: 2px;
+    padding: 8px 0;
+    border-bottom: 1px solid #2a2e37;
+    overflow-wrap: anywhere;
+}
+
+.asist-historial-cuando,
+.asist-historial-motivo {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+@media (max-width: 600px) {
+    .asist-filtros select {
+        flex: 1 1 100%;
+    }
+
+    .asist-fila {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "texto texto" "estado boton";
+    }
+
+    .asist-fila-texto {
+        grid-area: texto;
+    }
+
+    .asist-estado {
+        grid-area: estado;
+        justify-self: start;
+    }
+
+    .asist-boton.btn {
+        grid-area: boton;
+    }
+}
+
+.asist-filtros select,
+.asist-motivo input {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a2e37;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.asist-aviso a,
+.panel-aviso a,
+.aviso-suave a {
+    color: inherit;
+    font-weight: 600;
+}

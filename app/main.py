@@ -809,43 +809,79 @@ def _dias_profesora() -> list[date]:
 
 
 @app.get("/profesora/clases")
-def profesora_clases(request: Request, fecha: str = "", usuario: Usuario = Depends(requiere_profesora)):
+def profesora_clases(request: Request, fecha: str = "", mes: str = "", filtro: str = "todas",
+                     usuario: Usuario = Depends(requiere_profesora)):
     rango = _dias_profesora()
     hoy = rango[0]
     sb = _sb(usuario)
-    for lunes in {d - timedelta(days=d.weekday()) for d in (rango[0], rango[-1])}:
-        clases.generar_clases(sb, lunes)
-    # Solo los días que tienen clases: si mañana no hay (ej. sábado), se pasa al siguiente.
-    dias = clases.dias_con_clases(sb, rango[0], rango[-1], _mias(usuario))
-    if fecha:
-        f = _parse_fecha(fecha)
-        if f not in dias:
-            return RedirectResponse(url="/profesora/clases", status_code=303)
-    else:
-        f = dias[0] if dias else None
-    if f is None:
-        return _render(request, "profesora_clases.html", usuario, clases=[], dias=[], titulo_dia="", es_hoy=True)
-    etiquetas = {hoy: "Hoy", hoy + timedelta(days=1): "Mañana"}
+    meses = clases.meses_asistencias(hoy)
+    try:
+        elegido = tuple(int(x) for x in mes.split("-")) if mes else meses[0]
+    except ValueError:
+        elegido = meses[0]
+    if elegido not in meses:
+        elegido = meses[0]
+    filtro = filtro if filtro == "pendientes" else "todas"
+    es_mes_actual = elegido == meses[0]
+    contexto = {"dias": [], "clases": [], "titulo_dia": "", "es_hoy": True, "fecha_elegida": ""}
+    if es_mes_actual:
+        for lunes in {d - timedelta(days=d.weekday()) for d in (rango[0], rango[-1])}:
+            clases.generar_clases(sb, lunes)
+        # Solo los días que tienen clases: si mañana no hay (ej. sábado), se pasa al siguiente.
+        dias = clases.dias_con_clases(sb, rango[0], rango[-1], _mias(usuario))
+        if fecha:
+            f = _parse_fecha(fecha)
+            if f not in dias:
+                return RedirectResponse(url="/profesora/clases", status_code=303)
+        else:
+            f = dias[0] if dias else None
+        if f is not None:
+            etiquetas = {hoy: "Hoy", hoy + timedelta(days=1): "Mañana"}
+            contexto = {
+                "clases": clases.clases_del_dia(sb, f, _mias(usuario)),
+                "titulo_dia": f"{clases.nombre_dia(f)} {f.day} de {MESES[f.month]}",
+                "es_hoy": f == hoy, "fecha_elegida": f.isoformat(),
+                "dias": [{"fecha": d.isoformat(), "activo": d == f,
+                          "texto": etiquetas.get(d, f"{clases.nombre_dia(d)[:3]} {d.day}")} for d in dias],
+            }
+    try:
+        terminadas = clases.clases_terminadas(sb, *elegido)
+    except Exception:
+        logging.exception("No se pudieron leer las clases terminadas")
+        terminadas = []
+    pendientes = [c for c in terminadas if c["sin_registrar"]]
     return _render(
-        request, "profesora_clases.html", usuario,
-        clases=clases.clases_del_dia(sb, f, _mias(usuario)),
-        titulo_dia=f"{clases.nombre_dia(f)} {f.day} de {MESES[f.month]}",
-        es_hoy=f == hoy,
-        dias=[
-            {"fecha": d.isoformat(), "activo": d == f,
-             "texto": etiquetas.get(d, f"{clases.nombre_dia(d)[:3]} {d.day}")}
-            for d in dias
-        ],
+        request, "profesora_clases.html", usuario, **contexto,
+        es_mes_actual=es_mes_actual, filtro=filtro, mes_elegido=f"{elegido[0]}-{elegido[1]:02d}",
+        mes_txt=f"{MESES[elegido[1]]} {elegido[0]}",
+        meses=[{"valor": f"{a}-{m:02d}", "texto": f"{MESES[m].capitalize()} {a}"} for a, m in meses],
+        terminadas=pendientes if filtro == "pendientes" else terminadas,
+        pend_clases=len(pendientes), pend_asistencias=sum(c["sin_registrar"] for c in pendientes),
     )
 
 
 @app.get("/profesora/clases/{clase_id}")
 def profesora_clase(request: Request, clase_id: int, ok: int = 0, aviso: str = "",
                     usuario: Usuario = Depends(requiere_profesora)):
-    clase = clases.clase_con_asistencia(_sb(usuario), clase_id)
+    clase = clases.clase_con_asistencia(_sb(usuario), clase_id, es_admin=usuario.es_admin)
     if clase is None or clase["fecha"] > _dias_profesora()[-1] or not _puede_editar_horario(usuario, clase):
         return RedirectResponse(url="/profesora/clases", status_code=303)
     return _render(request, "profesora_clase.html", usuario, clase=clase, aviso=aviso, aviso_ok=bool(ok))
+
+
+@app.post("/profesora/clases/{clase_id}/corregir")
+async def profesora_corregir(request: Request, clase_id: int, usuario: Usuario = Depends(requiere_admin)):
+    """Completar o corregir asistencias de una clase terminada (solo la administradora; la base vuelve a comprobarlo
+    todo y guarda todas o ninguna)."""
+    form = await request.form()
+    cambios = [{"id_reserva": int(k.split("_", 1)[1]), "estado": v} for k, v in form.items()
+               if k.startswith("estado_") and k.split("_", 1)[1].isdigit()]
+    try:
+        ok, aviso = await run_in_threadpool(clases.corregir_asistencias, _sb(usuario), cambios, str(form.get("motivo", "")))
+    except Exception:
+        logging.exception("No se pudieron corregir las asistencias")
+        ok, aviso = False, "Ocurrió un error, probá de nuevo."
+    return RedirectResponse(url=f"/profesora/clases/{clase_id}?" + urlencode({"ok": int(ok), "aviso": aviso}), status_code=303)
 
 
 @app.post("/profesora/clases/{clase_id}/asistencia")
@@ -1408,8 +1444,13 @@ def profesora_confirmar_mes(request: Request, mes: int = 0, anio: int = 0, usuar
     except Exception:
         logging.exception("No se pudo armar la vista previa")
         return _volver_mes(mes, anio, False, "No pudimos armar la vista previa. Probá de nuevo.")
+    try:
+        sin_registrar = sum(c["sin_registrar"] for c in clases.clases_terminadas(sb, anio, mes))
+    except Exception:
+        logging.exception("No se pudieron contar las asistencias sin registrar del mes")
+        sin_registrar = 0
     return _render(request, "profesora_confirmar_mes.html", usuario, previa=previa, facturas=lista,
-                   mes=mes, anio=anio, mes_txt=facturas.mes_txt(mes, anio))
+                   mes=mes, anio=anio, mes_txt=facturas.mes_txt(mes, anio), sin_registrar=sin_registrar)
 
 
 @app.post("/profesora/resumenes/confirmar-mes")
@@ -1823,7 +1864,13 @@ def _resumen_admin(usuario: Usuario) -> dict:
 
 @app.get("/administracion")
 def administracion(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_admin)):
-    return _render(request, "administracion.html", usuario, resumen=_resumen_admin(usuario), aviso=aviso, aviso_ok=bool(ok))
+    try:
+        pendientes = clases.pendientes_totales(_sb(usuario))
+    except Exception:
+        logging.exception("No se pudieron contar las asistencias pendientes")
+        pendientes = {"clases": 0}
+    return _render(request, "administracion.html", usuario, resumen=_resumen_admin(usuario), pendientes=pendientes,
+                   aviso=aviso, aviso_ok=bool(ok))
 
 
 # ---------- personas de la empresa: edición (compartida por Alumnas y Profesoras) ----------
