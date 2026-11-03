@@ -125,7 +125,7 @@ mes_viejo = f"{hace2.year}-{hace2.month:02d}"
 h = A.get(f"/profesora/clases?mes={mes_ayer}").text
 ok("Asistencias abre con «Todas» y muestra la clase terminada con «3 de 3 sin registrar»",
    'filtro=todas#terminadas" class="dia-chip dia-chip-activo"' in h and ">3 de 3 sin registrar<" in h and ">Completar</a>" in h)
-ok("el aviso de pendientes y el contador del filtro", "Pendientes (1)" in h and "asistencias sin registrar en" in h)
+ok("el aviso de pendientes y el contador del filtro", "Pendientes (1)" in h and "3 asistencias sin registrar en" in h)
 hp = P.get(f"/profesora/clases?mes={mes_ayer}").text
 ok("la profesora ve su clase pendiente, solo para consultar", ">3 de 3 sin registrar<" in hp and ">Completar</a>" not in hp
    and "solo la administración puede completar" in hp)

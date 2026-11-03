@@ -65,7 +65,8 @@ class Pantalla(Base):
         self.assertEqual(r.status_code, 200)
         self.assertRegex(r.text, r'filtro=todas#terminadas" class="dia-chip dia-chip-activo"')
         self.assertIn("Pendientes (2)</a>", r.text)
-        self.assertIn("2 clases terminadas con 4\n            asistencias sin registrar en noviembre 2026", r.text)
+        aviso = " ".join(re.search(r'class="aviso-suave asist-aviso">(.*?)<a', r.text, re.S).group(1).split())
+        self.assertEqual(aviso, "4 asistencias sin registrar en 2 clases.")
         self.assertLess(r.text.index("Próximos días"), r.text.index('id="terminadas"'))  # hoy y próximos días, arriba
         filas = re.findall(r'href="/profesora/clases/(\d+)"', r.text.split('id="terminadas"')[1])
         self.assertEqual(filas, ["3", "2", "1"])
@@ -120,6 +121,7 @@ class Detalle(Base):
         r = self.get("/profesora/clases/7")
         self.assertIn('action="/profesora/clases/7/corregir"', r.text)
         self.assertIn('name="motivo"', r.text)
+        self.assertIn("La clase finalizó. Podés completar o corregir las asistencias indicando el motivo.", r.text)
         self.assertIn("1 sin registrar", r.text)
         self.assertRegex(r.text, r'name="estado_12" value="presente"[^>]*\n?[^>]*disabled')
         self.assertIn("La factura de este mes ya está confirmada", r.text)

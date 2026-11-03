@@ -21,8 +21,7 @@
         {% elif clase.cancelada %}
         <p class="nota">Clase cancelada: su asistencia no se registra.</p>
         {% elif clase.terminada and usuario.es_admin %}
-        <p class="nota">La clase terminó a las {{ clase.hora_fin }}. Como administradora podés completar o corregir la
-            asistencia: elegí Presente o Ausente y escribí el motivo. Las alumnas ven solo el resultado.</p>
+        <p class="nota">La clase finalizó. Podés completar o corregir las asistencias indicando el motivo.</p>
         {% elif clase.terminada %}
         <p class="nota">La clase terminó a las {{ clase.hora_fin }}. Fuera del horario de clase, solo la administración puede
             completar o corregir la asistencia.</p>

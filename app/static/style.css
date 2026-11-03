@@ -3366,3 +3366,26 @@ main.baja-pagina h1 {
     color: inherit;
     font-weight: 600;
 }
+
+/* tabla de asistencias en celular: columnas de casilleros angostas para que el nombre tenga lugar */
+@media (max-width: 600px) {
+    .asistencia-tabla th,
+    .asistencia-tabla td {
+        padding: 10px 8px;
+    }
+
+    .asistencia-tabla th {
+        font-size: 0.7rem;
+        letter-spacing: 0;
+    }
+
+    .asistencia-tabla .col-box {
+        width: 64px;
+    }
+
+    .asistencia-tabla td:first-child {
+        font-size: 0.95rem;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+}

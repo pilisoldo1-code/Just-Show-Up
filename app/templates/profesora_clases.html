@@ -29,9 +29,8 @@
 
         {% if pend_clases %}
         <p class="aviso-suave asist-aviso">
-            {{ pend_clases }} {{ 'clase terminada' if pend_clases == 1 else 'clases terminadas' }} con {{ pend_asistencias }}
-            {{ 'asistencia' if pend_asistencias == 1 else 'asistencias' }} sin registrar en {{ mes_txt }}.
-            <a href="#terminadas">Ver {{ 'la clase' if pend_clases == 1 else 'las clases' }}</a>
+            {{ pend_asistencias }} {{ 'asistencia' if pend_asistencias == 1 else 'asistencias' }} sin registrar en
+            {{ pend_clases }} {{ 'clase' if pend_clases == 1 else 'clases' }}. <a href="#terminadas">Ver {{ 'clase' if pend_clases == 1 else 'clases' }}</a>
         </p>
         {% endif %}
 
