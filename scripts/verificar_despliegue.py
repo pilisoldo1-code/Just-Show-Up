@@ -1,6 +1,7 @@
-"""Verificación de SOLO LECTURA de producción durante el despliegue de multiempresa (etapas B y D).
-Compara cada fila con el respaldo (columnas originales), revisa las columnas y tablas nuevas y prueba que la API
-resuelva las consultas anidadas que usa theta (sin PGRST201). Solo hace SELECT con la clave de administrador; no
+"""Verificación de SOLO LECTURA de producción durante un despliegue. Funciona con una o varias empresas.
+Compara cada fila del respaldo con la actual (columnas originales), revisa que Just Show Up no tenga filas nuevas
+inesperadas, que cada fila esté en la misma empresa que su fila madre, que Mercado Pago siga solo en Just Show Up y que
+la API resuelva las consultas anidadas que usa theta (sin PGRST201). Solo hace SELECT con la clave de administrador; no
 escribe nada. Imprime solo cantidades y resultados (sin datos personales).
 
 Uso:  python scripts/verificar_despliegue.py "<carpeta del respaldo>"
@@ -20,6 +21,12 @@ TABLAS = ["profiles", "tipo_clase", "horario", "clase", "reserva", "listadeesper
           "resumen_mensual", "resumen_mensual_detalle", "factura_historial", "pago", "pago_anulacion", "mp_intento",
           "mp_evento", "mp_configuracion"]
 CLAVE = {"pago_anulacion": "id_pago"}
+# columnas que cambian con el uso normal (no son datos de negocio): el lugar elegido al iniciar sesión
+VARIABLES = {"profiles": {"empresa_activa"}}
+# (tabla hija, columna, tabla madre): la fila hija tiene que estar en la misma empresa que su madre
+MADRES = [("horario", "id_tipo_clase", "tipo_clase"), ("clase", "id_horario", "horario"), ("reserva", "id_clase", "clase"),
+          ("listadeespera", "id_clase", "clase"), ("asistencia", "id_reserva", "reserva"),
+          ("resumen_mensual_detalle", "id_resumen_mensual", "resumen_mensual"), ("pago", "id_resumen_mensual", "resumen_mensual")]
 fallas = 0
 
 
@@ -39,39 +46,56 @@ def todas(t, cols="*"):
         desde += 1000
 
 
+empresas = todas("empresa")
+jsu = next((e for e in empresas if e["codigo"] == "JSU"), None)
+ok("Just Show Up (JSU) existe, activa y con Mercado Pago de prueba habilitado",
+   jsu is not None and jsu["activa"] and jsu["mp_habilitado"])
+otras = [e for e in empresas if e is not jsu]
+ok(f"otras empresas: {len(otras)}, todas con Mercado Pago apagado", all(not e["mp_habilitado"] for e in otras),
+   [e["codigo"] for e in otras if e["mp_habilitado"]])
+if "empresa" in respaldo:
+    antes = next((e for e in respaldo["empresa"] if e["codigo"] == "JSU"), {})
+    distintas = [c for c, v in antes.items() if json.dumps(jsu.get(c), default=str) != json.dumps(v, default=str)]
+    ok("Just Show Up: sus datos iguales al respaldo (nombre, código, contador, vigencia…)", not distintas, distintas)
+
+ids_empresa = {e["id"] for e in empresas}
 actual = {t: todas(t) for t in TABLAS}
 for t in TABLAS:
     clave = CLAVE.get(t, "id")
     ahora = {str(f[clave]): f for f in actual[t]}
+    ignorar = VARIABLES.get(t, set())
     distintas = [f[clave] for f in respaldo[t]
                  if str(f[clave]) not in ahora
-                 or any(json.dumps(ahora[str(f[clave])].get(c), default=str) != json.dumps(v, default=str) for c, v in f.items())]
-    ok(f"{t}: {len(respaldo[t])} filas del respaldo intactas (columnas originales)", not distintas
-       and len(ahora) == len(respaldo[t]), f"distintas o faltantes: {len(distintas)}, ahora {len(ahora)}")
+                 or any(json.dumps(ahora[str(f[clave])].get(c), default=str) != json.dumps(v, default=str)
+                        for c, v in f.items() if c not in ignorar)]
+    previas = {str(f[clave]) for f in respaldo[t]}
+    nuevas = [f for k, f in ahora.items() if k not in previas]
+    nuevas_jsu = [f for f in nuevas if jsu and f.get("id_empresa") == jsu["id"]]
+    ok(f"{t}: {len(respaldo[t])} filas del respaldo intactas; nuevas: {len(nuevas)} (Just Show Up: {len(nuevas_jsu)})",
+       not distintas and (t == "profiles" or not nuevas_jsu), f"distintas o faltantes: {len(distintas)}, nuevas en JSU: {len(nuevas_jsu)}")
+    if t not in ("profiles", "mp_evento", "mp_configuracion"):
+        ok(f"{t}: toda fila pertenece a una empresa existente", all(f.get("id_empresa") in ids_empresa for f in actual[t]))
 
-empresas = sb.table("empresa").select("id, nombre, codigo, activa, mp_habilitado, ultimo_numero_factura").execute().data
-ok("una sola empresa: Just Show Up / JSU, activa, Mercado Pago habilitado, contador 0",
-   len(empresas) == 1 and (empresas[0]["nombre"], empresas[0]["codigo"], empresas[0]["activa"], empresas[0]["mp_habilitado"],
-                           empresas[0]["ultimo_numero_factura"]) == ("Just Show Up", "JSU", True, True, 0), empresas)
-jsu = empresas[0]["id"] if empresas else None
-for t in TABLAS[1:-2] + ["mp_intento"]:
-    sin = [f for f in actual[t] if f.get("id_empresa") != jsu]
-    ok(f"{t}: todas las filas en la Empresa 1", not sin, len(sin))
-membresias = sb.table("membresia").select("id_usuario, id_empresa, es_admin, es_profesora, es_alumna, activa").execute().data
-por_usuario = {m["id_usuario"]: m for m in membresias}
-roles_ok = all(
-    p["id"] in por_usuario and por_usuario[p["id"]]["id_empresa"] == jsu and por_usuario[p["id"]]["activa"]
-    and (por_usuario[p["id"]]["es_admin"], por_usuario[p["id"]]["es_profesora"], por_usuario[p["id"]]["es_alumna"])
-    # la administradora es «administradora y profesora» antes de la migración de tres roles y solo «administradora» después
-    in (((True, True, False), (True, False, False)) if p["rol"] == "profesora" else ((False, False, True),))
-    for p in respaldo["profiles"])
-ok(f"una membresía por persona según su rol ({len(membresias)} de {len(respaldo['profiles'])})",
-   roles_ok and len(membresias) == len(respaldo["profiles"]))
-profesoras = [p["id"] for p in respaldo["profiles"] if p["rol"] == "profesora"]
-ok("cada clase y cada horario tienen su profesora", all(c.get("id_profesora") in profesoras for c in actual["clase"])
-   and all(h.get("id_profesora") in profesoras for h in actual["horario"]))
+por_id = {t: {f["id"]: f for f in actual[t]} for t in {m for _, _, m in MADRES}}
+for hija, col, madre in MADRES:
+    mal = [f["id"] for f in actual[hija] if f.get(col) in por_id[madre] and por_id[madre][f[col]]["id_empresa"] != f["id_empresa"]]
+    ok(f"{hija} y su {madre}: siempre en la misma empresa", not mal, len(mal))
+
+membresias = todas("membresia")
+if "membresia" in respaldo:
+    ahora = {(m["id_usuario"], m["id_empresa"]): m for m in membresias}
+    cols = ("es_admin", "es_profesora", "es_alumna", "activa")
+    distintas = [k for m in respaldo["membresia"] for k in [(m["id_usuario"], m["id_empresa"])]
+                 if k not in ahora or any(ahora[k][c] != m[c] for c in cols)]
+    ok(f"membresías del respaldo intactas ({len(respaldo['membresia'])})", not distintas, len(distintas))
+docentes = {(m["id_usuario"], m["id_empresa"]) for m in membresias if m["es_admin"] or m["es_profesora"]}
+ok("cada clase y cada horario tienen una docente de SU empresa",
+   all((c.get("id_profesora"), c["id_empresa"]) in docentes for c in actual["clase"])
+   and all((h.get("id_profesora"), h["id_empresa"]) in docentes for h in actual["horario"]))
 ok("las líneas de factura tienen la profesora", all(d.get("profesora_nombre") for d in actual["resumen_mensual_detalle"]))
-ok("ninguna persona quedó como superadministradora", not [p for p in actual["profiles"] if p.get("es_superadmin")])
+supers = {p["id"] for p in actual["profiles"] if p.get("es_superadmin")}
+ok(f"superadministradoras: {len(supers)}, ninguna pertenece a una empresa",
+   not [m for m in membresias if m["id_usuario"] in supers])
 
 # las consultas anidadas que usa el código de theta (PGRST201 si hubiera relaciones duplicadas)
 consultas = {

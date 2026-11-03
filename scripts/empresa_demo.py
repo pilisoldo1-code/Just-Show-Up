@@ -163,16 +163,27 @@ def borrar(db, guardar_contrasenas=True) -> dict:
     if not e:
         raise SystemExit(f"No existe la empresa {CODIGO}: no hay nada para borrar.")
     e2 = e["id"]
+    # cuentas que solo pertenecen a esta empresa (las del script y las que se crearon después desde la app): se borran,
+    # pero solo si son ficticias (.invalid); si hubiera otra, no se borra nada
+    membresias = db.leer("membresia", "id_usuario, id_empresa")
+    perfiles = {p["id"]: p for p in db.leer("profiles", "id, mail, empresa_activa, es_superadmin")}
+    de_e2 = {m["id_usuario"] for m in membresias if m["id_empresa"] == e2}
+    exclusivas = {u for u in de_e2 if not any(m["id_usuario"] == u and m["id_empresa"] != e2 for m in membresias)
+                  and not perfiles.get(u, {}).get("es_superadmin")}
+    reales = sorted(perfiles[u]["mail"] for u in exclusivas if u in perfiles and not perfiles[u]["mail"].endswith(".invalid"))
+    if reales:
+        raise SystemExit(f"La empresa {CODIGO} tiene cuentas que no son ficticias ({', '.join(reales)}): no se borra nada.")
     if db.leer("resumen_mensual", "id", id_empresa=e2) and any(f.get("numero") for f in db.leer("resumen_mensual", "numero", id_empresa=e2)):
         print("Aviso: la empresa tenía facturas confirmadas de demostración; se borran también.")
     for f in db.leer("resumen_mensual", "id", id_empresa=e2):
         db.actualizar("resumen_mensual", {"reemplaza_a": None}, id=f["id"])
     for tabla in ("mp_intento", "pago_anulacion", "pago", "factura_historial", "resumen_mensual_detalle", "resumen_mensual",
-                  "asistencia", "listadeespera", "reserva", "bloqueo", "clase", "horario", "tipo_clase"):
+                  "asistencia_historial", "asistencia", "listadeespera", "reserva", "baja_docente", "bloqueo", "clase", "horario",
+                  "tipo_clase", "sesion_empresa"):
         db.borrar(tabla, id_empresa=e2)
     mails = {m for m, *_ in CUENTAS}
-    for p in db.leer("profiles", "id, mail, empresa_activa"):
-        if p["mail"] in mails:
+    for p in perfiles.values():
+        if p["mail"] in mails or p["id"] in exclusivas:
             db.borrar_cuenta(p["id"])
         elif p["empresa_activa"] == e2:
             db.actualizar("profiles", {"empresa_activa": None}, id=p["id"])
