@@ -757,6 +757,24 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **Algunas pantallas ESCRIBEN en la base al abrirse (generación automática de clases)** — pasó el 03/11 al
+  verificar theta: abrir Asistencias creó las 10 clases de la semana siguiente (se conservaron: eran las que tocaban).
+  No hay tareas programadas (decisión: todo gratis y sin servicios extra), así que las clases se generan **a demanda**
+  con `generar_clases(lunes)` cuando alguien abre una pantalla que las necesita:
+  - `/` (Reservar clases): la semana que se mira (`?semana=0..2`, o sea hasta 3 semanas adelante).
+  - `/dia/{fecha}`: la semana de ese día.
+  - `/profesora/clases` (Asistencias): de hoy a hoy + 7 días, así que casi siempre **dos semanas** (la actual y la
+    siguiente).
+  - `/profesora/planificacion?modo=puntual&fecha=...`: la semana de esa fecha.
+  Es idempotente (no duplica: `on conflict (id_horario, fecha) do nothing`), respeta licencias, cancelaciones y
+  desactivaciones, y toma precio, cupo y duración del tipo. Además, la grilla, el día, Mis inscripciones y el detalle
+  de una clase de la profesora llaman a `actualizar_listas_espera` (vence ofertas y ofrece lugares libres: también
+  escribe si hay listas de espera en esas clases).
+  **Precauciones para verificar theta «solo lectura»**: antes de abrir esas pantallas, consultar en la base (solo
+  lectura) qué semanas ya tienen clases y si hay listas de espera en ellas; abrir solo semanas ya generadas y sin
+  listas de espera, o avisar y pedir autorización. Comparar siempre la huella de las tablas antes y después
+  (`huella_prod.py` del respaldo / fila por fila contra `datos.json`). Separar consulta de generación (por ejemplo, con
+  `pg_cron`) se evalúa después de la defensa del 17/11: **por ahora no se cambia**.
 - **Baja de docentes (rama `baja-docentes`, PR #32; migración `20261103000000_baja_docentes.sql` APLICADA en Supabase el
   02/11 como `20261102201448 baja_docentes`, con respaldo previo `2026-11-02 antes de desactivar docentes`; estructura igual a
   la esperada en las 11 categorías y datos idénticos al respaldo; theta con el código anterior verificada 26/26)**: en
