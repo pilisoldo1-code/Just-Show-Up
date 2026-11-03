@@ -1360,16 +1360,25 @@ def alumna_reiniciar(request: Request, alumna_id: str, desde: str = Form("alumna
 
 @app.get("/profesora/estadisticas")
 def profesora_estadisticas(request: Request, periodo: str = estadisticas.PERIODO_DEFECTO,
+                           tipo_clase: str = "", profesora: str = "",
                            usuario: Usuario = Depends(requiere_profesora)):
     if periodo not in estadisticas.PERIODOS:
         periodo = estadisticas.PERIODO_DEFECTO
+    sb = _sb(usuario)
     try:
-        datos, aviso = estadisticas.estadisticas(_sb(usuario), periodo), ""
+        tipos = tipos_clase.listar(sb)
+        profesoras = personas.nombres_profesoras(sb) if usuario.es_admin else {}
+        # Un id que no exista (o no sea de esta empresa: profesoras_empresa/tipo_clase ya filtran por
+        # RLS) se ignora en vez de rechazarse: queda "todos los tipos" / "toda la empresa".
+        id_tipo_clase = int(tipo_clase) if tipo_clase.isdigit() and any(str(t["id"]) == tipo_clase for t in tipos) else None
+        id_profesora = profesora if usuario.es_admin and profesora in profesoras else None
+        datos, aviso = estadisticas.estadisticas(sb, periodo, usuario, id_tipo_clase, id_profesora), ""
     except Exception:
         logging.exception("No se pudieron calcular las estadísticas")
-        datos, aviso = None, "No pudimos cargar las estadísticas. Probá de nuevo."
+        datos, aviso, tipos, profesoras, id_tipo_clase, id_profesora = None, "No pudimos cargar las estadísticas. Probá de nuevo.", [], {}, None, None
     return _render(request, "profesora_estadisticas.html", usuario, datos=datos, periodo=periodo,
-                   periodos=estadisticas.PERIODOS, aviso=aviso, aviso_ok=False)
+                   periodos=estadisticas.PERIODOS, tipos=tipos, profesoras=profesoras,
+                   tipo_clase=id_tipo_clase, profesora=id_profesora, aviso=aviso, aviso_ok=False)
 
 
 # ---------- profesora: facturación mensual ----------

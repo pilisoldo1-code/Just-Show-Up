@@ -1139,6 +1139,172 @@ main.ancho {
     float: right;
 }
 
+.est-filtros {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    margin: 4px 0 16px;
+}
+
+.est-filtro-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.est-filtro-campo select {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #2a2e37;
+    background: var(--card);
+    color: var(--text);
+    font-size: 0.95rem;
+}
+
+.est-grid-2 {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.est-tile-vacio .est-valor-texto {
+    color: var(--muted);
+}
+
+.est-barra {
+    height: 6px;
+    background: #2a2e37;
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 2px 0;
+}
+
+.est-barra-relleno {
+    height: 100%;
+    background: var(--accent);
+}
+
+.est-panel-grafica {
+    margin-bottom: 20px;
+}
+
+.est-svg-linea {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.est-eje,
+.est-grilla {
+    stroke: #2a2e37;
+    stroke-width: 1;
+}
+
+.est-eje-texto {
+    fill: var(--muted);
+    font-size: 10px;
+}
+
+.est-linea-presentes,
+.est-linea-ausentes {
+    fill: none;
+    stroke-width: 2;
+}
+
+.est-linea-presentes,
+.est-punto-presentes {
+    stroke: var(--accent);
+}
+
+.est-linea-ausentes,
+.est-punto-ausentes {
+    stroke: #f87171;
+}
+
+circle.est-punto-presentes {
+    fill: var(--accent);
+}
+
+circle.est-punto-ausentes {
+    fill: #f87171;
+}
+
+.est-leyenda {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+.est-punto-leyenda {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    margin-right: 4px;
+}
+
+.est-punto-leyenda.est-punto-presentes {
+    background: var(--accent);
+}
+
+.est-punto-leyenda.est-punto-ausentes {
+    background: #f87171;
+}
+
+.est-cols-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.est-dona {
+    display: block;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto;
+}
+
+.est-dona-fondo,
+.est-dona-relleno {
+    fill: none;
+    stroke-width: 16;
+}
+
+.est-dona-fondo {
+    stroke: #2a2e37;
+}
+
+.est-dona-relleno {
+    stroke: var(--accent);
+}
+
+.est-dona-texto {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: 8px 0 0;
+}
+
+.est-barras-horiz {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.est-barra-horiz-fila {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    margin-bottom: 3px;
+}
+
 /* ---------- lista de espera ---------- */
 
 .oferta-aviso {
