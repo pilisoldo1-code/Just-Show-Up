@@ -11,16 +11,16 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
 | Lun 2/11 | Multiempresa 4 (servidor): empresa activa, selector, rutas por rol. En paralelo: Estadísticas y prototipo de Videos | **Hecho (adelantado el 30/10)** (sin las sesiones paralelas) |
 | Mar 3/11 | Multiempresa 5 (pantallas): altas, profesora asignada, alumnas sin cédula para profesoras | **Hecho (adelantado el 30/10)** |
 | Mié 4/11 | Multiempresa 6: panel de superadministradora, script de la Empresa 2, todas las pruebas | **Hecho (adelantado el 30/10)**; falta la revisión con datos reales en el PR |
-| Jue 5/11 | Respaldo y PR de multiempresa → **① M** | |
-| Vie 6/11 | Aplicar y verificar → **① Merge** y creación de la Empresa 2 | |
-| Sáb 7/11 | Verificación en theta y Empresa 2 de demostración — **Hito 1** | |
-| Dom 8/11 | Cobro del 25 % (base y servidor) | |
-| Lun 9/11 | 25 % (pantallas, PDF, PR) + Estadísticas → **② M y merges** | |
-| Mar 10/11 | Aplicar y verificar — **Hito 2** | |
+| Jue 5/11 | Respaldo y PR de multiempresa → **① M** | **Hecho (adelantado el 31/10)** |
+| Vie 6/11 | Aplicar y verificar → **① Merge** y creación de la Empresa 2 | **Hecho**: multiempresa el 31/10; superadministradora y Pilates Centro el 03/11 |
+| Sáb 7/11 | Verificación en theta y Empresa 2 de demostración — **Hito 1** | **Hecho (adelantado el 03/11)** ✅ Hito 1 |
+| Dom 8/11 | Cobro del 25 % (base y servidor) | **Hecho (adelantado el 03/11)** |
+| Lun 9/11 | 25 % (pantallas, PDF, PR) + Estadísticas → **② M y merges** | 25 %: **hecho el 03/11** (PR #35). Estadísticas: pendiente (Julieta, en clase) |
+| Mar 10/11 | Aplicar y verificar — **Hito 2** | 25 % aplicado y verificado el 03/11; falta Estadísticas |
 | Mié 11/11 | Videos On Demand 1 | |
 | Jue 12/11 | Videos On Demand 2 → **③ M y merge** | |
 | Vie 13/11 | Magic Link y Avisos → **④ servicio de mails (Julieta), M y merge** | |
-| Sáb 14/11 | Revisión de celulares → **⑤ Merge** | |
+| Sáb 14/11 | Revisión de celulares → **⑤ Merge** | Pendiente (Julieta, en clase) |
 | Dom 15/11 | Pruebas generales y congelamiento → **⑥ Merge** — **Hito 3** | |
 | Lun 16/11 | Preparación de la defensa y ensayo — **Hito 4** | |
 | Mar 17/11 | Defensa | |
@@ -204,4 +204,40 @@ Cronograma aprobado por Julieta el 30/10. «M» = migración en Supabase (con su
 - Datos finales: 146 reservas, 71 asistencias, 1 factura (JSU-2026-09-0001), 0 pagos, contador sin usar.
 - Falta (con autorización aparte): superadministradora, Pilates Centro, revisión de las vistas previas viejas (Pilar).
 - Rama `panel-admin-simple` (sin desplegar): inicio del panel con 3 indicadores.
+
+### Dom 1/11 a Mar 3/11 — trabajo fuera del cronograma original (todo integrado en theta)
+- PR #28 (panel de administración), #29 (tres roles por empresa, migración aplicada el 02/11), #30 (Alumnas y Profesoras
+  en fichas), #31 (horarios: navegación y encabezados), #32 (desactivar docentes, migración aplicada el 02/11), #33
+  (documentación de la generación de clases) y #34 (correcciones de asistencia de la administradora, migración aplicada
+  el 03/11). Cada uno con respaldo previo, verificación de estructura y datos, y theta revisada en solo lectura.
+
+### Mar 3/11 — cobro del 25 % por inasistencia en producción ✅
+- PR #35 integrado (`7116ed9`); migración `20261103170757 cobro_inasistencia` aplicada con respaldo previo
+  (`2026-11-03 antes de cobro por inasistencia`): estructura igual a la esperada, datos idénticos, theta 25/25 (código
+  anterior) y 29/29 (código nuevo) en solo lectura. Just Show Up rige desde el 1/11/2026; octubre y la factura de
+  demostración quedan al 100 %.
+
+### Mar 3/11 — superadministradora y Pilates Centro en producción ✅ (Hito 1)
+- PR #36 (borrado completo de la Empresa 2 y `verificar_despliegue.py` para varias empresas) y PR #37 (escenario fijo de
+  Pilates Centro: solo local por defecto, `--produccion` explícito, idempotente) integrados.
+- Respaldo `2026-11-03 antes de Pilates Centro` (20 tablas + 15 cuentas, restaurable: ensayado completo en Supabase local
+  con `restaurar_datos.py`; las contraseñas y sesiones no se exportan).
+- Ensayo con copia exacta de producción en local: crear / crear otra vez / borrar / crear, Just Show Up idéntico.
+- **Superadministradora** `superadmin@prueba.invalid`: la creó Julieta con `scripts/crear_superadmin.py` (contraseña
+  solo de ella). Sin empresa; entra por `/admin/login` (verificado por Julieta). Solo cambió `profiles` (+1).
+- **Pilates Centro (PIL)** con `scripts/empresa_demo.py crear --produccion`: 7 cuentas `@demo.invalid` (contraseñas
+  de Lucía, Carolina, Rocío e Inés en `.env.cuentas-prueba`, ignorado por git), `alumna@prueba.invalid` como alumna
+  compartida, 2 tipos, 4 horarios (Lucía lunes y miércoles; Carolina martes y jueves), 23 clases, 73 reservas, 51
+  asistencias, 1 lista de espera, 5 facturas de octubre PIL-2026-10-0001…0005 (una pagada por transferencia),
+  vigencia del 25 % desde el 1/11/2026 y Mercado Pago apagado.
+- **Verificaciones**: `verificar_despliegue.py` TODO OK (Just Show Up intacta fila por fila; JSU-2026-09-0001, 0 pagos
+  y las 74 asistencias pendientes iguales; interruptor y credencial de Mercado Pago sin cambios). theta en solo lectura:
+  29/29 tras aclarar una prueba mal escrita (ver abajo): dos empresas, roles separados, la compartida entra a los dos
+  lugares sin mezclar datos, Inés al 25 % en el provisorio de noviembre y en Mi historial, octubre con una factura
+  pagada, Mercado Pago solo en Just Show Up (botón visible, sin pulsar) y nunca en Pilates.
+- **Prueba aclarada**: «una cuenta de Pilates no entra a Just Show Up» dio FALLA porque la prueba esperaba una
+  redirección y el servidor responde 401 con el mensaje genérico. Comprobado: 401, sin cookies de sesión, mensaje «No
+  pudimos iniciar sesión…» y `/administracion` redirige al login. Los permisos estaban bien.
+- Pendiente: mantener el escenario útil hasta el 17/11 (propuesta en curso), Estadísticas y celulares (Julieta, en
+  clase), Videos On Demand, Magic Link y avisos, pruebas generales y preparación de la defensa.
 
