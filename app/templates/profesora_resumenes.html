@@ -16,15 +16,15 @@
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
-        <div class="semana-nav">
-            <a class="btn btn-secundario" href="/profesora/resumenes?mes={{ ant_mes }}&anio={{ ant_anio }}">‹ Mes anterior</a>
-            <span class="semana-rango">{{ mes_txt }}</span>
+        <nav class="semana-nav" aria-label="Cambiar de mes">
+            <a class="btn btn-secundario semana-flecha" href="/profesora/resumenes?mes={{ ant_mes }}&anio={{ ant_anio }}" aria-label="Mes anterior">‹<span class="semana-texto"> Mes anterior</span></a>
+            <span class="semana-rango"><span class="rango-largo">{{ mes_txt }}</span><span class="rango-corto">{{ mes_txt }}</span></span>
             {% if hay_siguiente %}
-            <a class="btn btn-secundario" href="/profesora/resumenes?mes={{ sig_mes }}&anio={{ sig_anio }}">Mes siguiente ›</a>
+            <a class="btn btn-secundario semana-flecha" href="/profesora/resumenes?mes={{ sig_mes }}&anio={{ sig_anio }}" aria-label="Mes siguiente"><span class="semana-texto">Mes siguiente </span>›</a>
             {% else %}
-            <span class="btn btn-secundario btn-disabled">Mes siguiente ›</span>
+            <span class="btn btn-secundario btn-disabled semana-flecha" role="link" aria-disabled="true" aria-label="Mes siguiente"><span class="semana-texto">Mes siguiente </span>›</span>
             {% endif %}
-        </div>
+        </nav>
 
         {% if not en_revision %}
         <section class="panel">
@@ -39,8 +39,8 @@
             <li class="resumen-item">
                 <div class="lc-fecha"><strong>{{ a.alumna }}</strong></div>
                 <div class="lc-detalle">
-                    Hasta hoy: {{ a.dictadas }} {{ 'clase' if a.dictadas == 1 else 'clases' }} · ${{ a.total_dictadas }}
-                    {% if a.proximas %}<br />Reservadas para lo que queda del mes: {{ a.proximas }} · ${{ a.total_proximas }}{% endif %}
+                    Hasta hoy: {{ a.dictadas }} {{ 'clase' if a.dictadas == 1 else 'clases' }} · {{ a.total_dictadas|pesos }}{% if a.inasistencias %} · {{ a.inasistencias }} {{ 'inasistencia' if a.inasistencias == 1 else 'inasistencias' }} al {{ porcentaje_inasistencia }} %{% endif %}
+                    {% if a.proximas %}<br />Reservadas para lo que queda del mes: {{ a.proximas }} · {{ a.total_proximas|pesos }}{% endif %}
                 </div>
                 <details class="resumen-detalle">
                     <summary>Ver clases</summary>
@@ -50,8 +50,8 @@
                             {% for d in a.detalle %}
                             <tr{% if not d.dictada %} class="detalle-proxima"{% endif %}>
                                 <td>{{ d.fecha_txt }} · {{ d.hora }}</td>
-                                <td>{{ d.tipo }}{% if not d.dictada %} (todavía no se dictó){% endif %}</td>
-                                <td class="num">${{ d.precio }}</td>
+                                <td>{{ d.tipo }}{% if not d.dictada %} (todavía no se dictó){% endif %}{% if d.inasistencia %}<br /><span class="etiqueta-inasistencia">Inasistencia · {{ porcentaje_inasistencia }} %</span>{% endif %}</td>
+                                <td class="num">{% if d.inasistencia %}<s class="precio-tachado">{{ d.precio|pesos }}</s><span class="precio-base">{{ d.importe|pesos }}</span>{% else %}{{ d.precio|pesos }}{% endif %}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -72,6 +72,7 @@
             {% endif %}
             <p class="nota">Las alumnas ven sus facturas confirmadas desde el {{ publica_txt }}{% if publicada %} (ya publicadas){% endif %}.
                 Los borradores nunca se les muestran.</p>
+            {% include "_aviso_pendientes_factura.html" %}
             {% if previa and previa.cantidad %}
             {% if previa.periodo_finalizado %}
             <a class="btn" href="/profesora/resumenes/confirmar-mes?mes={{ mes }}&anio={{ anio }}">Confirmar todas las facturas del mes ({{ previa.cantidad }})</a>
@@ -88,8 +89,8 @@
                 <div class="lc-fecha"><strong>{{ f.alumna }}</strong>{% if f.numero %}<br /><span class="nota-chica">{{ f.numero }}</span>{% endif %}
                     {% if not f.cedula_txt %}<br /><span class="nota-chica">Sin cédula</span>{% endif %}</div>
                 <div class="lc-detalle">
-                    {{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · <strong>${{ f.total }}</strong>
-                    {% if f.total != f.subtotal_original %}<br /><span class="nota-chica">Original: ${{ f.subtotal_original }}</span>{% endif %}
+                    {{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · <strong>{{ f.total|pesos }}</strong>
+                    {% if f.total != f.subtotal_original %}<br /><span class="nota-chica">Original: {{ f.subtotal_original|pesos }}</span>{% endif %}
                 </div>
                 <span class="badge {{ 'badge-espera' if f.estado_factura == 'borrador' else ('badge-off' if f.estado_factura == 'anulada' else 'badge-on') }}">{{ f.estado_factura_txt }}</span>
                 {% if f.estado_factura == 'confirmada' %}

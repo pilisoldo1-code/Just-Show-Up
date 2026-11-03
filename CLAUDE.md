@@ -757,6 +757,19 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **Cobro del 25 % por inasistencia (rama `cobro-inasistencia`, PR #35; migración `20261105000000_cobro_inasistencia.sql`
+  APLICADA en Supabase el 03/11 como `20261103170757 cobro_inasistencia`, con respaldo previo `2026-11-03 antes de cobro por
+  inasistencia`; estructura igual a la esperada, datos idénticos y theta con el código anterior verificada 25/25)**: ausente explícita → 25 % de `clase.precio` (redondeo a centésimos, `_importe_base`); presente y
+  sin registrar → 100 %. Rige por empresa desde `empresa.cobro_inasistencia_desde` (Just Show Up: 1/11/2026; empresas
+  nuevas sin fecha = no se aplica); solo la superadministradora la configura (`configurar_cobro_inasistencia`, nunca antes
+  del 1° del mes en curso ni si ya rige desde un mes anterior). Cada línea guarda `porcentaje` y `asistencia`; los
+  borradores se recalculan al sincronizar y cada cambio de asistencia de una línea queda en `factura_historial`
+  (`cambio_asistencia`, aunque el importe no cambie). Los ajustes por clase tienen tope en el importe base. Las capturas
+  locales usan la fecha 1/9/2026 puesta por SQL solo en el Supabase local. Montos en facturación con el filtro `pesos`
+  ($1.237,50). Pruebas: `tests/base_local/test_cobro_inasistencia_base.py "<respaldo>"` (95),
+  `tests/supabase_local/prueba_cobro_inasistencia_reales.py` (43), `tests.test_cobro_inasistencia` (21). Vuelta atrás:
+  `supabase/pendientes/vuelta_atras_cobro_inasistencia.sql` (se niega si hay líneas al 25 %). Orden de despliegue: primero
+  la migración (el código de `main` funciona con ella) y después el merge.
 - **Correcciones de asistencia (rama `asistencias-correcciones`, PR #34; migración `20261104000000_asistencias_correcciones.sql`
   APLICADA en Supabase el 03/11 como `20261103131731 asistencias_correcciones`, con respaldo previo `2026-11-03 antes de
   correcciones de asistencia`; estructura igual a la esperada, datos idénticos y las 74 pendientes intactas)**: la profesora sigue marcando solo mientras dura la clase (`marcar_asistencia`, mismas reglas). La

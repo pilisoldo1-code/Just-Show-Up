@@ -9,6 +9,8 @@ from datetime import datetime
 
 from fpdf import FPDF
 
+from app.facturas import PORCENTAJE_INASISTENCIA
+
 VERDE = (110, 231, 183)      # --accent de la app
 TINTA = (15, 17, 21)         # --bg de la app
 GRIS = (110, 116, 124)
@@ -132,9 +134,12 @@ def generar(f: dict, ahora: datetime, marca: str | None = None) -> bytes:
             ajuste = "Bonificada"
         elif l["ajuste_tipo"] == "importe":
             ajuste = _plata(l["ajuste"])
+        elif l.get("inasistencia"):
+            ajuste = f"Inasist. {l['porcentaje']} %"
         else:
             ajuste = "-"
-        valores = [l.get("fecha_corta") or l["fecha_txt"], l["hora"], l["tipo"]] + \
+        tipo = l["tipo"] + (" *" if l.get("inasistencia") else "")
+        valores = [l.get("fecha_corta") or l["fecha_txt"], l["hora"], tipo] + \
             ([l.get("profesora") or "-"] if con_profesora else []) + \
             [_plata(l["precio_original"]), ajuste, _plata(l["importe_final"])]
         for (_, w, al), v in zip(cols, valores):
@@ -148,7 +153,10 @@ def generar(f: dict, ahora: datetime, marca: str | None = None) -> bytes:
     pdf.ln(4)
     x = 16 + ancho - 86
     filas = [("Subtotal (precios originales)", _plata(f["subtotal_original"]))]
-    ajustes = f["total_lineas"] - f["subtotal_original"]
+    inasistencias = f.get("descuento_inasistencias") or 0
+    if f.get("inasistencias"):
+        filas.append((f"Inasistencias ({f['inasistencias']}) al {PORCENTAJE_INASISTENCIA} %", _plata(-inasistencias)))
+    ajustes = f["total_lineas"] - f["subtotal_original"] + inasistencias
     if ajustes:
         filas.append(("Ajustes por clase", _plata(ajustes)))
     if f.get("descuento_tipo"):
@@ -164,6 +172,13 @@ def generar(f: dict, ahora: datetime, marca: str | None = None) -> bytes:
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(56, 10, "  TOTAL", fill=True)
     pdf.cell(30, 10, _txt(_plata(f["total"])) + "  ", fill=True, align="R", new_x="LMARGIN", new_y="NEXT")
+
+    if f.get("inasistencias"):
+        pdf.ln(4)
+        pdf.set_font("Helvetica", "", 8.5)
+        pdf.set_text_color(*GRIS)
+        pdf.multi_cell(0, 4.5, _txt(f"* Inasistencia ({PORCENTAJE_INASISTENCIA} %): clase reservada que no se canceló a tiempo "
+                                    f"y a la que no se asistió. Se cobra el {PORCENTAJE_INASISTENCIA} % de su precio."))
 
     if f.get("reemplaza") or f.get("estado_factura") == "anulada":
         pdf.ln(6)

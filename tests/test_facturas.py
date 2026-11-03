@@ -39,7 +39,7 @@ def factura(**cambios):
         "descuento_monto": D("155.00"), "total": D("1395.00"), "descuento_txt": "10%", "descuento_motivo": "frecuente",
         "version": 7, "numero": None, "confirmada_txt": "", "lineas": LINEAS, "pago": None, "pagos_anulados": [],
         "historial": [{"en": "30/06/2026 12:00", "por": "Profe Prueba", "accion": "Ajuste de clase",
-                       "texto": "Lunes 29/6 08:00: $800.00 → $600.00", "motivo": "llegó tarde"}],
+                       "texto": "Lunes 29/6 08:00: $800,00 → $600,00", "motivo": "llegó tarde"}],
         "reemplazada_por": None, "reemplaza": None, "reemplaza_a": None, "reemplazada_por_id": None, "reemplaza_id": None,
         "anulada_txt": "", "cedula_txt": "1.234.567-2", "identificacion_fija": False,
     }
@@ -122,7 +122,7 @@ class PantallaMes(Base):
         sinc.assert_not_called()
         p.assert_called_once()
         self.assertIn("Provisorio", r.text)
-        self.assertIn("Hasta hoy: 3 clases · $2400.00", r.text)
+        self.assertIn("Hasta hoy: 3 clases · $2.400,00", r.text)
         self.assertIn("desde el último día del mes (30/6)", r.text)
         self.assertNotIn("Confirmar todas", r.text)
 
@@ -134,7 +134,7 @@ class PantallaMes(Base):
                 mock.patch.object(facturas, "previsualizar_mes", return_value=previa):
             r = self.client.get("/profesora/resumenes?mes=6&anio=2026")
         sinc.assert_called_once_with("SB", 6, 2026)
-        for texto in ("Ana Uno", "$1395.00", "Original: $1750.00", "Borrador", "Confirmar todas las facturas del mes (1)",
+        for texto in ("Ana Uno", "$1.395,00", "Original: $1.750,00", "Borrador", "Confirmar todas las facturas del mes (1)",
                       "desde el 1/7/2026"):
             self.assertIn(texto, r.text)
 
@@ -173,8 +173,8 @@ class PantallaFactura(Base):
 
     def test_borrador_editable_con_motivos_y_version(self):
         t = self.ver(factura())
-        for texto in ("Ajustar", "Quitar ajuste", "«llegó tarde»", "Descuento general (10%)", "«frecuente»", "−$155.00",
-                      "$1395.00", 'name="version" value="7"', "Confirmar factura", "Historial"):
+        for texto in ("Ajustar", "Quitar ajuste", "«llegó tarde»", "Descuento general (10%)", "«frecuente»", "−$155,00",
+                      "$1.395,00", 'name="version" value="7"', "Confirmar factura", "Historial"):
             self.assertIn(texto, t)
 
     def test_borrador_con_periodo_abierto_no_se_confirma(self):
@@ -317,7 +317,7 @@ class Formularios(Base):
                 mock.patch.object(facturas, "facturas_del_mes", return_value=[factura(), factura(id=2, alumna="Bea Dos"),
                                                                               factura(id=3, estado_factura="confirmada")]):
             t = self.client.get("/profesora/resumenes/confirmar-mes?mes=6&anio=2026").text
-        for texto in ("Vas a confirmar <strong>2 facturas</strong>", "$3000.00", 'name="firma" value="abc"', "Bea Dos",
+        for texto in ("Vas a confirmar <strong>2 facturas</strong>", "$3.000,00", 'name="firma" value="abc"', "Bea Dos",
                       "1 borrador queda afuera"):
             self.assertIn(texto, t)
 
@@ -330,8 +330,8 @@ class MisFacturas(Base):
         with mock.patch.object(facturas, "mis_facturas", return_value=[f]) as mf:
             t = self.client.get("/mis-facturas").text
         mf.assert_called_once_with("SB", "a")
-        for texto in ("Junio 2026", "JSU-2026-06-0001", "Descuento", "−$200.00", "$600.00", "Pilates",
-                      "Descuento general (10%)", "$1395.00", "Pagada"):
+        for texto in ("Junio 2026", "JSU-2026-06-0001", "Descuento", "−$200,00", "$600,00", "Pilates",
+                      "Descuento general (10%)", "$1.395,00", "Pagada"):
             self.assertIn(texto, t)
         for interno in ("llegó tarde", "frecuente", "Historial", "Ajustar"):
             self.assertNotIn(interno, t)
@@ -448,14 +448,14 @@ class Identificacion(Base):
     def test_borrador_sin_cedula_avisa_pero_deja_confirmar(self):
         t = self.ver(factura(cedula_txt=""))
         self.assertIn("<dt>Cédula</dt><dd>no registrada</dd>", t)
-        self.assertIn("La alumna no tiene cédula registrada", t)
+        self.assertIn("Sin cédula registrada: la factura dirá «no registrada»", t)
         self.assertIn("/profesora/resumenes/1/confirmar", t)
 
     def test_confirmada_no_muestra_aviso_de_perfil(self):
         t = self.ver(factura(estado_factura="confirmada", numero="JSU-1", identificacion_fija=True, cedula_txt=""))
         self.assertIn("no registrada", t)
         self.assertNotIn("al confirmar quedan fijos", t)
-        self.assertNotIn("La alumna no tiene cédula registrada", t)
+        self.assertNotIn("Sin cédula registrada", t)
 
     def test_vista_previa_avisa_facturas_sin_cedula(self):
         self.como(PROFESORA)
@@ -464,7 +464,7 @@ class Identificacion(Base):
         with mock.patch.object(facturas, "previsualizar_mes", return_value=previa), \
                 mock.patch.object(facturas, "facturas_del_mes", return_value=[factura(), factura(id=2, cedula_txt="")]):
             t = self.client.get("/profesora/resumenes/confirmar-mes?mes=6&anio=2026").text
-        self.assertIn("1 factura es de una alumna sin cédula registrada", t)
+        self.assertIn("1 factura sin cédula registrada: dirá «no registrada»", t)
         self.assertIn("Sin cédula", t)
         self.assertIn("Confirmar 2 facturas", t)
 
@@ -592,7 +592,7 @@ class Logica(unittest.TestCase):
 
     def test_historial_legible(self):
         h = {"accion": "ajuste_linea", "detalle": {"fecha": "2026-06-29", "hora": "08:00:00", "antes": 800, "despues": 600}}
-        self.assertEqual(facturas._historial_txt(h), "Lunes 29/6 08:00: $800.00 → $600.00")
+        self.assertEqual(facturas._historial_txt(h), "Lunes 29/6 08:00: $800,00 → $600,00")
         h = {"accion": "descuento_general", "detalle": {"antes": {"tipo": None, "valor": None}, "despues": {"tipo": "porcentaje", "valor": 10}}}
         self.assertEqual(facturas._historial_txt(h), "sin descuento → 10%")
 

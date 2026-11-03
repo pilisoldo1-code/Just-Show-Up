@@ -24,6 +24,8 @@ app = FastAPI(title="Just Show Up - Horarios")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 templates.env.filters["nombre_dia"] = clases.nombre_dia
+templates.env.filters["pesos"] = facturas.pesos
+templates.env.globals["porcentaje_inasistencia"] = facturas.PORCENTAJE_INASISTENCIA
 
 TABLE = "horario"
 MESES = [
@@ -397,11 +399,18 @@ def mis_inscripciones(request: Request, usuario: Usuario = Depends(requiere_alum
 @app.get("/mi-historial")
 def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
     try:
-        historial = clases.mis_inscripciones(_sb(usuario), usuario.id)["historial"]
+        sb = _sb(usuario)
+        historial = clases.mis_inscripciones(sb, usuario.id)["historial"]
         aviso = ""
     except Exception:
         logging.exception("No se pudo cargar el historial")
         historial, aviso = [], "No pudimos cargar tu historial. Probá de nuevo."
+    if any(c["estado_txt"] == "Ausente" for c in historial):
+        desde = facturas.cobro_inasistencia_desde(sb, [usuario.empresa_id]).get(usuario.empresa_id)
+        for c in historial:
+            pct = facturas.porcentaje_cobro(c["fecha"], "ausente", desde) if c["estado_txt"] == "Ausente" else 100
+            c["cobro_reducido"] = pct != 100
+            c["importe_estimado"] = facturas.importe_base(c["precio"], pct)
     return _render(
         request, "mi_historial.html", usuario, historial=historial, aviso=aviso, aviso_ok=False,
         presentes=sum(c["estado_txt"] == "Presente" for c in historial),
@@ -1407,12 +1416,15 @@ def profesora_resumenes(request: Request, mes: int = 0, anio: int = 0, ok: int =
     hoy = ahora.date()
     revision = facturas.en_revision(mes, anio, hoy)
     lista, provisorio, previa, aviso_final = [], [], None, aviso
+    pendientes = None
     try:
         sb = _sb(usuario)
         if revision:
             facturas.sincronizar(sb, mes, anio)
             lista = facturas.facturas_del_mes(sb, mes, anio)
             previa = facturas.previsualizar_mes(sb, mes, anio)
+            if any(f["estado_factura"] == "borrador" for f in lista):
+                pendientes = _pendientes_mes(sb, anio, mes)
         else:
             provisorio = facturas.provisorio(sb, mes, anio, ahora)
     except Exception:
@@ -1423,7 +1435,7 @@ def profesora_resumenes(request: Request, mes: int = 0, anio: int = 0, ok: int =
     publica = facturas.primer_dia_siguiente(mes, anio)
     return _render(
         request, "profesora_resumenes.html", usuario,
-        facturas=lista, provisorio=provisorio, previa=previa, en_revision=revision,
+        facturas=lista, provisorio=provisorio, previa=previa, en_revision=revision, pendientes=pendientes,
         mes=mes, anio=anio, mes_txt=facturas.mes_txt(mes, anio),
         ultimo_dia_txt=f"{facturas.ultimo_dia(mes, anio).day}/{mes}", publica_txt=f"{publica.day}/{publica.month}/{publica.year}",
         publicada=ahora >= facturas.inicio_publicacion(mes, anio),
@@ -1444,13 +1456,19 @@ def profesora_confirmar_mes(request: Request, mes: int = 0, anio: int = 0, usuar
     except Exception:
         logging.exception("No se pudo armar la vista previa")
         return _volver_mes(mes, anio, False, "No pudimos armar la vista previa. Probá de nuevo.")
+    return _render(request, "profesora_confirmar_mes.html", usuario, previa=previa, facturas=lista,
+                   mes=mes, anio=anio, mes_txt=facturas.mes_txt(mes, anio), pendientes=_pendientes_mes(sb, anio, mes))
+
+
+def _pendientes_mes(sb, anio: int, mes: int) -> dict:
+    """Asistencias sin registrar del mes (se cobran completas): para avisar antes de confirmar, sin bloquear."""
     try:
-        sin_registrar = sum(c["sin_registrar"] for c in clases.clases_terminadas(sb, anio, mes))
+        terminadas = [c for c in clases.clases_terminadas(sb, anio, mes) if c["sin_registrar"]]
     except Exception:
         logging.exception("No se pudieron contar las asistencias sin registrar del mes")
-        sin_registrar = 0
-    return _render(request, "profesora_confirmar_mes.html", usuario, previa=previa, facturas=lista,
-                   mes=mes, anio=anio, mes_txt=facturas.mes_txt(mes, anio), sin_registrar=sin_registrar)
+        terminadas = []
+    return {"asistencias": sum(c["sin_registrar"] for c in terminadas), "clases": len(terminadas),
+            "enlace": f"/profesora/clases?mes={anio:04d}-{mes:02d}&filtro=pendientes#terminadas"}
 
 
 @app.post("/profesora/resumenes/confirmar-mes")
@@ -1682,7 +1700,41 @@ def admin_empresa_gestionar(request: Request, empresa_id: int, ok: int = 0, avis
     empresa["cant_admins"] = sum(1 for a in admins if a["activa"])
     for a in admins:  # solo para mostrar la opción deshabilitada: la base lo vuelve a comprobar al confirmar
         a["ultima"] = a["activa"] and empresa["cant_admins"] == 1
-    return _render(request, "admin_empresa.html", usuario, e=empresa, admins=admins, aviso=aviso, aviso_ok=bool(ok))
+    return _render(request, "admin_empresa.html", usuario, e=empresa, admins=admins, aviso=aviso, aviso_ok=bool(ok),
+                   cobro=_cobro_inasistencia(sb, empresa_id))
+
+
+def _cobro_inasistencia(sb, empresa_id: int) -> dict:
+    """Desde cuándo rige el cobro del 25 % por inasistencia. Solo se cambia si todavía no rige desde un mes anterior."""
+    desde = facturas.cobro_inasistencia_desde(sb, [empresa_id]).get(empresa_id)
+    inicio_mes = clases.ahora().date().replace(day=1)
+    return {"desde": desde, "desde_txt": f"{desde.day}/{desde.month}/{desde.year}" if desde else "",
+            "editable": desde is None or desde >= inicio_mes, "minimo": inicio_mes.isoformat()}
+
+
+MSG_COBRO = {
+    "ok": "Cobro por inasistencia actualizado.",
+    "sin_cambios": "No hubo cambios.",
+    "fecha_retroactiva": "La fecha no puede ser anterior al primer día del mes en curso: no se cambian meses ya facturados o en revisión.",
+    "ya_vigente": "El cobro ya rige desde un mes anterior: no se puede cambiar para no modificar lo ya facturado.",
+    "no_existe": "La empresa no existe.",
+}
+
+
+@app.post("/admin/empresas/{empresa_id}/cobro-inasistencia")
+def admin_empresa_cobro(empresa_id: int, desde: str = Form(""), quitar: int = Form(0),
+                        usuario: Usuario = Depends(requiere_superadmin)):
+    try:
+        fecha = None if quitar else date.fromisoformat(desde.strip())
+    except ValueError:
+        return _volver_empresas(False, "Elegí una fecha válida.", empresa_id)
+    try:
+        r = _sb(usuario).rpc("configurar_cobro_inasistencia", {"p_id_empresa": empresa_id,
+                                                                "p_desde": fecha.isoformat() if fecha else None}).execute().data
+    except Exception:
+        logging.exception("No se pudo configurar el cobro por inasistencia")
+        r = None
+    return _volver_empresas(r in ("ok", "sin_cambios"), MSG_COBRO.get(r, auth.MSG_GENERICO), empresa_id)
 
 
 @app.post("/admin/empresas")

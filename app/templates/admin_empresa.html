@@ -42,6 +42,35 @@
             </div>
         </section>
 
+        <section class="empresa-bloque" aria-labelledby="titulo-cobro">
+            <h2 id="titulo-cobro">Cobro por inasistencia</h2>
+            {% if cobro.desde %}
+            <p>Rige desde el <strong>{{ cobro.desde_txt }}</strong>: una clase reservada, no cancelada y marcada «Ausente» se
+                cobra al {{ porcentaje_inasistencia }} %. «Presente» y «Sin registrar» se cobran completas.</p>
+            {% else %}
+            <p>No se aplica: todas las clases reservadas se cobran completas.</p>
+            {% endif %}
+            {% if cobro.editable %}
+            <form action="/admin/empresas/{{ e.id }}/cobro-inasistencia" method="post" class="form-en-linea cobro-form">
+                <label>
+                    {{ 'Cambiar la fecha de inicio' if cobro.desde else 'Aplicar desde' }}
+                    <input type="date" name="desde" min="{{ cobro.minimo }}" value="{{ cobro.desde.isoformat() if cobro.desde else '' }}" required />
+                </label>
+                <button type="submit" class="btn">Guardar</button>
+            </form>
+            {% if cobro.desde %}
+            <form action="/admin/empresas/{{ e.id }}/cobro-inasistencia" method="post"
+                  onsubmit="return confirm('¿Dejar de aplicar el cobro por inasistencia en {{ e.nombre }}?')">
+                <input type="hidden" name="quitar" value="1" />
+                <button type="submit" class="btn btn-chico btn-secundario-claro">No aplicar</button>
+            </form>
+            {% endif %}
+            <p class="nota">Nunca hacia atrás: la fecha no puede ser anterior al primer día del mes en curso.</p>
+            {% else %}
+            <p class="nota">Ya rige desde un mes anterior: no se puede cambiar para no modificar lo ya facturado.</p>
+            {% endif %}
+        </section>
+
         <section class="empresa-bloque">
             <div class="bloque-encabezado">
                 <div class="bloque-encabezado-texto">

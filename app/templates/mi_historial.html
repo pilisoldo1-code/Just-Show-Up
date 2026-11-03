@@ -31,10 +31,17 @@
                     <span class="historial-fecha">{{ c.dia }} {{ c.fecha_txt }}</span>
                     <span class="badge {{ c.badge }}">{{ c.estado_txt }}</span>
                 </div>
+
                 <div class="historial-detalle">
                     <span>{{ c.hora }} · {{ c.duracion }} min</span>
-                    {% if not cancelada %}<span class="historial-precio">${{ '%g'|format(c.precio) }}</span>{% endif %}
+                    {% if not cancelada %}<span class="historial-precio{{ ' historial-precio-original' if c.cobro_reducido }}">{% if c.cobro_reducido %}Precio de la clase: {% endif %}{{ c.precio|pesos }}</span>{% endif %}
                 </div>
+                {% if c.cobro_reducido %}
+                <div class="historial-cobro">
+                    <p>Inasistencia: se factura el {{ porcentaje_inasistencia }} % ({{ c.importe_estimado|pesos }})</p>
+                    <p class="nota-chica">Importe estimado: el definitivo figura en Mis facturas.</p>
+                </div>
+                {% endif %}
             </li>
             {% endfor %}
         </ul>
