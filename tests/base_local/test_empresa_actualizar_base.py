@@ -1,8 +1,9 @@
 """Modo `actualizar` del escenario de Pilates Centro (scripts/empresa_demo.py), en un Postgres LOCAL descartable con la
 COPIA de producción: se crea el escenario el 3/11, se simulan cambios de un ensayo y se actualiza el 16/11 y el 17/11.
-Comprueba que solo agrega (asistencias pendientes, reservas, clases y la lista de espera), que conserva lo hecho en el
-ensayo, que no toca facturas confirmadas, pagos, octubre ni Just Show Up, que el plan no escribe nada y que repetirlo no
-duplica. No toca Supabase.
+Comprueba que nunca asigna asistencias por su cuenta (solo las del archivo aprobado; las filas vacías quedan pendientes y
+las reservas ajenas o ya registradas se rechazan sin aplicar nada), que solo agrega reservas, clases y la lista de espera,
+que conserva lo hecho en el ensayo, que no toca facturas confirmadas, pagos, octubre ni Just Show Up, que la vista previa
+no escribe nada y que repetirlo no duplica. No toca Supabase.
 
 Uso:  python tests/base_local/test_empresa_actualizar_base.py "<carpeta del respaldo antes de multiempresa>"
 """
@@ -163,22 +164,53 @@ q(su, "insert into clase (id_horario, fecha, hora_inicio, estado, duracion, prec
 HIST = historico()
 ok("Just Show Up no cambió con la creación ni con el ensayo", jsu() == FOTO_JSU)
 
-# ---------- 16/11, 12:00: plan sin escribir ----------
+# ---------- 16/11, 12:00: vista previa sin asignaciones ----------
 d16 = datetime(2026, 11, 16, 12, 0, tzinfo=TZ)
 antes = pil_todo()
 plan = ED.actualizar(db, d16, aplicar=False)
-ok("el plan (sin --aplicar) no escribe nada", pil_todo() == antes and plan["aplicado"] is False)
-ok("plan del 16/11: completa asistencias, Inés ausente el 12/11 (su última pendiente), Sabrina queda sin registrar el 12/11, lista de espera el 26/11",
-   plan["asistencias"] > 0 and plan["ausentes"] == [(date(2026, 11, 12), ED.INES)] and plan["sin_registrar_queda"] == date(2026, 11, 12)
-   and plan["espera"] == [date(2026, 11, 26)], plan)
+PEND = {p["id_reserva"]: p for p in plan["pendientes"]}
+ok("la vista previa no escribe nada y no asigna ninguna asistencia por su cuenta",
+   pil_todo() == antes and plan["aplicado"] is False and plan["asistencias"] == 0 and plan["ausentes"] == [])
+ok("lista las pendientes de noviembre de las alumnas del escenario (ni la compartida, ni otras cuentas, ni octubre facturado)",
+   PEND and r_extra not in PEND and r_rocio not in PEND
+   and all(p["alumna"] in {m for m, *_ in ED.ALUMNAS} and p["fecha"] >= "2026-11-01" for p in PEND.values()), plan["pendientes"])
+ok("cada pendiente muestra cuánto se cobraría: completa si presente, 25 % si ausente",
+   all(float(p["cobro_si_ausente"]) == round(float(p["precio"]) * 0.25, 2) and p["cobro_si_presente"] == p["precio"] for p in PEND.values()))
+ok("el plan de reservas sigue igual: lista de espera del jueves 26/11", plan["espera"] == [date(2026, 11, 26)], plan)
 
-# ---------- 16/11: aplicar ----------
-r16 = ED.actualizar(db, d16, aplicar=True)
-ok("aplicado el 16/11 con el mismo resultado que el plan", {k: v for k, v in r16.items() if k != "aplicado"}
-   == {k: v for k, v in plan.items() if k != "aplicado"}, r16)
-ok("Inés: inasistencia del 12/11 (reformer, $1.200 → $300) para el 25 % del provisorio",
+# ---------- propuesta en CSV, asignación explícita y rechazos ----------
+import tempfile  # noqa: E402
+tmp = tempfile.mkdtemp()
+ruta = os.path.join(tmp, "propuesta.csv")
+ok("la propuesta tiene una fila por pendiente y la columna estado vacía",
+   ED.escribir_propuesta(plan["pendientes"], ruta) == len(PEND) and ED.leer_asignaciones(ruta)[0] == {})
+ines12 = res(ED.INES, date(2026, 11, 12), "jueves")["id"]
+sabrina12 = res(ED.SABRINA, date(2026, 11, 12), "jueves")["id"]
+import csv  # noqa: E402
+filas = list(csv.DictReader(open(ruta, encoding="utf-8"), delimiter=";"))
+for f in filas:  # Julieta aprueba todas salvo Sabrina 12/11 (la deja vacía); Inés 12/11 ausente
+    rid = int(f["id_reserva"])
+    f["estado"] = "" if rid == sabrina12 else ("ausente" if rid == ines12 else "presente")
+with open(ruta, "w", newline="", encoding="utf-8") as fh:
+    w = csv.DictWriter(fh, fieldnames=ED.COLUMNAS, delimiter=";"); w.writeheader(); w.writerows(filas)
+ASIG, SHA = ED.leer_asignaciones(ruta)
+ok("se leen solo las filas completadas", ines12 in ASIG and sabrina12 not in ASIG and len(ASIG) == len(PEND) - 1)
+for nombre, malas in (("una reserva de otra cuenta", {r_extra: "presente"}), ("una reserva que ya tiene asistencia", {r_rocio: "presente"}),
+                      ("una reserva de octubre facturado", {res(ED.ROCIO, date(2026, 10, 5), "lunes")["id"]: "presente"})):
+    antes = pil_todo()
+    try:
+        ED.actualizar(db, d16, aplicar=True, asignaciones={**ASIG, **malas})
+        ok(f"se rechaza {nombre}", False)
+    except SystemExit:
+        ok(f"se rechaza {nombre} y no se aplica nada (tampoco las demás)", pil_todo() == antes)
+
+# ---------- 16/11: aplicar las asignaciones aprobadas ----------
+r16 = ED.actualizar(db, d16, aplicar=True, asignaciones=ASIG)
+ok("aplicado: exactamente las asignaciones del archivo", r16["asistencias"] == len(ASIG)
+   and r16["ausentes"] == [(date(2026, 11, 12), ED.INES)] and [p["id_reserva"] for p in r16["quedan_pendientes"]] == [sabrina12], r16)
+ok("Inés: ausente el 12/11 (reformer, $1.200 → $300 en el provisorio) y presente el 11/11, como se asignó",
    res(ED.INES, date(2026, 11, 12), "jueves")["asistencia"] == "ausente" and res(ED.INES, date(2026, 11, 11), "miercoles")["asistencia"] == "presente")
-ok("Sabrina: su clase del 12/11 sigue sin registrar", res(ED.SABRINA, date(2026, 11, 12), "jueves")["asistencia"] is None)
+ok("Sabrina: la fila que se dejó vacía sigue pendiente (no se inventa)", res(ED.SABRINA, date(2026, 11, 12), "jueves")["asistencia"] is None)
 ok("se conserva el ensayo: Inés presente el 2/11, Julia cancelada el 9/11, Rocío ausente el 5/11",
    res(ED.INES, date(2026, 11, 2), "lunes")["asistencia"] == "presente"
    and res(ED.JULIA, date(2026, 11, 9), "lunes") == {"id": res(ED.JULIA, date(2026, 11, 9), "lunes")["id"], "estado": "cancelada", "asistencia": None}
@@ -188,13 +220,11 @@ ok("la reserva de una alumna que no es del escenario no se toca", q(su, "select 
 ok("no se revive la cancelación de Julia (ninguna reserva nueva suya ese lunes)",
    q(su, "select count(*) n from reserva where id_alumna = %s and id_clase = %s", (U[ED.JULIA], c_lunes9), True)["n"] == 1)
 hist = q(su, "select count(*) n, count(distinct id_reserva) d from asistencia_historial where id_empresa = %s and motivo = %s",
-         (E2, ED.MOTIVO_ACTUALIZAR), True)
+         (E2, ED.MOTIVO_ASIGNADA), True)
 SIS = q(su, "select id::text, nombre, apellido, es_superadmin from profiles where mail = %s", (ED.SISTEMA[0],), True)
-ok("cada asistencia completada quedó en el historial, con motivo, a nombre de la cuenta técnica (nunca de Lucía)",
+ok("cada asignación quedó en el historial como «asignación explícita de datos ficticios», a nombre de la cuenta técnica",
    SIS and hist["n"] == hist["d"] == r16["asistencias"]
-   and q(su, "select count(*) n from asistencia_historial where motivo = %s and por <> %s", (ED.MOTIVO_ACTUALIZAR, SIS["id"]), True)["n"] == 0
-   and q(su, "select count(*) n from asistencia_historial where por = %s and motivo <> %s", (U[ED.ADMIN[0]], ED.MOTIVO_ACTUALIZAR), True)["n"]
-   == q(su, "select count(*) n from asistencia_historial where por = %s", (U[ED.ADMIN[0]],), True)["n"])
+   and q(su, "select count(*) n from asistencia_historial where motivo = %s and por <> %s", (ED.MOTIVO_ASIGNADA, SIS["id"]), True)["n"] == 0)
 ok("la cuenta técnica no pertenece a ninguna empresa ni es superadministradora",
    not SIS["es_superadmin"] and q(su, "select count(*) n from membresia where id_usuario = %s", (SIS["id"],), True)["n"] == 0)
 LU = ClienteFalso(uri, U[ED.ADMIN[0]])
@@ -202,11 +232,7 @@ c12 = q(su, "select c.id from clase c join horario h on h.id = c.id_horario wher
             "and h.dia_semana = 'jueves'", (E2,), True)["id"]
 vista = LU.rpc("historial_asistencias_clase", {"p_id_clase": c12}).execute().data
 ok("en la pantalla, el historial de la clase dice «Carga automática (script de demostración)» y el motivo explícito",
-   vista and all(x["por"] == "Carga automática (script de demostración)" and x["motivo"] == ED.MOTIVO_ACTUALIZAR for x in vista), vista)
-pend = q(su, "select count(*) n from reserva r join clase c on c.id = r.id_clase left join asistencia a on a.id_reserva = r.id "
-             "where c.id_empresa = %s and r.estado = 'confirmada' and c.fecha < '2026-11-16' and c.fecha >= '2026-11-01' and a.id is null "
-             "and r.id_alumna <> %s", (E2, EXTRA), True)["n"]
-ok("del escenario queda exactamente una asistencia pendiente en noviembre (la de Sabrina)", pend == 1, pend)
+   vista and all(x["por"] == "Carga automática (script de demostración)" and x["motivo"] == ED.MOTIVO_ASIGNADA for x in vista), vista)
 ok("octubre, facturas, líneas, historial de facturas y pagos: intactos", historico() == HIST)
 jue26 = q(su, "select c.id, c.cantidad_inscriptas, c.cupo_max from clase c join horario h on h.id = c.id_horario where c.id_empresa = %s "
               "and c.fecha = '2026-11-26' and h.dia_semana = 'jueves'", (E2,), True)
@@ -223,18 +249,22 @@ ok("sin clases duplicadas", q(su, "select count(*) n from (select id_horario, fe
                                   "having count(*) > 1) x", (E2,), True)["n"] == 0)
 ok("Just Show Up idéntico", jsu() == FOTO_JSU)
 antes = pil_todo()
+try:
+    ED.actualizar(db, d16, aplicar=True, asignaciones=ASIG)
+    ok("volver a aplicar el mismo archivo se rechaza (ya no son pendientes)", False)
+except SystemExit:
+    ok("volver a aplicar el mismo archivo se rechaza (ya no son pendientes) sin cambiar nada", pil_todo() == antes)
 r16b = ED.actualizar(db, d16, aplicar=True)
-ok("repetirlo el mismo día no cambia nada", pil_todo() == antes and r16b["asistencias"] == r16b["reservas"] == r16b["clases_nuevas"] == 0
+ok("repetirlo el mismo día sin asignaciones no cambia nada", pil_todo() == antes and r16b["asistencias"] == r16b["reservas"] == r16b["clases_nuevas"] == 0
    and not r16b["espera"], r16b)
 
-# ---------- 17/11, 10:00 (día de la defensa) ----------
+# ---------- 17/11, 10:00 (día de la defensa), sin asignaciones ----------
 d17 = datetime(2026, 11, 17, 10, 0, tzinfo=TZ)
 r17 = ED.actualizar(db, d17, aplicar=True)
-ok("17/11: completa las del lunes 16; Sabrina queda sin registrar el 16/11; sin ausentes nuevas (Inés ya tiene la suya)",
-   r17["sin_registrar_queda"] == date(2026, 11, 16) and r17["ausentes"] == [] and r17["asistencias"] > 0, r17)
-ok("…su clase del 12/11 ahora está completa (solo se agregó la asistencia)", res(ED.SABRINA, date(2026, 11, 12), "jueves")["asistencia"] == "presente")
-ok("…Inés sigue con la inasistencia del 12/11 (el 25 % del provisorio de noviembre)",
-   res(ED.INES, date(2026, 11, 12), "jueves")["asistencia"] == "ausente")
+ok("17/11 sin asignaciones: no registra ninguna asistencia; lista como pendientes la de Sabrina 12/11 y las del lunes 16/11",
+   r17["asistencias"] == 0 and sabrina12 in {p["id_reserva"] for p in r17["quedan_pendientes"]}
+   and {p["fecha"] for p in r17["quedan_pendientes"]} == {"2026-11-12", "2026-11-16"}, r17)
+ok("…Inés sigue con la inasistencia del 12/11", res(ED.INES, date(2026, 11, 12), "jueves")["asistencia"] == "ausente")
 ok("…la lista de espera del 26/11 sigue igual (no se duplica)", q(su, "select count(*) n from listadeespera where id_clase = %s",
                                                                   (jue26["id"],), True)["n"] == 1)
 ok("…octubre, facturas y pagos intactos; Just Show Up idéntico", historico() == HIST and jsu() == FOTO_JSU)

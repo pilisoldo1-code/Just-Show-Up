@@ -133,15 +133,16 @@ ok("profesoras: Lucía da lunes (mat) y miércoles (reformer); Carolina martes (
                                                        "martes": "Carolina Méndez", "jueves": "Carolina Méndez"}
    and all(x["distintas"] == 0 for x in docente.values()), docente)
 from app import facturas as FA  # noqa: E402
-aus25 = reg["ines_ausente_25"]
-ok("la inasistencia de Inés de este mes cae en la vigencia: en el provisorio se cobra al 25 %",
-   aus25 is not None and FA.porcentaje_cobro(aus25[0], "ausente", HOY.replace(day=1)) == 25
-   and FA.porcentaje_cobro(reg["ines_ausente_100"][0], "ausente", HOY.replace(day=1)) == 100, reg)
-ok("Inés: ausente en el mes anterior y en este mes", estado(ED.INES, reg["ines_ausente_100"])["asistencia"] == "ausente"
-   and estado(ED.INES, reg["ines_ausente_25"])["asistencia"] == "ausente"
-   and reg["ines_ausente_100"][0].month != HOY.month and reg["ines_ausente_25"][0].month == HOY.month)
-ok("Sabrina: su última clase de este mes quedó sin registrar", estado(ED.SABRINA, reg["sabrina_sin_registrar"]) ==
-   {"reserva": "confirmada", "asistencia": None})
+VIGENCIA = (HOY.replace(day=1) - timedelta(days=1)).replace(day=1)
+ok("las dos inasistencias de Inés caen en la vigencia: se cobran al 25 %",
+   all(reg[k] and FA.porcentaje_cobro(reg[k][0], "ausente", VIGENCIA) == 25 for k in ("ines_ausente_mes_anterior", "ines_ausente_mes")), reg)
+ok("Inés: ausente en el mes anterior y en este mes", estado(ED.INES, reg["ines_ausente_mes_anterior"])["asistencia"] == "ausente"
+   and estado(ED.INES, reg["ines_ausente_mes"])["asistencia"] == "ausente"
+   and reg["ines_ausente_mes_anterior"][0].month != HOY.month and reg["ines_ausente_mes"][0].month == HOY.month)
+ok("ninguna clase dictada queda «sin registrar» (sin excepciones artificiales; Sabrina incluida)",
+   q(su, "select count(*) n from reserva r join clase c on c.id = r.id_clase left join asistencia a on a.id_reserva = r.id "
+         "where c.id_empresa = %s and r.estado = 'confirmada' and c.fecha < %s and a.id is null", (E2, HOY), True)["n"] == 0
+   and "sabrina_sin_registrar" not in reg)
 ok("Julia: una reserva cancelada a tiempo en el mes anterior", estado(ED.JULIA, reg["julia_cancelada"])["reserva"] == "cancelada")
 ok("Rocío: siempre presente", q(su, "select count(*) n from reserva r left join asistencia a on a.id_reserva = r.id join clase c "
    "on c.id = r.id_clase where r.id_alumna = %s and c.fecha < %s and coalesce(a.estado, '') <> 'presente'", (U[ED.ROCIO], HOY), True)["n"] == 0)
@@ -152,8 +153,8 @@ ok("el jueves de la próxima semana: reformer completa y Noelia primera en la li
    "where id_clase = %s", (llena["id"],)) == [{"id_alumna": U[ED.NOELIA], "posicion": 1, "estado": "en_espera"}])
 ok("la alumna compartida tiene los lunes de este mes en Pilates", q(su, "select count(*) n from reserva r join clase c on c.id = r.id_clase "
    "where r.id_alumna = %s and c.id_empresa = %s", (DEMO, E2), True)["n"] >= 1)
-ok("vigencia del 25 %: desde el 1° de este mes", q(su, "select cobro_inasistencia_desde d from empresa where id = %s", (E2,), True)["d"]
-   == HOY.replace(day=1))
+ok("vigencia del 25 %: desde el 1° del mes anterior (todo el escenario)",
+   q(su, "select cobro_inasistencia_desde d from empresa where id = %s", (E2,), True)["d"] == VIGENCIA)
 fac = q(su, "select f.numero, f.estado_factura, f.estado_pago, f.total, p.mail from resumen_mensual f join profiles p on p.id = f.id_alumna "
             "where f.id_empresa = %s order by f.numero", (E2,))
 mes_ant = HOY.replace(day=1) - timedelta(days=1)
@@ -164,7 +165,7 @@ ok("la de Rocío pagada (transferencia); las demás pendientes", {f["mail"]: f["
    and all(f["estado_pago"] == "pendiente" for f in fac if f["mail"] != ED.ROCIO))
 lin = q(su, "select d.porcentaje, d.asistencia, d.importe_final from resumen_mensual_detalle d join resumen_mensual f on f.id = d.id_resumen_mensual "
             "where f.id_empresa = %s and f.id_alumna = %s and d.asistencia = 'ausente'", (E2, U[ED.INES]))
-ok("la inasistencia de Inés del mes anterior se factura al 100 % (antes de la vigencia)", lin and all(x["porcentaje"] == 100 for x in lin), lin)
+ok("la inasistencia de Inés del mes anterior se factura al 25 %", lin and all(x["porcentaje"] == 25 for x in lin), lin)
 ok("Julia: la clase cancelada no está en su factura", q(su, "select count(*) n from resumen_mensual_detalle d join reserva r on r.id = d.id_reserva "
    "where r.estado = 'cancelada' and d.id_empresa = %s", (E2,), True)["n"] == 0)
 ok("la factura de JSU-2026-09-0001 y el contador de Just Show Up no cambian",
