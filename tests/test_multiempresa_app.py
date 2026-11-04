@@ -820,20 +820,31 @@ class EditarPersona(Base):
         self.preparar()
         r = self.get(f"/profesora/profesoras/{self.ID}")
         self.assertEqual(r.status_code, 200)
-        for texto in ("Pia Dos", "Guardar datos", "Rol actual: <strong>Profesora</strong>", "Cambiar a alumna",
+        for texto in ("Pia Dos", "Guardar datos",
                       f'action="/profesora/profesoras/{self.ID}/baja" method="get"', ">Desactivar</button>", "p@x.uy", "<dt>Teléfono</dt><dd>099123456</dd>", "<dt>Cédula</dt><dd>No registrada</dd>",
                       "<dt>Carné de salud vence</dt>", "Reiniciar contraseña"):
             self.assertIn(texto, r.text)
         for texto in ("es_admin", "Administradora</label>", "Guardar roles"):
             self.assertNotIn(texto, r.text)  # nunca se ofrece el rol de administradora
+        for texto in ("Rol en", "Cambiar a", "/roles"):
+            self.assertNotIn(texto, r.text)  # la tarjeta de rol de una profesora se retiró de la pantalla
+
+    def test_alumna_sin_opcion_de_cambiar_a_profesora(self):
+        self.como(ADMIN)
+        self.MEMB = {**self.MEMB, "es_profesora": False, "es_alumna": True}
+        self.preparar()
+        r = self.get(f"/profesora/alumnas/{self.ID}")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Rol actual: <strong>Alumna</strong>", r.text)
+        for texto in ("Cambiar a", "/roles", "Para que pase a ser"):
+            self.assertNotIn(texto, r.text)
 
     def test_pendientes_bloquean_el_cambio_de_rol(self):
+        # la pantalla ya no ofrece el cambio, pero el servidor lo sigue validando con la base
         self.como(ADMIN)
         self.preparar()
         self.respuestas["pendientes_cambio_rol"] = ["horarios", "clases_futuras"]
         r = self.get(f"/profesora/profesoras/{self.ID}")
-        self.assertIn("Para que pase a ser alumna, antes hay que resolver que", r.text)
-        self.assertIn("tiene horarios activos", r.text)
         self.assertNotIn("Cambiar a alumna", r.text)
         self.respuestas["asignar_membresia"] = "pendientes:horarios"
         r = self.post(f"/profesora/profesoras/{self.ID}/roles", {"rol": "alumna"})  # la base vuelve a comprobarlo

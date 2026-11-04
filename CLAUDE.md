@@ -1163,6 +1163,14 @@ Para cada módulo, en este orden:
   rango abreviado (`_formato_rango_corto`, «26 oct – 1 nov»). Encabezados con botón al lado del título (Horarios,
   Tipos de clase, Alumnas, Profesoras, Empresas): `.seccion-encabezado`, título a la izquierda y botón a la derecha
   en la misma fila también en celular (hasta 400 px se achican título y botón).
+- **Celular, módulo de administración (rama `mobile-administracion`, 03/11)**: el menú ☰ (hasta 1099 px, no 900)
+  se **superpone** al contenido (`position: absolute` debajo del encabezado; no lo empuja). Fechas y horas a la izquierda
+  con `::-webkit-date-and-time-value` (Safari de iPhone las centra; Chrome no lo reproduce). `.dias-nav` la comparten
+  Asistencias, Planificación y Estadísticas: para cambiar solo una pantalla usar una clase propia (`.dias-grilla`).
+  Selector de imagen propio (`.selector-archivo`: input oculto + label con aspecto de botón + nombre del archivo y vista
+  previa local); ojo: `.tipo-imagen` pone `display: block` y anula el atributo `hidden`. Facturación del mes usa
+  `.lista-facturas` / `.factura-item` y la confirmación masiva va al final. La pantalla ya no ofrece el cambio de rol
+  alumna ↔ profesora (la ruta `/roles` del servidor sigue).
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
 - Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).
