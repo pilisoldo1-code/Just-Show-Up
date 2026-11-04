@@ -199,9 +199,10 @@ ok("panel: las dos empresas con sus cifras", "Just Show Up" in lista and "Pilate
 ok("panel: sin datos operativos ni personales (no muestra alumnas, cédulas ni facturas)",
    "rocio.pilates" not in lista and "Factura" not in lista)
 g = texto(SA.get(f"/admin/empresas/{PIL}").text)
-ok("Gestionar Pilates Centro: administradora y vigencia del 25 % desde el 1° de este mes",
+VIG = (hoy.replace(day=1) - timedelta(days=1)).replace(day=1)  # el escenario aplica el 25 % desde el mes anterior
+ok("Gestionar Pilates Centro: administradora y vigencia del 25 % desde el 1° del mes anterior (sin poder moverla)",
    "Lucía Bentancor" in g and "Cobro por inasistencia" in g
-   and f"Rige desde el <strong>1/{hoy.month}/{hoy.year}</strong>" in g)
+   and f"Rige desde el <strong>1/{VIG.month}/{VIG.year}</strong>" in g)
 r = SA.post(f"/admin/empresas/{PIL}/editar", data={"nombre": "Pilates Centro Demo", "codigo": "PIL"}, follow_redirects=False)
 ok("editar el nombre de la empresa", "ok=1" in r.headers["location"]
    and sql("select nombre from empresa where id = %s", (PIL,), True)["nombre"] == "Pilates Centro Demo")
@@ -226,7 +227,6 @@ r = SA.post(f"/admin/empresas/{PIL}/administradoras/{ADM2_P}/baja", data={"motiv
 ok("desactivar una administradora con vista previa (queda inactiva y registrada)", firma is not None and sql(
    "select activa from membresia where id_usuario = %s and id_empresa = %s", (ADM2_P, PIL), True)["activa"] is False
    and sql("select count(*) n from baja_docente where id_empresa = %s", (PIL,), True)["n"] == 1, r.headers.get("location"))
-VIG = (hoy.replace(day=1) - timedelta(days=1)).replace(day=1)  # el escenario aplica el 25 % desde el mes anterior
 r = SA.post(f"/admin/empresas/{PIL}/cobro-inasistencia", data={"desde": hoy.replace(day=1).isoformat()}, follow_redirects=False)
 ok("la vigencia ya rige desde un mes anterior: la superadministradora no puede moverla (no cambia lo facturado)",
    "ok=0" in r.headers["location"] and sql("select cobro_inasistencia_desde d from empresa where id = %s", (PIL,), True)["d"] == VIG)
