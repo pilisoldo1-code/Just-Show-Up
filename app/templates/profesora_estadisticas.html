@@ -100,6 +100,7 @@
                 <span class="est-etiqueta">Pendientes de registrar</span>
                 <span class="est-valor">{{ datos.pendientes.clases }} {{ 'clase' if datos.pendientes.clases == 1 else 'clases' }}</span>
                 <span class="est-detalle">{{ datos.pendientes.asistencias }} {{ 'asistencia' if datos.pendientes.asistencias == 1 else 'asistencias' }} sin registrar{% if not datos.pendientes.clases %} · al día{% endif %}</span>
+                <span class="est-detalle">Total de pendientes de {{ 'la empresa' if usuario.es_admin else 'tus clases' }}, independientemente de los filtros</span>
             </div>
         </div>
 
