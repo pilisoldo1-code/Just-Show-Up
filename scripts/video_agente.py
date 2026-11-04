@@ -1,7 +1,7 @@
 """Autoriza una computadora para subir videos (programa local de Videos On Demand) y prepara el bucket.
 
 El token se muestra una sola vez: en la base queda solo su huella. Por defecto se niega a correr fuera de localhost:
-contra un proyecto remoto exige --remoto (y autorización).
+contra un proyecto remoto exige --remoto y contra producción, además, --produccion (y autorización).
 
 Uso:
     python scripts/video_agente.py crear <mail de la profesora> "<nombre de la computadora>" [--remoto]
@@ -12,7 +12,6 @@ import os
 import secrets
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -22,7 +21,7 @@ load_dotenv(RAIZ / ".env")
 
 from supabase import create_client  # noqa: E402
 
-from app import auth, videos  # noqa: E402
+from app import auth, entorno, videos  # noqa: E402
 
 
 def id_de(mail: str) -> str:
@@ -55,14 +54,13 @@ def bucket() -> None:
     print(f"Bucket privado {videos.BUCKET} creado.")
 
 
-def es_local(url: str) -> bool:
-    return (urlparse(url).hostname or "") in ("localhost", "127.0.0.1", "::1")
-
-
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if a != "--remoto"]
-    if not es_local(os.environ.get("SUPABASE_URL", "")) and "--remoto" not in sys.argv:
+    args = [a for a in sys.argv[1:] if a not in ("--remoto", "--produccion")]
+    url = os.environ.get("SUPABASE_URL", "")
+    if not entorno.es_local(url) and "--remoto" not in sys.argv:
         sys.exit("SUPABASE_URL no es local: para usarlo igual, agregá --remoto (y tené autorización).")
+    if entorno.url_es_produccion(url) and "--produccion" not in sys.argv:
+        sys.exit("SUPABASE_URL es producción: no se hace nada sin --produccion y autorización.")
     accion = args[0] if args else ""
     if accion == "crear" and len(args) == 3:
         crear(args[1], args[2])

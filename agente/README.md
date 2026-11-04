@@ -29,11 +29,11 @@ Lo que no esté activado no se comprime ni se sube.
 
    Se muestra una sola vez y en la base queda solo su huella. No mandarlo por chat. Contra un proyecto que no sea
    local, el script exige `--remoto`.
-5. Copiar `config.ejemplo.json` como `config.json`, pegar el token y cambiar `url`. El ejemplo apunta a un servidor
-   local a propósito: nunca a producción. En Mac o Linux: `chmod 600 config.json`.
+5. Copiar `config.ejemplo.json` como `config.json`, pegar el token y completar `entorno`. En Mac o Linux:
+   `chmod 600 config.json`. En pruebas, `scripts/videos_prueba_datos.py` genera este archivo solo.
 
-   El programa solo necesita `url` y `token`. **No lleva ninguna clave de Supabase.** Si `ffmpeg` no está en el PATH,
-   indicar su ruta completa en `ffmpeg` y `ffprobe`.
+   El programa solo necesita `url`, `entorno` y `token`. **No lleva ninguna clave de Supabase.** Si `ffmpeg` no está en
+   el PATH, indicar su ruta completa en `ffmpeg` y `ffprobe`.
 6. Hacer que arranque solo.
 
 ### Mac
@@ -52,6 +52,19 @@ Lo que no esté activado no se comprime ni se sube.
 
 Crear una tarea en el Programador de tareas que ejecute `python agente_videos.py --una-vez` cada 5 minutos. Si Documentos
 está en OneDrive, indicar la carpeta real en `carpeta_zoom`.
+
+## Protección contra producción
+
+El programa no sube nada si no coinciden tres cosas: `entorno` en `config.json`, `VIDEOS_ENTORNO` en el servidor y
+`video_parametros.entorno` en la base. Una base recién migrada queda cerrada hasta configurarlo a propósito.
+
+- Sin `--produccion`, el entorno tiene que ser `pruebas-...` y el servidor, de la red local. Rechaza producción aunque
+  el entorno diga pruebas.
+- Un servidor de pruebas se niega a correr en Vercel o contra la base de producción.
+- Si el servidor rechaza al programa, se detiene sin reintentar. Tampoco sube a producción aunque se lo pidan.
+- `--produccion` no está autorizado todavía.
+
+Procedimiento de las pruebas reales: `PRUEBAS_REALES.md`.
 
 ## Qué hace
 

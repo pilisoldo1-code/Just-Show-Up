@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app import auth, clases, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones, videos
+from app import auth, clases, entorno, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones, videos
 from app.auth import (ErrorAuth, Redirigir, Usuario, requiere_admin, requiere_alumna, requiere_espectadora, requiere_login,
                       requiere_profesora, requiere_superadmin)
 from app.clases import DIAS_ORDEN
@@ -2247,11 +2247,13 @@ def videos_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuari
 @app.get("/videos/configuracion")
 def videos_configuracion(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_admin)):
     try:
-        horarios = videos.configuracion(_sb(usuario))
+        sb = _sb(usuario)
+        horarios, grabaciones = videos.configuracion(sb), videos.ultimas_grabaciones(sb)
     except Exception:
         logging.exception("No se pudo cargar la configuración de videos")
-        horarios, aviso, ok = [], "No pudimos cargar la configuración. Probá de nuevo.", 0
-    return _render(request, "videos_configuracion.html", usuario, horarios=horarios, aviso=aviso, aviso_ok=bool(ok))
+        horarios, grabaciones, aviso, ok = [], [], "No pudimos cargar la configuración. Probá de nuevo.", 0
+    return _render(request, "videos_configuracion.html", usuario, horarios=horarios, grabaciones=grabaciones,
+                   aviso=aviso, aviso_ok=bool(ok))
 
 
 @app.post("/videos/configuracion/{horario_id}")
@@ -2328,8 +2330,11 @@ class VideoFallo(BaseModel):
 
 
 def _agente(request: Request) -> str:
-    """id de la profesora dueña del token del programa local."""
-    id_profesora = videos.identificar_agente(request.headers.get("authorization", ""))
+    """id de la profesora dueña del token. El programa, este servidor y la base tienen que estar en el mismo entorno."""
+    entorno_pedido = request.headers.get("x-video-entorno", "")
+    if not entorno.servidor_admite(entorno_pedido):
+        raise HTTPException(status_code=403, detail="Entorno no autorizado")
+    id_profesora = videos.identificar_agente(request.headers.get("authorization", ""), entorno_pedido)
     if id_profesora is None:
         raise HTTPException(status_code=401, detail="Token inválido")
     return id_profesora
@@ -2340,6 +2345,11 @@ def _video_del_agente(video_id: int, id_profesora: str) -> dict:
     if video is None:
         raise HTTPException(status_code=404, detail="Video no encontrado")
     return video
+
+
+@app.post("/api/videos/agente/entorno")
+def video_agente_entorno(request: Request, _: str = Depends(_agente)):
+    return {"entorno": request.headers.get("x-video-entorno", "")}
 
 
 @app.post("/api/videos/agente/consultar")

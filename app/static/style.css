@@ -3820,3 +3820,10 @@ a.video-card:hover {
     justify-content: space-between;
     gap: 8px 16px;
 }
+
+.video-error {
+    margin: 6px 0 0;
+    color: #f87171;
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+}

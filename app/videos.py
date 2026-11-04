@@ -2,11 +2,12 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 from datetime import date
 
 from supabase import Client, create_client
 
-from app import auth, clases
+from app import auth, clases, entorno
 
 BUCKET = "videos-clases"
 TTL_URL_MAXIMO = 90 * 60  # alcanza para 40 minutos con pausas; después el reproductor pide una lista nueva
@@ -109,6 +110,49 @@ def lista_para_reproducir(sb: Client, id_video: int) -> tuple[str, str]:
 
 # ---------- configuración (administradora) ----------
 
+ESTADOS_GRABACION = {
+    "subiendo": ("Subiendo", "badge-espera"),
+    "publicado": ("Publicado", "badge-on"),
+    "error": ("Con error, se reintenta", "badge-ausente"),
+}
+
+
+def limpiar_mensaje(mensaje: str | None) -> str:
+    """Saca lo que no debe guardarse ni mostrarse: URLs firmadas, rutas de la computadora, tokens y claves."""
+    texto = re.sub(r"https?://\S+", "[enlace]", mensaje or "")
+    texto = re.sub(r"(?:/Users|/home|/private|/tmp|[A-Za-z]:\\)[^\s,;]*", "[ruta]", texto)
+    texto = re.sub(r"\b(?:Bearer\s+\S+|sb_[a-z]+_\S+|eyJ[\w-]+\S*)", "[dato]", texto)
+    texto = re.sub(r"\b[A-Za-z0-9_-]{32,}\b", "[dato]", texto)
+    return " ".join(texto.split())[:300]
+
+
+def _estado_grabacion(g: dict) -> tuple[str, str]:
+    if g["estado"] == "eliminado":
+        return ("Abandonada, sin publicar", "badge-off") if g["nunca_publicado"] else ("Vencido, archivos borrados", "badge-off")
+    if g["estado"] == "publicado" and g["vencido"]:
+        return "Vencido, falta borrar archivos", "badge-espera"
+    return ESTADOS_GRABACION.get(g["estado"], (g["estado"], "badge-off"))
+
+
+def ultimas_grabaciones(sb: Client) -> list[dict]:
+    salida = []
+    for g in sb.rpc("videos_ultimas_grabaciones", {}).execute().data or []:
+        f = date.fromisoformat(g["fecha"])
+        estado_txt, badge = _estado_grabacion(g)
+        salida.append({
+            "clase": g["clase"],
+            "fecha_txt": f"{clases.nombre_dia(f)} {f.day}/{f.month}",
+            "hora": g["hora_inicio"][:5],
+            "estado_txt": estado_txt,
+            "badge": badge,
+            "intentos": g["intentos"],
+            "limpieza_intentos": g["limpieza_intentos"],
+            "error": limpiar_mensaje(g["ultimo_error"]),
+            "error_limpieza": limpiar_mensaje(g["limpieza_error"]),
+        })
+    return salida
+
+
 def configuracion(sb: Client) -> list[dict]:
     filas = sb.rpc("videos_configuracion", {}).execute().data or []
     return sorted(filas, key=lambda h: (clases.DIAS_ORDEN.index(h["dia_semana"]), h["hora_inicio"]))
@@ -125,11 +169,14 @@ def huella_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def identificar_agente(cabecera: str) -> str | None:
+def identificar_agente(cabecera: str, entorno_pedido: str) -> str | None:
+    """La profesora dueña del token, si el programa, este servidor y la base están en el mismo entorno."""
     token = cabecera.removeprefix("Bearer ").strip()
-    if not token:
+    if not token or not entorno.servidor_admite(entorno_pedido):
         return None
-    return auth.cliente_admin().rpc("video_agente_identificar", {"p_token_hash": huella_token(token)}).execute().data
+    return auth.cliente_admin().rpc("video_agente_identificar", {
+        "p_token_hash": huella_token(token), "p_entorno": entorno_pedido,
+    }).execute().data
 
 
 def video_de_agente(id_video: int, id_profesora: str) -> dict | None:
@@ -187,13 +234,21 @@ def publicar(video: dict, id_profesora: str) -> dict:
 
 def registrar_error(id_video: int, id_profesora: str, mensaje: str) -> None:
     auth.cliente_admin().rpc("video_error", {"p_id_video": id_video, "p_id_profesora": id_profesora,
-                                             "p_mensaje": mensaje}).execute()
+                                             "p_mensaje": limpiar_mensaje(mensaje)}).execute()
 
 
 # ---------- limpieza ----------
 
 def secreto_valido(cabecera: str, secreto: str) -> bool:
     return hmac.compare_digest(cabecera, f"Bearer {secreto}")
+
+
+def borrar_archivos(bucket, id_empresa: int, id_video: int, partes: list[dict]) -> None:
+    """Borra las partes de un video y comprueba listando el bucket: falla si queda alguna."""
+    bucket.remove([ruta(id_empresa, id_video, p["nombre"]) for p in partes])
+    quedan = {p["nombre"] for p in partes} & set(_subidas({"id": id_video, "id_empresa": id_empresa}, bucket))
+    if quedan:
+        raise RuntimeError(f"Siguen en Storage: {', '.join(sorted(quedan))}")
 
 
 def limpiar() -> dict:
@@ -205,16 +260,13 @@ def limpiar() -> dict:
     resultado = {"eliminados": 0, "errores": 0}
     for v in pendientes:
         try:
-            bucket.remove([ruta(v["id_empresa"], v["id"], p["nombre"]) for p in v["partes"]])
-            quedan = {p["nombre"] for p in v["partes"]} & set(_subidas(v, bucket))
-            if quedan:
-                raise RuntimeError(f"Siguen en Storage: {', '.join(sorted(quedan))}")
+            borrar_archivos(bucket, v["id_empresa"], v["id"], v["partes"])
             admin.rpc("video_marcar_eliminado", {"p_id_video": v["id"]}).execute()
             resultado["eliminados"] += 1
         except Exception as e:
             logging.exception("No se pudieron borrar los archivos del video %s", v["id"])
             resultado["errores"] += 1
-            admin.rpc("video_limpieza_error", {"p_id_video": v["id"], "p_mensaje": str(e)}).execute()
+            admin.rpc("video_limpieza_error", {"p_id_video": v["id"], "p_mensaje": limpiar_mensaje(str(e))}).execute()
     return resultado
 
 

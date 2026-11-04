@@ -14,6 +14,7 @@ Uso:
 """
 import argparse
 import hashlib
+import ipaddress
 import json
 import logging
 import os
@@ -23,9 +24,11 @@ import sqlite3
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 AQUI = Path(__file__).resolve().parent
 TAMANO_MAXIMO_PARTE = 45_000_000
@@ -39,6 +42,12 @@ TAMANO_MINIMO_VIDEO = 1_000_000
 # Las clases se generan cuando alguien abre ciertas pantallas: una clase puede aparecer después, y el espacio se libera.
 RESULTADOS_REINTENTABLES = {"sin_clase", "sin_espacio"}
 PROGRAMAS = {"ffmpeg": "ffmpeg", "ffprobe": "ffprobe"}
+# Mismas huellas que app/entorno.py: este programa se instala solo, sin el resto de la app.
+HUELLAS_PRODUCCION = {
+    "b876de330340b21a5dc25a639a9a40b2d7266dbb7db26f7982a6ef0a22205fc8",
+    "e050af1051bb53a852bb650f2bf80e8ffbc5d5a218ddbff4c0d613371b14c90c",
+    "41dcb3ec2a68f5edce8a58c5149a882df4718a3e796a30f9528045287ff74da6",
+}
 COMPRESION = [
     "-vf", "scale=-2:360,fps=24", "-c:v", "libx264", "-preset", "slow", "-crf", "28", "-maxrate", "340k",
     "-bufsize", "680k", "-g", "144", "-c:a", "aac", "-b:a", "64k", "-ac", "1",
@@ -49,6 +58,41 @@ COMPRESION = [
 
 class ErrorAgente(Exception):
     pass
+
+
+class EntornoNoAutorizado(Exception):
+    """No se reintenta: el programa se detiene sin enviar nada."""
+
+
+def es_produccion(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    candidatos = {host, host.split(".")[0]}
+    return any(hashlib.sha256(c.encode()).hexdigest() in HUELLAS_PRODUCCION for c in candidatos)
+
+
+def es_red_local(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_private
+    except ValueError:
+        return False
+
+
+def validar_config(config: dict, produccion: bool) -> None:
+    """Antes de leer ninguna grabación. Sin --produccion solo se habla con un servidor de la red local."""
+    url, entorno = config.get("url", ""), config.get("entorno", "")
+    if produccion:
+        if not entorno.startswith("produccion-") or urlparse(url).scheme != "https":
+            raise EntornoNoAutorizado("Con --produccion hacen falta un entorno produccion-... y una URL https.")
+        return
+    if es_produccion(url):
+        raise EntornoNoAutorizado("Esa URL es producción y no se indicó --produccion: no se envía nada.")
+    if not entorno.startswith("pruebas-"):
+        raise EntornoNoAutorizado("Falta \"entorno\" en config.json (pruebas-...).")
+    if not es_red_local(url):
+        raise EntornoNoAutorizado("En pruebas el servidor tiene que estar en la red local.")
 
 
 # ---------- lista HLS ----------
@@ -160,19 +204,31 @@ def comprimir(origen: Path, carpeta: Path) -> tuple[list[dict], str]:
 # ---------- servidor ----------
 
 class Servidor:
-    def __init__(self, url: str, token: str):
-        self.url, self.token = url.rstrip("/"), token
+    def __init__(self, url: str, token: str, entorno: str = "", produccion: bool = False):
+        self.url, self.token, self.entorno, self.produccion = url.rstrip("/"), token, entorno, produccion
 
     def post(self, ruta: str, datos: dict | None = None) -> dict:
         pedido = urllib.request.Request(
             f"{self.url}/api/videos/agente/{ruta}", data=json.dumps(datos or {}).encode(), method="POST",
-            headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
+            headers={"Authorization": f"Bearer {self.token}", "X-Video-Entorno": self.entorno,
+                     "Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(pedido, timeout=60) as r:
-            return json.load(r)
+        try:
+            with urllib.request.urlopen(pedido, timeout=60) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                raise EntornoNoAutorizado(f"El servidor rechazó este programa ({e.code}).") from e
+            raise
+
+    def comprobar_entorno(self) -> None:
+        if self.post("entorno").get("entorno") != self.entorno:
+            raise EntornoNoAutorizado("El servidor está en otro entorno.")
 
 
-def subir_parte(url: str, ruta: Path) -> None:
+def subir_parte(servidor: Servidor, url: str, ruta: Path) -> None:
+    if es_produccion(url) and not servidor.produccion:
+        raise EntornoNoAutorizado("El servidor pidió subir a producción: no se envía nada.")
     pedido = urllib.request.Request(url, data=ruta.read_bytes(), method="PUT", headers={"Content-Type": "video/mp2t"})
     with urllib.request.urlopen(pedido, timeout=900):
         pass
@@ -215,7 +271,7 @@ def procesar(servidor: Servidor, video: Path, trabajo: Path) -> tuple[str, int |
     try:
         subida = servidor.post(f"{id_video}/urls-subida")
         for nombre, url in subida["urls"].items():
-            subir_parte(url, carpeta / nombre)
+            subir_parte(servidor, url, carpeta / nombre)
         publicado = servidor.post(f"{id_video}/publicar")
         if publicado["resultado"] != "ok":
             raise ErrorAgente(f"No se pudo publicar: {publicado['resultado']}")
@@ -308,13 +364,35 @@ def pasada(servidor: Servidor, carpeta_zoom: Path, trabajo: Path, cola: sqlite3.
             cerrar(cola, video, resultado, id_video)
 
 
+def probar_archivo(video: Path, carpeta: Path) -> int:
+    """Solo compresión y división, sin servidor: para validar FFmpeg con un video generado."""
+    duracion = duracion_segundos(video)
+    partes, lista = comprimir(video, carpeta)
+    (carpeta / "lista.m3u8").write_text(lista)
+    total = sum(p["bytes"] for p in partes)
+    print(f"Duración: {duracion} s · Partes: {len(partes)} · Total: {total / 1e6:.1f} MB · "
+          f"Mayor parte: {max(p['bytes'] for p in partes) / 1e6:.1f} MB")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", type=Path, default=AQUI / "config.json")
     parser.add_argument("--una-vez", action="store_true")
+    parser.add_argument("--produccion", action="store_true", help="solo con autorización: permite un servidor de producción")
+    parser.add_argument("--probar-archivo", type=Path, help="comprime y divide ese video, sin conectarse a nada")
+    parser.add_argument("--salida", type=Path, default=AQUI / "trabajo" / "prueba", help="carpeta de --probar-archivo")
     args = parser.parse_args()
 
+    if args.probar_archivo:
+        return probar_archivo(args.probar_archivo, args.salida)
+
     config = json.loads(args.config.read_text())
+    try:
+        validar_config(config, args.produccion)
+    except EntornoNoAutorizado as e:
+        print(e, file=sys.stderr)
+        return 2
     trabajo = Path(config.get("carpeta_trabajo", AQUI / "trabajo")).expanduser()
     trabajo.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(filename=trabajo / "agente.log", level=logging.INFO,
@@ -332,15 +410,20 @@ def main() -> int:
             print(f"Falta instalar {programa} o indicar su ruta en config.json", file=sys.stderr)
             return 1
 
-    servidor = Servidor(config["url"], config["token"])
+    servidor = Servidor(config["url"], config["token"], config["entorno"], args.produccion)
     carpeta_zoom = Path(config.get("carpeta_zoom", "~/Documents/Zoom")).expanduser()
     cola = abrir_cola(trabajo / "cola.sqlite")
     while True:
         try:
+            servidor.comprobar_entorno()
             if carpeta_zoom.is_dir():
                 pasada(servidor, carpeta_zoom, trabajo, cola, time.time())
             else:
                 logging.warning("No existe la carpeta %s", carpeta_zoom)
+        except EntornoNoAutorizado as e:
+            logging.error("%s Se detiene sin enviar nada.", e)
+            print(e, file=sys.stderr)
+            return 2
         except PermissionError:
             logging.error("Sin permiso para leer %s (en Mac: Acceso total al disco)", carpeta_zoom)
         except OSError as e:

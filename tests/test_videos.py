@@ -26,6 +26,7 @@ SUPERADMIN = Usuario(id="s", mail="s@prueba.invalid", nombre="Sol", apellido="P"
                      es_superadmin=True, con_membresias=True)
 FILA = {"id": 7, "clase": "Gimnasia", "fecha": "2026-11-16", "hora_inicio": "08:00:00", "profesora": "Pía Pérez",
         "duracion_seg": 2340, "segundos_restantes": 5400}
+ENTORNO = "pruebas-abcd1234"
 LISTA = "#EXTM3U\n#EXT-X-BYTERANGE:10@0\nparte-00.ts\n#EXT-X-BYTERANGE:5@0\nparte-01.ts\n#EXT-X-ENDLIST"
 PARTES = [{"nombre": "parte-00.ts", "bytes": 10}, {"nombre": "parte-01.ts", "bytes": 5}]
 
@@ -208,10 +209,19 @@ class Configuracion(unittest.TestCase):
         {"id": 3, "dia_semana": "lunes", "hora_inicio": "10:00:00", "clase": "Gimnasia", "profesora": "Pía", "duracion": 60,
          "programable": False, "activa": False},
     ]
+    GRABACIONES = [
+        {"id": 9, "clase": "Pilates", "fecha": "2026-11-16", "hora_inicio": "08:00:00", "estado": "error", "vencido": False,
+         "nunca_publicado": True, "intentos": 3, "ultimo_error": "falló https://x.supabase.co/a?token=secreto1",
+         "limpieza_intentos": 0, "limpieza_error": None},
+        {"id": 8, "clase": "Yoga", "fecha": "2026-11-15", "hora_inicio": "09:00:00", "estado": "publicado", "vencido": True,
+         "nunca_publicado": False, "intentos": 1, "ultimo_error": None, "limpieza_intentos": 2,
+         "limpieza_error": "Siguen en Storage: parte-00.ts"},
+    ]
 
     def setUp(self):
         self.client = TestClient(main.app)
-        self.sb = Rpc({"videos_configuracion": self.HORARIOS, "video_programar": {"resultado": "ok"}, "videos_disponibles": []})
+        self.sb = Rpc({"videos_configuracion": self.HORARIOS, "video_programar": {"resultado": "ok"}, "videos_disponibles": [],
+                       "videos_ultimas_grabaciones": self.GRABACIONES})
         p = mock.patch.object(main, "_sb", return_value=self.sb)
         p.start()
         self.addCleanup(p.stop)
@@ -250,10 +260,38 @@ class Configuracion(unittest.TestCase):
         r = self.client.post("/videos/configuracion/3", data={"activa": "true"}, follow_redirects=False)
         self.assertIn("ok=0", r.headers["location"])
 
+    def test_ultimas_grabaciones_muestra_estado_errores_y_reintentos(self):
+        self.como(ADMIN)
+        html = self.client.get("/videos/configuracion").text
+        for texto in ("Últimas grabaciones", "Con error, se reintenta", "3 intentos", "Vencido, falta borrar archivos",
+                      "Limpieza (2 intentos)", "Siguen en Storage"):
+            self.assertIn(texto, html)
+        self.assertNotIn("secreto1", html)
+        self.assertNotIn("supabase.co", html)
+
+    def test_estados_de_las_grabaciones(self):
+        base = {"nunca_publicado": False, "vencido": False}
+        self.assertEqual(videos._estado_grabacion({**base, "estado": "eliminado"})[0], "Vencido, archivos borrados")
+        self.assertEqual(videos._estado_grabacion({**base, "estado": "eliminado", "nunca_publicado": True})[0], "Abandonada, sin publicar")
+        self.assertEqual(videos._estado_grabacion({**base, "estado": "publicado"})[0], "Publicado")
+
     def test_solo_la_administradora_ve_el_acceso(self):
         for usuario, ve in ((ADMIN, True), (PROFESORA, False), (ALUMNA, False)):
             self.como(usuario)
             self.assertEqual("/videos/configuracion" in self.client.get("/videos").text, ve)
+
+
+class Mensajes(unittest.TestCase):
+    def test_saca_lo_sensible(self):
+        for sensible in ("https://abc.supabase.co/storage/v1/object/upload/sign/x?token=eyJhbGci",
+                         "/Users/ana/Documents/Zoom/clase.mp4", "C:\\Users\\ana\\zoom.mp4", "Bearer abcdef",
+                         "sb_secret_abc123", "eyJhbGciOiJIUzI1NiJ9.e30.abc", "a" * 40):
+            self.assertNotIn(sensible, videos.limpiar_mensaje(f"falló {sensible} al subir"), sensible)
+
+    def test_conserva_lo_util_y_recorta(self):
+        self.assertEqual(videos.limpiar_mensaje("No se pudo publicar: partes_incompletas"), "No se pudo publicar: partes_incompletas")
+        self.assertEqual(videos.limpiar_mensaje(None), "")
+        self.assertLessEqual(len(videos.limpiar_mensaje("palabra " * 200)), 300)
 
 
 class Menu(unittest.TestCase):
@@ -291,13 +329,44 @@ class Agente(unittest.TestCase):
         p = mock.patch.object(auth, "cliente_admin", return_value=self.admin)
         p.start()
         self.addCleanup(p.stop)
-        self.cabecera = {"Authorization": "Bearer secreto"}
+        self.cabecera = {"Authorization": "Bearer secreto", "X-Video-Entorno": ENTORNO}
+        p = mock.patch.dict(os.environ, {"VIDEOS_ENTORNO": ENTORNO, "SUPABASE_URL": "http://local"})
+        p.start()
+        self.addCleanup(p.stop)
 
     def test_sin_token_o_con_token_malo(self):
-        self.assertEqual(self.client.post("/api/videos/agente/registrar", json=self.CUERPO).status_code, 401)
+        sin_token = {"X-Video-Entorno": ENTORNO}
+        self.assertEqual(self.client.post("/api/videos/agente/registrar", json=self.CUERPO, headers=sin_token).status_code, 401)
         self.admin.respuestas["video_agente_identificar"] = None
         r = self.client.post("/api/videos/agente/registrar", json=self.CUERPO, headers=self.cabecera)
         self.assertEqual(r.status_code, 401)
+
+    def test_sin_entorno_o_con_otro_entorno_rechaza_antes_de_mirar_el_token(self):
+        for cabecera in ({"Authorization": "Bearer secreto"},
+                         {"Authorization": "Bearer secreto", "X-Video-Entorno": "pruebas-otroentorno"}):
+            r = self.client.post("/api/videos/agente/registrar", json=self.CUERPO, headers=cabecera)
+            self.assertEqual(r.status_code, 403)
+        self.assertEqual(self.admin.llamadas, [])
+
+    def test_servidor_sin_entorno_configurado_rechaza_todo(self):
+        with mock.patch.dict(os.environ, {"VIDEOS_ENTORNO": ""}):
+            r = self.client.post("/api/videos/agente/entorno", headers=self.cabecera)
+        self.assertEqual(r.status_code, 403)
+
+    def test_la_base_tambien_decide_el_entorno(self):
+        self.client.post("/api/videos/agente/entorno", headers=self.cabecera)
+        self.assertEqual(self.admin.llamadas[0][1]["p_entorno"], ENTORNO)
+
+    def test_informa_el_entorno(self):
+        r = self.client.post("/api/videos/agente/entorno", headers=self.cabecera)
+        self.assertEqual(r.json(), {"entorno": ENTORNO})
+
+    def test_error_se_guarda_sin_datos_sensibles(self):
+        self.client.post("/api/videos/agente/7/error", headers=self.cabecera,
+                         json={"mensaje": "falló https://x.supabase.co/a?token=abc en /Users/ana/zoom/clase.mp4"})
+        mensaje = dict(self.admin.llamadas)["video_error"]["p_mensaje"]
+        self.assertNotIn("token=abc", mensaje)
+        self.assertNotIn("/Users/ana", mensaje)
 
     def test_el_token_se_compara_por_huella(self):
         self.client.post("/api/videos/agente/registrar", json=self.CUERPO, headers=self.cabecera)
@@ -317,7 +386,8 @@ class Agente(unittest.TestCase):
         self.assertEqual(dict(self.admin.llamadas)["video_consultar"]["p_id_profesora"], "p")
 
     def test_consultar_sin_token(self):
-        r = self.client.post("/api/videos/agente/consultar", json={"inicio": "x", "duracion_seg": 1})
+        r = self.client.post("/api/videos/agente/consultar", json={"inicio": "x", "duracion_seg": 1},
+                             headers={"X-Video-Entorno": ENTORNO})
         self.assertEqual(r.status_code, 401)
 
     def test_video_de_otra_profesora(self):

@@ -28,11 +28,18 @@ ANTES = ["empresa"]  # multiempresa: antes de los perfiles (profiles.empresa_act
 POR_PERSONA = {"membresia": ("id_usuario", "id_empresa")}
 ORDEN = ["membresia", "tipo_clase", "horario", "clase", "bloqueo", "reserva", "listadeespera", "asistencia", "resumen_mensual",
          "resumen_mensual_detalle", "factura_historial", "pago", "pago_anulacion", "mp_configuracion", "mp_intento", "mp_evento"]
+# Videos On Demand: solo si el respaldo las trae (los anteriores a la migración no). video_agente queda afuera a propósito:
+# guarda huellas de tokens, que se vuelven a crear. Las filas no recuperan los archivos de Storage.
+VIDEOS = ["video_programacion", "video", "video_reproduccion"]
 CLAVE = {"pago_anulacion": "id_pago"}
 
 
 def es_local(url: str) -> bool:
     return bool(re.match(r"^http://(127\.0\.0\.1|localhost):\d+$", url))
+
+
+def tablas_de(datos: dict) -> list:
+    return ORDEN + [t for t in VIDEOS if t in datos]
 
 
 def restaurar_cuentas(sb, datos: dict) -> int:
@@ -70,7 +77,7 @@ def generar_sql(datos: dict, contador: dict) -> str:
         partes.append(f"insert into public.profiles ({', '.join(cols)}) select {', '.join(cols)} "
                       f"from jsonb_populate_recordset(null::public.profiles, {_literal(perfiles)}) "
                       f"on conflict (id) do update set {asignaciones};")
-    for t in ORDEN:
+    for t in tablas_de(datos):
         filas = datos.get(t) or []
         if filas and t in POR_PERSONA:
             cols = [c for c in filas[0] if c != "id"]
@@ -84,7 +91,7 @@ def generar_sql(datos: dict, contador: dict) -> str:
             partes.append(f"insert into public.{t} ({', '.join(cols)}) overriding system value select {', '.join(cols)} "
                           f"from jsonb_populate_recordset(null::public.{t}, {_literal(filas)}) "
                           f"on conflict on constraint {t}_pkey do update set {asignaciones};")
-    for t in ANTES + ["profiles"] + ORDEN:
+    for t in ANTES + ["profiles"] + tablas_de(datos):
         partes.append(f"""do $$ declare c text; begin
   for c in select a.attname from pg_attribute a where a.attrelid = 'public.{t}'::regclass and a.attidentity <> '' loop
     execute format('select setval(pg_get_serial_sequence(%L, %L), coalesce((select max(%I) from public.{t}), 0) + 1, false)',
@@ -97,7 +104,7 @@ def generar_sql(datos: dict, contador: dict) -> str:
 
 def comparar(sb, datos: dict) -> dict:
     diferencias = {}
-    for t in ANTES + ["profiles"] + ORDEN:
+    for t in ANTES + ["profiles"] + tablas_de(datos):
         if t not in datos:
             continue  # respaldo anterior a multiempresa
         def k(f):

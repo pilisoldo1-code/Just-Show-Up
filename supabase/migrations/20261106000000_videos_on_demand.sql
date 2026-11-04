@@ -24,7 +24,10 @@ create table public.video_parametros (
     margen_estimacion numeric(4, 2) not null default 1.25 check (margen_estimacion >= 1),
     tope_usuaria_bytes bigint not null default 300000000 check (tope_usuaria_bytes > 0),
     almacenamiento_max_bytes bigint not null default 800000000 check (almacenamiento_max_bytes > 0),
-    tamano_estimado_bytes bigint not null default 130000000 check (tamano_estimado_bytes > 0)
+    tamano_estimado_bytes bigint not null default 130000000 check (tamano_estimado_bytes > 0),
+    -- Identifica el entorno. Vacío = nadie puede subir: el programa local, el servidor (VIDEOS_ENTORNO) y esta fila
+    -- tienen que coincidir. Una base recién migrada queda cerrada hasta configurarlo a propósito.
+    entorno text check (entorno ~ '^(pruebas|produccion)-[a-z0-9]{8,}$')
 );
 insert into public.video_parametros default values;
 
@@ -391,17 +394,54 @@ begin
 end;
 $$;
 
+-- Para la administradora: estado del procesamiento de su empresa. Sin huellas, rutas ni listas de reproducción.
+create or replace function public.videos_ultimas_grabaciones(p_limite integer default 20)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+    v_empresa bigint := public.empresa_activa();
+begin
+    if v_empresa is null or not public.es_admin() then
+        return '[]'::jsonb;
+    end if;
+    return coalesce((
+        select jsonb_agg(jsonb_build_object(
+                   'id', x.id,
+                   'clase', coalesce(t.nombre, 'Clase'),
+                   'fecha', c.fecha,
+                   'hora_inicio', c.hora_inicio,
+                   'estado', x.estado,
+                   'vencido', x.vence_en is not null and x.vence_en <= now(),
+                   'nunca_publicado', x.publicado_en is null,
+                   'intentos', x.intentos,
+                   'ultimo_error', x.ultimo_error,
+                   'limpieza_intentos', x.limpieza_intentos,
+                   'limpieza_error', x.limpieza_error,
+                   'actualizado_en', x.actualizado_en
+               ) order by x.actualizado_en desc)
+        from (select * from public.video v where v.id_empresa = v_empresa
+              order by v.actualizado_en desc limit least(greatest(coalesce(p_limite, 20), 1), 50)) x
+        join public.clase c on c.id = x.id_clase
+        left join public.tipo_clase t on t.id = c.id_tipo_clase
+    ), '[]'::jsonb);
+end;
+$$;
+
 revoke execute on function public._video_vigente(bigint), public._video_inicio_ciclo(integer)
     from public, anon, authenticated;
 revoke execute on function public.videos_configuracion(), public.video_programar(bigint, boolean),
-    public.videos_disponibles(bigint), public.video_iniciar(bigint), public.video_progreso(bigint, integer),
+    public.videos_ultimas_grabaciones(integer), public.videos_disponibles(bigint), public.video_iniciar(bigint), public.video_progreso(bigint, integer),
     public.video_para_firmar(bigint) from public, anon;
 grant execute on function public.videos_configuracion(), public.video_programar(bigint, boolean),
-    public.videos_disponibles(bigint), public.video_iniciar(bigint), public.video_progreso(bigint, integer),
+    public.videos_ultimas_grabaciones(integer), public.videos_disponibles(bigint), public.video_iniciar(bigint), public.video_progreso(bigint, integer),
     public.video_para_firmar(bigint) to authenticated;
 
 -- ---------- programa local y limpieza (solo el servidor, con la clave de administrador) ----------
-create or replace function public.video_agente_identificar(p_token_hash text)
+create or replace function public.video_agente_identificar(p_token_hash text, p_entorno text)
 returns uuid
 language sql
 security definer
@@ -409,6 +449,7 @@ set search_path = ''
 as $$
     update public.video_agente a set ultimo_contacto = now()
     where a.token_hash = p_token_hash and a.activo
+      and exists (select 1 from public.video_parametros g where g.entorno = p_entorno)
       and exists (select 1 from public.membresia m
                   where m.id_usuario = a.id_profesora and m.activa and (m.es_profesora or m.es_admin))
     returning a.id_profesora;
@@ -675,7 +716,7 @@ as $$
 $$;
 
 revoke execute on function
-    public.video_agente_identificar(text),
+    public.video_agente_identificar(text, text),
     public._video_partes_validas(jsonb, bigint),
     public._video_programada(bigint),
     public._video_evaluar(uuid, timestamptz, integer, bigint),
@@ -689,7 +730,7 @@ revoke execute on function
     public.video_limpieza_error(bigint, text)
 from public, anon, authenticated;
 grant execute on function
-    public.video_agente_identificar(text),
+    public.video_agente_identificar(text, text),
     public.video_consultar(uuid, timestamptz, integer),
     public.video_registrar(uuid, timestamptz, text, integer, bigint, jsonb, text),
     public.video_de_agente(bigint, uuid),

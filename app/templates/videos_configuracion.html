@@ -43,6 +43,25 @@
         {% else %}
         <p class="vacio">No hay horarios activos para configurar.</p>
         {% endif %}
+
+        <h2 class="seccion">Últimas grabaciones</h2>
+        {% if grabaciones %}
+        <div class="videos-config">
+            {% for g in grabaciones %}
+            <div class="video-card">
+                <div>
+                    <h2>{{ g.clase }}</h2>
+                    <span class="video-dato">{{ g.fecha_txt }} · {{ g.hora }} · {{ g.intentos }} {{ 'intento' if g.intentos == 1 else 'intentos' }}</span>
+                    {% if g.error %}<p class="video-error">Subida: {{ g.error }}</p>{% endif %}
+                    {% if g.error_limpieza %}<p class="video-error">Limpieza ({{ g.limpieza_intentos }} {{ 'intento' if g.limpieza_intentos == 1 else 'intentos' }}): {{ g.error_limpieza }}</p>{% endif %}
+                </div>
+                <span class="badge {{ g.badge }}">{{ g.estado_txt }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="vacio vacio-izq">Todavía no hay grabaciones. Las que no estén autorizadas no aparecen acá: nunca salen de la computadora.</p>
+        {% endif %}
         <p><a class="video-volver" href="/videos">Volver a Videos On Demand</a></p>
     </main>
 </body>

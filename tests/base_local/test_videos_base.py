@@ -356,16 +356,42 @@ rpc(srvc, "video_marcar_eliminado", p_id_video=v4)
 ok("cambiar la profesora de la clase no traba la limpieza", estado(v4) == "eliminado")
 
 # ---------- agente ----------
-token = "c" * 64
+token, ENT = "c" * 64, "pruebas-abcd1234"
+
+
+def identificar(hash_token=token, ent=ENT):
+    return rpc(srvc, "video_agente_identificar", p_token_hash=hash_token, p_entorno=ent)
+
+
 q(su, "insert into public.video_agente (id_profesora, nombre, token_hash) values (%s, 'Notebook', %s)", (prof1, token))
-ok("identifica el token", rpc(srvc, "video_agente_identificar", p_token_hash=token) == prof1)
-ok("token desconocido", rpc(srvc, "video_agente_identificar", p_token_hash="d" * 64) is None)
+ok("P2: sin entorno configurado nadie sube", identificar() is None)
+q(su, "update public.video_parametros set entorno = %s", (ENT,))
+ok("identifica token y entorno", identificar() == prof1)
+ok("P2: otro entorno se rechaza", identificar(ent="pruebas-otroentorno") is None)
+ok("P2: entorno vacío se rechaza", identificar(ent="") is None)
+ok("token desconocido", identificar("d" * 64) is None)
+try:
+    q(su, "update public.video_parametros set entorno = 'cualquiera'")
+    ok("P2: el entorno tiene formato", False)
+except psycopg2.Error as e:
+    ok("P2: el entorno tiene formato", e.pgcode == "23514")
+ok("una sesión no ejecuta la identificación", rpc(administradora1, "video_agente_identificar", p_token_hash=token, p_entorno=ENT).get("error") == "42501")
 ok("guarda el último contacto", q(su, "select ultimo_contacto from public.video_agente", uno=True)["ultimo_contacto"] is not None)
 q(su, "update public.membresia set activa = false where id_usuario = %s", (prof1,))
-ok("una profesora dada de baja deja de subir", rpc(srvc, "video_agente_identificar", p_token_hash=token) is None)
+ok("una profesora dada de baja deja de subir", identificar() is None)
 q(su, "update public.membresia set activa = true where id_usuario = %s", (prof1,))
 q(su, "update public.video_agente set activo = false")
-ok("un token desactivado no sirve", rpc(srvc, "video_agente_identificar", p_token_hash=token) is None)
+ok("un token desactivado no sirve", identificar() is None)
+
+# ---------- últimas grabaciones (P4) ----------
+g1 = rpc(administradora1, "videos_ultimas_grabaciones")
+ok("P4: la administradora ve las de su empresa", {g["id"] for g in g1} == {v1, v4}, g1)
+ok("P4: no ve las de otra empresa", v2 not in {g["id"] for g in g1} and {g["id"] for g in rpc(administradora2, "videos_ultimas_grabaciones")} == {v2})
+ok("P4: sin datos sensibles", not {"huella_sha256", "partes", "lista_hls", "tamano_bytes", "id_profesora"} & set(g1[0]))
+ok("P4: la profesora no las ve", rpc(profesora1, "videos_ultimas_grabaciones") == [])
+ok("P4: la alumna no las ve", rpc(alumna2, "videos_ultimas_grabaciones") == [])
+ok("P4: anon no ejecuta", rpc(anon, "videos_ultimas_grabaciones").get("error") == "42501")
+ok("P4: respeta el límite", len(rpc(administradora1, "videos_ultimas_grabaciones", p_limite=1)) == 1)
 
 # ---------- cuentas de prueba ----------
 total = "select coalesce(sum(bytes_estimados), 0) s from public.video_reproduccion"

@@ -327,15 +327,109 @@ class Procesar(Base):
 class Permisos(Base):
     def test_sin_permiso_no_cierra_el_programa(self):
         config = self.d / "config.json"
-        config.write_text(json.dumps({"url": "http://127.0.0.1:8000", "token": "t", "carpeta_zoom": str(self.zoom),
-                                      "carpeta_trabajo": str(self.d / "t2")}))
+        config.write_text(json.dumps({"url": "http://127.0.0.1:8000", "token": "t", "entorno": "pruebas-abcd1234",
+                                      "carpeta_zoom": str(self.zoom), "carpeta_trabajo": str(self.d / "t2")}))
         with mock.patch.object(sys, "argv", ["x", "--config", str(config), "--una-vez"]), \
                 mock.patch.object(ag.shutil, "which", return_value="/bin/x"), \
+                mock.patch.object(ag.Servidor, "comprobar_entorno"), \
                 mock.patch.object(ag, "pasada", side_effect=PermissionError("Operation not permitted")) as pasada, \
                 mock.patch.object(ag.logging, "basicConfig"), self.assertLogs(level="ERROR") as logs:
             self.assertEqual(ag.main(), 0)
         pasada.assert_called_once()
         self.assertIn("Acceso total al disco", logs.output[0])
+
+
+class Proteccion(Base):
+    PRODUCCION = {"url": "https://just-show-up-theta.vercel.app", "entorno": "pruebas-abcd1234", "token": "t"}
+    LOCAL = {"url": "http://127.0.0.1:8000", "entorno": "pruebas-abcd1234", "token": "t"}
+
+    def arrancar(self, config, *extra):
+        ruta = self.d / "config.json"
+        ruta.write_text(json.dumps({**config, "carpeta_zoom": str(self.zoom), "carpeta_trabajo": str(self.d / "t3")}))
+        with mock.patch.object(sys, "argv", ["x", "--config", str(ruta), "--una-vez", *extra]), \
+                mock.patch.object(ag.shutil, "which", return_value="/bin/x"), \
+                mock.patch.object(ag.logging, "basicConfig"), \
+                mock.patch.object(ag, "pasada") as pasada:
+            return ag.main(), pasada
+
+    def test_rechaza_produccion_aunque_el_entorno_parezca_de_prueba(self):
+        codigo, pasada = self.arrancar(self.PRODUCCION)
+        self.assertEqual(codigo, 2)
+        pasada.assert_not_called()
+
+    def test_validacion_de_la_configuracion(self):
+        malas = [
+            {"url": "http://127.0.0.1:8000"},  # sin entorno
+            {"url": "http://127.0.0.1:8000", "entorno": "produccion-abcd1234"},
+            {"url": "https://otro-sitio.com", "entorno": "pruebas-abcd1234"},
+            self.PRODUCCION,
+        ]
+        for config in malas:
+            with self.assertRaises(ag.EntornoNoAutorizado, msg=config):
+                ag.validar_config(config, False)
+        ag.validar_config(self.LOCAL, False)
+        ag.validar_config({"url": "http://192.168.1.20:8000", "entorno": "pruebas-abcd1234"}, False)
+
+    def test_produccion_exige_bandera_entorno_y_https(self):
+        with self.assertRaises(ag.EntornoNoAutorizado):
+            ag.validar_config({"url": "https://x.com", "entorno": "pruebas-abcd1234"}, True)
+        with self.assertRaises(ag.EntornoNoAutorizado):
+            ag.validar_config({"url": "http://x.com", "entorno": "produccion-abcd1234"}, True)
+        ag.validar_config({"url": "https://x.com", "entorno": "produccion-abcd1234"}, True)
+
+    def test_si_el_servidor_esta_en_otro_entorno_se_detiene(self):
+        with mock.patch.object(ag.Servidor, "post", return_value={"entorno": "pruebas-otroentorno"}):
+            codigo, pasada = self.arrancar(self.LOCAL)
+        self.assertEqual(codigo, 2)
+        pasada.assert_not_called()
+
+    def test_si_el_servidor_rechaza_se_detiene_sin_reintentar(self):
+        error = urllib.error.HTTPError("http://x", 403, "no", {}, None)
+        with mock.patch.object(ag.urllib.request, "urlopen", side_effect=error):
+            with self.assertRaises(ag.EntornoNoAutorizado):
+                ag.Servidor("http://127.0.0.1:8000", "t", "pruebas-abcd1234").post("entorno")
+
+    def test_rechazo_durante_una_pasada_no_queda_como_reintento(self):
+        servidor = mock.Mock()
+        with mock.patch.object(ag, "procesar", side_effect=ag.EntornoNoAutorizado("no")):
+            ag.pasada(servidor, self.zoom, self.trabajo, self.cola, 1000)
+            with self.assertRaises(ag.EntornoNoAutorizado):
+                ag.pasada(servidor, self.zoom, self.trabajo, self.cola, 1200)
+
+    def test_manda_la_cabecera_de_entorno(self):
+        respuesta = mock.MagicMock()
+        respuesta.__enter__.return_value = respuesta
+        with mock.patch.object(ag.urllib.request, "urlopen", return_value=respuesta) as urlopen, \
+                mock.patch.object(ag.json, "load", return_value={"entorno": "pruebas-abcd1234"}):
+            ag.Servidor("http://127.0.0.1:8000", "t", "pruebas-abcd1234").comprobar_entorno()
+        self.assertEqual(urlopen.call_args.args[0].get_header("X-video-entorno"), "pruebas-abcd1234")
+
+    def test_no_sube_a_produccion_aunque_el_servidor_lo_pida(self):
+        servidor = ag.Servidor("http://127.0.0.1:8000", "t", "pruebas-abcd1234")
+        parte = self.d / "parte.ts"
+        parte.write_bytes(b"1")
+        with mock.patch.object(ag.urllib.request, "urlopen") as urlopen:
+            with self.assertRaises(ag.EntornoNoAutorizado):
+                ag.subir_parte(servidor, "https://just-show-up-theta.vercel.app/subir", parte)
+        urlopen.assert_not_called()
+
+    def test_mismas_huellas_que_el_servidor(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from app import entorno
+        self.assertEqual(ag.HUELLAS_PRODUCCION, entorno.HUELLAS_PRODUCCION)
+
+
+class ProbarArchivo(Base):
+    def test_no_se_conecta_a_nada(self):
+        partes = [{"nombre": "parte-00.ts", "inicio": 0, "bytes": 1000}]
+        salida = self.d / "salida"
+        salida.mkdir()
+        with mock.patch.object(ag, "duracion_segundos", return_value=2400), \
+                mock.patch.object(ag, "comprimir", return_value=(partes, "#EXTM3U\n")), \
+                mock.patch.object(ag.urllib.request, "urlopen") as urlopen:
+            self.assertEqual(ag.probar_archivo(self.video, salida), 0)
+        urlopen.assert_not_called()
+        self.assertTrue((salida / "lista.m3u8").exists())
 
 
 if __name__ == "__main__":

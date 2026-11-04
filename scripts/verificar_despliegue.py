@@ -21,6 +21,8 @@ TABLAS = ["profiles", "tipo_clase", "horario", "clase", "reserva", "listadeesper
           "resumen_mensual", "resumen_mensual_detalle", "factura_historial", "pago", "pago_anulacion", "mp_intento",
           "mp_evento", "mp_configuracion"]
 CLAVE = {"pago_anulacion": "id_pago"}
+# Videos On Demand: pueden no existir todavía, y sus filas cambian con el uso normal: no se comparan con el respaldo
+VIDEOS = ["video_programacion", "video", "video_reproduccion"]
 # columnas que cambian con el uso normal (no son datos de negocio): el lugar elegido al iniciar sesión
 VARIABLES = {"profiles": {"empresa_activa"}}
 # (tabla hija, columna, tabla madre): la fila hija tiene que estar en la misma empresa que su madre
@@ -75,6 +77,26 @@ for t in TABLAS:
        not distintas and (t == "profiles" or not nuevas_jsu), f"distintas o faltantes: {len(distintas)}, nuevas en JSU: {len(nuevas_jsu)}")
     if t not in ("profiles", "mp_evento", "mp_configuracion"):
         ok(f"{t}: toda fila pertenece a una empresa existente", all(f.get("id_empresa") in ids_empresa for f in actual[t]))
+
+def opcional(t):
+    """Filas de una tabla que puede no existir antes de la migración: None en ese caso; otro error corta."""
+    try:
+        return todas(t)
+    except Exception as e:
+        if any(c in str(e) for c in ("PGRST205", "42P01", "does not exist")):
+            return None
+        raise
+
+
+videos = {t: opcional(t) for t in VIDEOS}
+if videos["video"] is None:
+    print("OK    Videos On Demand: tablas todavía no creadas, no se verifican")
+else:
+    for t in VIDEOS:
+        ok(f"{t}: {len(videos[t])} filas, todas de una empresa existente", all(f["id_empresa"] in ids_empresa for f in videos[t]))
+    actual.update(videos)
+    MADRES = MADRES + [("video", "id_clase", "clase"), ("video_programacion", "id_horario", "horario"),
+                       ("video_reproduccion", "id_video", "video")]
 
 por_id = {t: {f["id"]: f for f in actual[t]} for t in {m for _, _, m in MADRES}}
 for hija, col, madre in MADRES:

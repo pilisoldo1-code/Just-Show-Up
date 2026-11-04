@@ -541,10 +541,26 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     publicadas se pueden volver a subir.
   - **Menú**: la administradora tiene Videos en el menú de cuenta y no en las secciones: una décima sección desborda el
     header a 1120 px. Alumna y profesora lo tienen en sus secciones. No se tocó el CSS del header.
-  - **Borrar cuentas**: `video_reproduccion.id_usuario` queda vacío y `video_agente` cae en cascada. `video.id_clase` no:
-    `empresa_demo.py borrar` borra primero los videos; sus archivos en Storage hay que limpiarlos aparte.
-  - Pruebas: `python tests/base_local/test_videos_base.py` (143), `tests.test_videos` y `tests.test_agente_videos`.
-    Variables nuevas: `CRON_SECRET` y, si Storage va aparte, las dos `VIDEOS_SUPABASE_*`. Vuelta atrás:
+  - **Borrar cuentas y empresas**: `video_reproduccion.id_usuario` queda vacío y `video_agente` cae en cascada.
+    `empresa_demo.py borrar` borra primero los archivos de Storage, verifica listando el bucket y, si algo falla, corta sin
+    borrar ninguna fila.
+  - **Protección contra producción** (`app/entorno.py`): el programa, el servidor (`VIDEOS_ENTORNO`) y la base
+    (`video_parametros.entorno`) tienen que coincidir. Una base recién migrada queda cerrada. Un entorno `pruebas-...` no
+    corre en Vercel ni contra producción, y el programa solo habla con la red local si no se usa `--produccion`. Producción
+    se reconoce por huellas sha256: no escribir sus identificadores en archivos nuevos. Las huellas están repetidas en
+    `agente/agente_videos.py`, que se instala solo; una prueba comprueba que coincidan.
+  - **Pruebas reales**: procedimiento en `agente/PRUEBAS_REALES.md`. `scripts/videos_prueba_migrar.py` (sin `--aplicar`
+    solo revisa; exige proyecto vacío y confirmación) y `scripts/videos_prueba_datos.py` leen solo `.env.videos-prueba`,
+    nunca el `.env`. **Sin ejecutar contra Supabase remoto.**
+  - **Errores visibles**: `/videos/configuracion` muestra «Últimas grabaciones» solo a la administradora. Los mensajes
+    pasan por `videos.limpiar_mensaje` (saca URLs firmadas, rutas y tokens). Lo que nunca salió de la computadora, como
+    `no_autorizada`, queda solo en `agente/trabajo/agente.log`.
+  - **Respaldos**: `verificar_despliegue.py` y `restaurar_datos.py` incluyen las tablas si existen, y funcionan antes de la
+    migración. `video_agente` queda afuera a propósito. `descargar_datos.py` está en la carpeta de respaldos, fuera del
+    repo: hay que sumarle `video_programacion`, `video` y `video_reproduccion` a mano.
+  - Pruebas: `python tests/base_local/test_videos_base.py` (155), `tests/base_local/test_videos_prueba_base.py` (27),
+    `tests.test_videos`, `tests.test_agente_videos` y `tests.test_entorno`.
+    Variables nuevas: `CRON_SECRET`, `VIDEOS_ENTORNO` y, si Storage va aparte, las dos `VIDEOS_SUPABASE_*`. Vuelta atrás:
     `supabase/pendientes/vuelta_atras_videos_on_demand.sql`. **Orden de despliegue: primero la migración y después el
     merge**: el menú ya muestra la sección y sin las funciones la pantalla da aviso de error.
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
