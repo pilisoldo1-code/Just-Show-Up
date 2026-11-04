@@ -65,6 +65,45 @@ class TarjetasTiposClase(Base):
         self.assertNotIn("cupo 7", r.text)
 
 
+class InactivosPlegados(Base):
+    DEMO = dict(id=81, nombre="Gimnasia (demostración)", activo=False, horarios_activos=0, horarios=1)
+
+    def listado(self, tipos):
+        with mock.patch.object(tipos_clase, "listar", return_value=tipos):
+            return self.client.get("/profesora/tipos-clase").text
+
+    def test_inactivos_al_final_en_seccion_cerrada(self):
+        html = self.listado([tipo(), tipo(id=82, nombre="Yoga", activo=False, horarios_activos=0)])
+        corte = html.index('<details class="seccion-inactivos">')
+        self.assertIn("<summary>Inactivos (1)</summary>", html[corte:])
+        self.assertNotIn('<details class="seccion-inactivos" open', html)  # cerrada por defecto
+        self.assertIn("Yoga", html[corte:])
+        self.assertIn(">Activar</button>", html[corte:])  # las acciones se conservan
+        self.assertNotIn("Yoga", html[:corte])
+        self.assertIn('href="/profesora/tipos-clase/1/editar"', html[:corte])
+
+    def test_sin_inactivos_la_seccion_queda_en_cero(self):
+        html = self.listado([tipo()])
+        self.assertIn("<summary>Inactivos (0)</summary>", html)
+        self.assertIn("No hay tipos de clase inactivos", html)
+
+    def test_el_tipo_de_demostracion_no_aparece_ni_en_inactivos(self):
+        html = self.listado([tipo(), tipo(**self.DEMO)])
+        self.assertNotIn("demostración", html)
+        self.assertIn("<summary>Inactivos (0)</summary>", html)  # sin otros inactivos, la sección dice 0
+        html = self.listado([tipo(), tipo(**self.DEMO), tipo(id=82, nombre="Yoga", activo=False)])
+        self.assertIn("<summary>Inactivos (1)</summary>", html)
+        self.assertNotIn("demostración", html)
+
+    def test_la_exclusion_es_por_id_y_no_solo_por_nombre(self):
+        mismo_nombre = self.listado([tipo(), tipo(**{**self.DEMO, "id": 99})])
+        self.assertIn("Gimnasia (demostración)", mismo_nombre)
+        otro_nombre = self.listado([tipo(), tipo(**{**self.DEMO, "nombre": "Otra"})])
+        self.assertIn("Otra", otro_nombre)
+        activo = self.listado([tipo(), tipo(**{**self.DEMO, "activo": True})])
+        self.assertIn("Gimnasia (demostración)", activo)
+
+
 class RevisarCambioDeTipo(Base):
     def _post(self, sb, datos):
         with mock.patch.object(main, "_sb", return_value=sb):

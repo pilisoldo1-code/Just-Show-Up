@@ -65,32 +65,19 @@
             </form>
         </section>
 
+        {# El cambio de rol alumna ↔ profesora se retiró de la pantalla (decisión del 03/11); la ruta /roles del servidor sigue existiendo #}
+        {% if persona.rol == 'admin' %}
         <section class="bloque-persona">
             <h2>Rol en {{ usuario.empresa_nombre or 'tu empresa' }}</h2>
-            {% if persona.rol == 'admin' %}
             <p class="nota">Sos la administradora. Las administradoras tienen todas las funciones de una profesora (con o sin
                 clases asignadas). El rol de administradora solo lo da o lo quita la administración general.</p>
-            {% else %}
-            {% set otro = 'profesora' if persona.rol == 'alumna' else 'alumna' %}
-            <p>Rol actual: <strong>{{ 'Alumna' if persona.rol == 'alumna' else 'Profesora' }}</strong>. Cada persona tiene un solo
-                rol en tu empresa.</p>
-            {% if persona.pendientes %}
-            <div class="aviso aviso-error">
-                <strong>Para que pase a ser {{ otro }}, antes hay que resolver que:</strong>
-                <ul class="lista-errores">{% for p in persona.pendientes %}<li>{{ p }}</li>{% endfor %}</ul>
-            </div>
-            {% else %}
-            <form action="/profesora/{{ seccion }}/{{ persona.id }}/roles" method="post"
-                  data-confirmar="¿Cambiar el rol de {{ persona.nombre }} {{ persona.apellido }} a {{ otro }}? Su historial se conserva.">
-                <input type="hidden" name="rol" value="{{ otro }}" />
-                <p class="nota">{{ 'Va a dejar de reservar clases y va a poder dar clases.' if otro == 'profesora' else
-                    'Va a dejar de dar clases y va a poder reservar clases.' }} Sus reservas, asistencias, facturas y clases
-                    pasadas se conservan.</p>
-                <button type="submit" class="btn btn-secundario">Cambiar a {{ otro }}</button>
-            </form>
-            {% endif %}
-            {% endif %}
         </section>
+        {% elif persona.rol == 'alumna' %}
+        <section class="bloque-persona">
+            <h2>Rol en {{ usuario.empresa_nombre or 'tu empresa' }}</h2>
+            <p>Rol actual: <strong>Alumna</strong>. Cada persona tiene un solo rol en tu empresa.</p>
+        </section>
+        {% endif %}
 
         {% if not persona.yo %}
         <section class="bloque-persona">

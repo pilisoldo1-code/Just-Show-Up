@@ -890,6 +890,26 @@ Para cada módulo, en este orden:
   asistencias que completa quedan en el historial a nombre de la cuenta técnica `escenario.sistema@demo.invalid`
   («Carga automática (script de demostración)», sin empresa ni rol), nunca de Lucía. Prueba:
   `tests/base_local/test_empresa_actualizar_base.py "<respaldo>"` (30).
+- **Datos de demostración cargados en Just Show Up (04/11, con autorización de Julieta; respaldos previos
+  `2026-11-04 antes de completar asistencias de octubre` y `2026-11-04 antes de datos personales ficticios`)**:
+  - **Cuenta técnica** `escenario.sistema@demo.invalid` («Carga automática (script de demostración)»): sin empresa, sin
+    rol, sin contraseña conocida y **bloqueada hasta 2126** (`banned_until`; Supabase responde `user_banned`). Existe
+    solo para figurar como autora en los historiales de cargas hechas por script (la auditoría exige un perfil en
+    `por`). No se puede borrar mientras el historial la mencione.
+  - **63 asistencias de octubre** (51 presentes, 12 ausentes, reparto equilibrado ~20 % por alumna) en las 8 facturas
+    borrador, con 63 entradas en `asistencia_historial` (origen `correccion`) y 63 `cambio_asistencia` en
+    `factura_historial`, todas de la cuenta técnica. Importes sin cambios (en octubre la ausencia se cobra al 100 %).
+    Quedan 11 pendientes a propósito: las de facturas confirmadas (Agustina, JSU-2026-10-0001, y la demostración de
+    Mercado Pago, JSU-2026-09-0001).
+  - **Cédulas FICTICIAS** 9.000.001-8 … 9.000.013-7 (`90000018`…`90000137`) en la membresía de Just Show Up de las 13
+    cuentas `.invalid` (12 alumnas y la administradora de prueba), y teléfonos `099000101`…`099000104` con carnés
+    2027 en las 4 cuentas `@prueba.invalid` exclusivas de JSU. **Son solo para la demostración académica: la serie
+    9.000.0xx NO es un rango oficial reservado para pruebas** (pasan el dígito verificador y un número así podría
+    asignarse a una persona real), **no deben usarse para validar identidades reales ni emitir documentos fiscales**
+    y se borran junto con las cuentas `.invalid` antes de usar el sistema de verdad. Lo que las identifica sin
+    ambigüedad como ficticias es estar en cuentas `.invalid` (dominio reservado por norma para ejemplos). Las cuentas
+    reales del equipo (`julieta@gmail.com`, `pilisoldo1@gmail.com`) no tienen cédula cargada; el carné de la alumna
+    compartida con Pilates no se tocó.
 - **`scripts/empresa_demo.py`**: por defecto se niega a correr fuera de localhost; contra producción exige `--produccion`
   (y autorización). `crear` no hace nada si PIL ya existe; `borrar` elimina solo lo de PIL (incluidos historial,
   desactivaciones y sesiones) y las cuentas que pertenecen solo a PIL y son `.invalid` (si encuentra otra, no borra
@@ -1163,6 +1183,18 @@ Para cada módulo, en este orden:
   rango abreviado (`_formato_rango_corto`, «26 oct – 1 nov»). Encabezados con botón al lado del título (Horarios,
   Tipos de clase, Alumnas, Profesoras, Empresas): `.seccion-encabezado`, título a la izquierda y botón a la derecha
   en la misma fila también en celular (hasta 400 px se achican título y botón).
+- **Celular, módulo de administración (rama `mobile-administracion`, 03/11)**: el menú ☰ (hasta 1099 px, no 900)
+  se **superpone** al contenido (`position: absolute` debajo del encabezado; no lo empuja). Fechas y horas a la izquierda
+  con `::-webkit-date-and-time-value` (Safari de iPhone las centra; Chrome no lo reproduce). `.dias-nav` la comparten
+  Asistencias, Planificación y Estadísticas: para cambiar solo una pantalla usar una clase propia (`.dias-grilla`).
+  Selector de imagen propio (`.selector-archivo`: input oculto + label con aspecto de botón + nombre del archivo y vista
+  previa local); ojo: `.tipo-imagen` pone `display: block` y anula el atributo `hidden`. Facturación del mes usa
+  `.lista-facturas` / `.factura-item` y la confirmación masiva va al final. La pantalla ya no ofrece el cambio de rol
+  alumna ↔ profesora (la ruta `/roles` del servidor sigue).
+  Tipos de clase y Horarios fijos pliegan lo inactivo al final («Inactivos (n)», siempre visible; con 0, un mensaje). El tipo
+  «Gimnasia (demostración)» (id 81) y su horario lunes 10:00 (id 204) **no se muestran** (`app/demostracion.py`: por id
+  real + nombre + inactivo); se conservan en la base porque sostienen la factura de demostración de Mercado Pago. En
+  otra base (Supabase local) los ids se indican con `DEMO_TIPOS_OCULTOS` / `DEMO_HORARIOS_OCULTOS` al levantar la app.
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
 - Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).

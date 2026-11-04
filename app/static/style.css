@@ -195,6 +195,17 @@ h1 {
     font-size: 1rem;
 }
 
+/* fechas y horas alineadas a la izquierda como el resto de los campos (Safari en iPhone las centra) */
+input[type="date"],
+input[type="time"] {
+    text-align: left;
+}
+
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+    text-align: left;
+}
+
 .horario-form .checkbox-label {
     flex-direction: row;
     align-items: center;
@@ -522,6 +533,10 @@ main.ancho {
     padding-bottom: 2px;
 }
 
+.menu-fondo {
+    display: none;
+}
+
 .menu-cuenta {
     display: flex;
     align-items: center;
@@ -578,10 +593,30 @@ main.ancho {
         margin-left: auto;
     }
 
+    /* el menú se superpone al contenido (no lo empuja hacia abajo) */
+    .menu {
+        position: relative;
+        z-index: 40;
+    }
+
+    .menu.abierto + .menu-fondo {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 35;
+        background: rgba(0, 0, 0, 0.4);
+    }
+
     .menu-links {
         display: none;
-        order: 3;
-        flex: 0 0 100%;
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        right: 0;
+        z-index: 40;
+        max-height: calc(100vh - 140px);
+        max-height: calc(100dvh - 140px);
+        overflow-y: auto;
         flex-direction: column;
         align-items: stretch;
         gap: 2px;
@@ -589,6 +624,7 @@ main.ancho {
         background: var(--card);
         border: 1px solid #2a2e37;
         border-radius: 12px;
+        box-shadow: 0 16px 32px rgba(0, 0, 0, 0.55);
     }
 
     .menu.abierto .menu-links {
@@ -993,6 +1029,38 @@ main.ancho {
     border-color: var(--accent);
     color: var(--bg);
     font-weight: 600;
+}
+
+/* Asistencias: en celular los próximos días van de a 3 por fila (6 columnas, cada día ocupa 2). Si la última fila
+   queda con 2 días, ocupan media fila cada uno; si queda 1, la fila entera: nunca hay huecos (4, 5, 7 u 8 días). */
+@media (max-width: 600px) {
+    .dias-grilla {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .dias-grilla .dia-chip {
+        grid-column: span 2;
+    }
+
+    .dias-grilla .dia-chip:nth-child(3n + 1):nth-last-child(2),
+    .dias-grilla .dia-chip:nth-child(3n + 2):last-child {
+        grid-column: span 3;
+    }
+
+    .dias-grilla .dia-chip:nth-child(3n + 1):last-child {
+        grid-column: span 6;
+    }
+
+    .dias-grilla .dia-chip {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 6px 4px;
+        text-align: center;
+        white-space: nowrap;
+    }
 }
 
 /* ---------- planificación ---------- */
@@ -1432,9 +1500,199 @@ circle.est-punto-ausentes {
     max-width: 100%;
 }
 
+/* Tipos de clase y Horarios: lo inactivo se conserva, pero plegado al final del listado (cerrado por defecto) */
+.seccion-inactivos {
+    margin-top: 28px;
+    border-top: 1px solid #2a2e37;
+    padding-top: 16px;
+}
+
+.seccion-inactivos > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+    padding: 10px 16px;
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--muted);
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+}
+
+.seccion-inactivos > summary::-webkit-details-marker {
+    display: none;
+}
+
+.seccion-inactivos > summary::after {
+    content: "▾";
+    font-size: 1.4rem;
+    line-height: 1;
+    transition: transform 0.15s;
+}
+
+.seccion-inactivos[open] > summary {
+    color: var(--accent);
+    border-color: var(--accent);
+    margin-bottom: 16px;
+}
+
+.seccion-inactivos[open] > summary::after {
+    transform: rotate(180deg);
+}
+
+.seccion-inactivos > summary:hover {
+    border-color: var(--accent);
+}
+
+.seccion-inactivos > summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.seccion-inactivos .inactivos-vacio {
+    margin: 0;
+    padding: 4px 16px 8px;
+}
+
+/* selector de imagen propio: botón + nombre del archivo elegido (sin el texto cortado del control del navegador) */
+.panel-imagen {
+    margin-top: 28px;
+}
+
+.campo-imagen {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.campo-imagen .nota {
+    margin: 0;
+}
+
+.campo-imagen-titulo {
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+/* la vista previa muestra la imagen entera (sin recortar ni deformar), dentro del recuadro */
+.campo-imagen .selector-archivo-previa {
+    width: 100%;
+    max-width: 320px;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: contain;
+    background: var(--bg);
+    border: 1px solid #2a2e37;
+    border-radius: 8px;
+}
+
+/* .tipo-imagen pone display: block, que anularía el atributo hidden */
+.campo-imagen .tipo-imagen[hidden] {
+    display: none;
+}
+
+.imagen-acciones {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.imagen-acciones .nota {
+    margin: 0;
+}
+
+.selector-archivo {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    min-width: 0;
+}
+
+.selector-archivo-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+}
+
+.selector-archivo-boton {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+}
+
+/* .btn (definido después de .btn-secundario) le pondría fondo verde, y .horario-form label lo haría columna */
+.btn.selector-archivo-boton,
+.horario-form label.selector-archivo-boton {
+    flex-direction: row;
+    gap: 0;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid #3a3f4a;
+    font-size: 0.95rem;
+}
+
+.btn.selector-archivo-boton:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.selector-archivo-input:focus-visible + .selector-archivo-boton {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.selector-archivo-nombre {
+    flex: 1 1 160px;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+.selector-archivo-nombre.elegido {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.form-imagen .btn {
+    min-height: 44px;
+}
+
 @media (max-width: 520px) {
     .tipo-imagen-editar {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .campo-imagen .selector-archivo-previa {
+        max-width: 100%;
+    }
+
+    .form-imagen,
+    .form-imagen .selector-archivo {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .selector-archivo-nombre {
+        flex: none;  /* en columna, la base de 160px sería una altura */
+    }
+
+    .form-imagen .btn,
+    .selector-archivo-boton {
+        width: 100%;
+        justify-content: center;
     }
 }
 
@@ -1695,6 +1953,161 @@ circle.est-punto-ausentes {
 .factura-identificacion dd {
     margin: 0;
     font-weight: 600;
+}
+
+/* Facturación del mes: una tarjeta por alumna (nombre y estado · número y cédula · clases e importe · Ver factura) */
+.lista-facturas {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.factura-item {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-radius: 12px;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "cabecera cifras ver";
+    align-items: center;
+    gap: 12px 24px;
+}
+
+.factura-item.factura-anulada {
+    opacity: 0.6;
+}
+
+.fi-cabecera {
+    grid-area: cabecera;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px 12px;
+    min-width: 0;
+}
+
+/* si no entran los dos estados al lado del nombre, bajan a su propio renglón */
+.fi-quien {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 170px;
+    min-width: 0;
+}
+
+.fi-numero {
+    white-space: nowrap;
+}
+
+.fi-nombre {
+    font-size: 1.05rem;
+    overflow-wrap: anywhere;
+}
+
+.fi-estados {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+    flex: none;
+}
+
+.fi-estados .badge {
+    white-space: nowrap;
+}
+
+.fi-cifras {
+    grid-area: cifras;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    white-space: nowrap;
+}
+
+.fi-clases {
+    color: var(--muted);
+}
+
+.fi-importe {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.fi-importe strong {
+    font-size: 1.1rem;
+}
+
+.btn.fi-ver {
+    grid-area: ver;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+}
+
+.confirmar-mes-pie {
+    margin-top: 20px;
+}
+
+.confirmar-mes-pie .nota {
+    margin: 0 0 14px;
+}
+
+@media (max-width: 720px) {
+    .factura-item {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "cabecera" "cifras" "ver";
+        gap: 12px;
+    }
+
+    .fi-cifras {
+        justify-content: space-between;
+        padding-top: 12px;
+        border-top: 1px solid #2a2e37;
+    }
+
+    .btn.fi-ver,
+    .confirmar-mes-pie .btn {
+        width: 100%;
+        min-height: 44px;
+        text-align: center;
+    }
+
+    .confirmar-mes-pie .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+/* Confirmar factura: aire entre la explicación y el botón */
+.panel-confirmar .nota {
+    margin: 0 0 18px;
+    line-height: 1.5;
+}
+
+.panel-confirmar .aviso {
+    margin: 0 0 18px;
+}
+
+@media (max-width: 600px) {
+    .panel-confirmar > .btn {
+        width: 100%;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
 }
 
 /* ---------- Mercado Pago (solo prueba) ---------- */
@@ -3557,6 +3970,19 @@ main.baja-pagina h1 {
 }
 
 /* ---------- cobro por inasistencia ---------- */
+/* celdas de la factura: en escritorio cada dato en su renglón (en celular se juntan, ver más abajo) */
+.ft-dia,
+.ft-hora,
+.ft-tipo,
+.ft-prof {
+    display: block;
+}
+
+.ft-asis {
+    display: block;
+    width: fit-content;
+}
+
 .etiqueta-inasistencia {
     display: inline-block;
     margin-top: 4px;
@@ -3647,6 +4073,16 @@ main.baja-pagina h1 {
     margin: 8px 0;
 }
 
+.cobro-form input[type="date"] {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a2e37;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1rem;
+    min-height: 44px;
+}
+
 /* factura en celular: cada clase es una tarjeta (fecha e importe arriba; clase, precio y ajuste debajo) */
 @media (max-width: 600px) {
     .factura-tabla thead {
@@ -3683,14 +4119,64 @@ main.baja-pagina h1 {
 
     .factura-tabla tbody .ft-clase,
     .factura-tabla tbody .ft-precio,
-    .factura-tabla tbody .ft-ajuste,
-    .factura-tabla tbody .ft-acciones {
-        grid-column: 1 / -1;
+    .factura-tabla tbody .ft-ajuste {
+        grid-column: 1;
         margin-top: 2px;
     }
 
     .factura-tabla tbody .ft-clase .etiqueta-inasistencia {
         margin-top: 2px;
+    }
+
+    /* una línea «Lunes 5/10 · 08:00», otra «Pilates mat · Profesora» y la asistencia debajo;
+       importe arriba a la derecha y «Ajustar» debajo del importe */
+    .factura-tabla tbody tr {
+        padding: 12px 0;
+        row-gap: 2px;
+    }
+
+    .factura-tabla tbody .ft-fecha {
+        font-weight: 700;
+        font-size: 0.95rem;
+    }
+
+    .factura-tabla tbody .ft-dia,
+    .factura-tabla tbody .ft-hora,
+    .factura-tabla tbody .ft-tipo,
+    .factura-tabla tbody .ft-prof {
+        display: inline;
+    }
+
+    .factura-tabla tbody .ft-hora {
+        color: var(--text);
+        font-size: inherit;
+    }
+
+    .factura-tabla tbody .ft-hora::before,
+    .factura-tabla tbody .ft-prof::before {
+        content: " · ";
+    }
+
+    .factura-tabla tbody .ft-prof {
+        font-size: 0.9rem;
+    }
+
+    .factura-tabla tbody .ft-asis {
+        display: block;
+        width: fit-content;
+        margin-top: 4px;
+    }
+
+    .factura-tabla tbody .ft-acciones {
+        grid-column: 2;
+        grid-row: 2 / span 3;
+        align-self: start;
+        justify-self: end;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+        margin-top: 6px;
     }
 
     .factura-tabla tbody .ft-precio .precio-base {
@@ -3715,7 +4201,8 @@ main.baja-pagina h1 {
     }
 
     .factura-tabla tbody td.ft-acciones .btn {
-        margin: 4px 6px 0 0;
+        margin: 0;
+        min-height: 36px;
     }
 
     .factura-tabla tfoot tr {

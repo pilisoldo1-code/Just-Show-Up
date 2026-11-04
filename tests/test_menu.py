@@ -181,6 +181,41 @@ class Pantallas(unittest.TestCase):
         self.assertRegex(contenido, r'<div class="tabla-scroll">\s*<table class="horario-table tabla-tarjetas">')
 
 
+    def _horarios(self, filas):
+        self.como(PROFESORA)
+        main._sb.return_value.table.return_value.select.return_value.execute.return_value.data = filas
+        return self.client.get("/profesora/horarios").text
+
+    ACTIVO = {"id": 1, "dia_semana": "lunes", "hora_inicio": "08:00:00", "activo": True, "tipo_clase": {"nombre": "Gimnasia", "activo": True}}
+    DEMO = {"id": 204, "dia_semana": "lunes", "hora_inicio": "10:00:00", "activo": False,
+            "tipo_clase": {"nombre": "Gimnasia (demostración)", "activo": False}}
+    INACTIVO = {"id": 300, "dia_semana": "domingo", "hora_inicio": "08:00:00", "activo": False, "tipo_clase": {"nombre": "Funcional", "activo": True}}
+
+    def test_horarios_inactivos_plegados_al_final(self):
+        html = self._horarios([self.ACTIVO, self.INACTIVO])
+        corte = html.index('<details class="seccion-inactivos">')
+        self.assertIn('href="/profesora/horarios/1/editar"', html[:corte])
+        self.assertNotIn("Funcional", html[:corte])
+        self.assertIn("<summary>Inactivos (1)</summary>", html[corte:])
+        self.assertIn('href="/profesora/horarios/300/editar"', html[corte:])
+        self.assertIn("Activar", html[corte:])
+
+    def test_horario_de_demostracion_oculto_y_seccion_en_cero(self):
+        html = self._horarios([self.ACTIVO, self.DEMO])
+        self.assertNotIn("/profesora/horarios/204/", html)
+        self.assertNotIn("demostración", html)
+        self.assertIn("<summary>Inactivos (0)</summary>", html)
+        self.assertIn("No hay horarios inactivos", html)
+        html = self._horarios([self.ACTIVO, self.DEMO, self.INACTIVO])
+        self.assertIn("<summary>Inactivos (1)</summary>", html)
+        self.assertNotIn("/profesora/horarios/204/", html)
+
+    def test_horario_oculto_solo_por_su_id(self):
+        otro_id = self._horarios([self.ACTIVO, {**self.DEMO, "id": 205}])
+        self.assertIn("/profesora/horarios/205/editar", otro_id)
+        otro_tipo = self._horarios([self.ACTIVO, {**self.DEMO, "tipo_clase": {"nombre": "Funcional", "activo": True}}])
+        self.assertIn("/profesora/horarios/204/editar", otro_tipo)
+
     def test_horarios_encabezado_con_separacion(self):
         self.como(PROFESORA)
         main._sb.return_value.table.return_value.select.return_value.execute.return_value.data = []

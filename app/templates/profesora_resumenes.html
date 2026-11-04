@@ -73,35 +73,48 @@
             <p class="nota">Las alumnas ven sus facturas confirmadas desde el {{ publica_txt }}{% if publicada %} (ya publicadas){% endif %}.
                 Los borradores nunca se les muestran.</p>
             {% include "_aviso_pendientes_factura.html" %}
-            {% if previa and previa.cantidad %}
-            {% if previa.periodo_finalizado %}
-            <a class="btn" href="/profesora/resumenes/confirmar-mes?mes={{ mes }}&anio={{ anio }}">Confirmar todas las facturas del mes ({{ previa.cantidad }})</a>
-            {% else %}
-            <span class="btn btn-disabled">Confirmar todas las facturas del mes ({{ previa.cantidad }})</span>
-            {% endif %}
-            {% endif %}
         </section>
 
         {% if facturas %}
-        <ul class="lista-clases">
+        <ul class="lista-facturas">
             {% for f in facturas %}
-            <li class="resumen-item{% if f.estado_factura == 'anulada' %} factura-anulada{% endif %}">
-                <div class="lc-fecha"><strong>{{ f.alumna }}</strong>{% if f.numero %}<br /><span class="nota-chica">{{ f.numero }}</span>{% endif %}
-                    {% if not f.cedula_txt %}<br /><span class="nota-chica">Sin cédula</span>{% endif %}</div>
-                <div class="lc-detalle">
-                    {{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }} · <strong>{{ f.total|pesos }}</strong>
-                    {% if f.total != f.subtotal_original %}<br /><span class="nota-chica">Original: {{ f.subtotal_original|pesos }}</span>{% endif %}
+            <li class="factura-item{% if f.estado_factura == 'anulada' %} factura-anulada{% endif %}">
+                <div class="fi-cabecera">
+                    <div class="fi-quien">
+                        <strong class="fi-nombre">{{ f.alumna }}</strong>
+                        <span class="nota-chica"><span class="fi-numero">{{ f.numero or 'Sin número (borrador)' }}</span>{% if not f.cedula_txt %} · <span class="fi-numero">Sin cédula</span>{% endif %}</span>
+                    </div>
+                    <div class="fi-estados">
+                        <span class="badge {{ 'badge-espera' if f.estado_factura == 'borrador' else ('badge-off' if f.estado_factura == 'anulada' else 'badge-on') }}">{{ f.estado_factura_txt }}</span>
+                        {% if f.estado_factura == 'confirmada' %}
+                        <span class="badge {{ f.estado_pago_clase }}">{{ f.estado_pago_txt }}</span>
+                        {% endif %}
+                    </div>
                 </div>
-                <span class="badge {{ 'badge-espera' if f.estado_factura == 'borrador' else ('badge-off' if f.estado_factura == 'anulada' else 'badge-on') }}">{{ f.estado_factura_txt }}</span>
-                {% if f.estado_factura == 'confirmada' %}
-                <span class="badge {{ f.estado_pago_clase }}">{{ f.estado_pago_txt }}</span>
-                {% endif %}
-                <a class="btn btn-chico" href="/profesora/resumenes/{{ f.id }}">Ver factura</a>
+                <div class="fi-cifras">
+                    <span class="fi-clases">{{ f.cantidad_clases }} {{ 'clase' if f.cantidad_clases == 1 else 'clases' }}</span>
+                    <span class="fi-importe">
+                        <strong>{{ f.total|pesos }}</strong>
+                        {% if f.total != f.subtotal_original %}<span class="nota-chica">Original: {{ f.subtotal_original|pesos }}</span>{% endif %}
+                    </span>
+                </div>
+                <a class="btn btn-secundario fi-ver" href="/profesora/resumenes/{{ f.id }}">Ver factura</a>
             </li>
             {% endfor %}
         </ul>
         {% else %}
         <p class="vacio vacio-izq">No hay clases para facturar en {{ mes_txt }}.</p>
+        {% endif %}
+
+        {% if previa and previa.cantidad %}
+        <section class="panel confirmar-mes-pie">
+            {% if previa.periodo_finalizado %}
+            <p class="nota">Antes de confirmar vas a ver la cantidad de facturas y el total del mes.</p>
+            <a class="btn" href="/profesora/resumenes/confirmar-mes?mes={{ mes }}&anio={{ anio }}">Confirmar todas las facturas del mes ({{ previa.cantidad }})</a>
+            {% else %}
+            <span class="btn btn-disabled">Confirmar todas las facturas del mes ({{ previa.cantidad }})</span>
+            {% endif %}
+        </section>
         {% endif %}
         {% endif %}
     </main>

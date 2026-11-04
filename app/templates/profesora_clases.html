@@ -36,7 +36,7 @@
 
         {% if es_mes_actual %}
         <h2 class="seccion">Próximos días</h2>
-        <nav class="dias-nav" aria-label="Elegir día">
+        <nav class="dias-nav dias-grilla" aria-label="Elegir día">
             {% for d in dias %}
             <a href="/profesora/clases?fecha={{ d.fecha }}&mes={{ mes_elegido }}&filtro={{ filtro }}" class="dia-chip {{ 'dia-chip-activo' if d.activo else '' }}"
                {{ 'aria-current=page' if d.activo else '' }}>{{ d.texto }}</a>

@@ -6,6 +6,39 @@
     <title>Just Show Up - {{ 'Horarios' if usuario.es_admin else 'Mis horarios' }}</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
+{% macro fila(h) %}
+    <tr>
+        <td data-label="Día">{{ h.dia_semana | nombre_dia }}</td>
+        <td data-label="Hora">{{ h.hora_inicio[:5] }}</td>
+        <td data-label="Tipo">{{ h.tipo_clase.nombre if h.tipo_clase else '—' }}</td>
+        {% if usuario.es_admin and usuario.empresa_id %}<td data-label="Profesora">{{ h.profesora or '—' }}</td>{% endif %}
+        <td data-label="Estado">
+            <span class="badge {{ 'badge-on' if h.activo else 'badge-off' }}">
+                {{ 'Activo' if h.activo else 'Inactivo' }}
+            </span>
+        </td>
+        <td class="acciones">
+            <a class="btn btn-chico" href="/profesora/horarios/{{ h.id }}/editar">Editar</a>
+            <form action="/profesora/horarios/{{ h.id }}/toggle" method="post">
+                <button type="submit" class="link-btn">
+                    {{ 'Desactivar' if h.activo else 'Activar' }}
+                </button>
+            </form>
+        </td>
+    </tr>
+{% endmacro %}
+{% macro cabecera() %}
+    <thead>
+        <tr>
+            <th>Día</th>
+            <th>Hora de inicio</th>
+            <th>Tipo de clase</th>
+            {% if usuario.es_admin and usuario.empresa_id %}<th>Profesora</th>{% endif %}
+            <th>Estado</th>
+            <th></th>
+        </tr>
+    </thead>
+{% endmacro %}
 <body>
     {% include "_menu.html" %}
     <main class="ancho">
@@ -19,47 +52,41 @@
             </div>
         </div>
 
+        {% set activos = horarios | selectattr('activo') | list %}
+        {% set inactivos = horarios | rejectattr('activo') | list %}
         <div class="tabla-scroll">
             <table class="horario-table tabla-tarjetas">
-                <thead>
-                    <tr>
-                        <th>Día</th>
-                        <th>Hora de inicio</th>
-                        <th>Tipo de clase</th>
-                        {% if usuario.es_admin and usuario.empresa_id %}<th>Profesora</th>{% endif %}
-                        <th>Estado</th>
-                        <th></th>
-                    </tr>
-                </thead>
+                {{ cabecera() }}
                 <tbody>
-                    {% for h in horarios %}
-                    <tr>
-                        <td data-label="Día">{{ h.dia_semana | nombre_dia }}</td>
-                        <td data-label="Hora">{{ h.hora_inicio[:5] }}</td>
-                        <td data-label="Tipo">{{ h.tipo_clase.nombre if h.tipo_clase else '—' }}</td>
-                        {% if usuario.es_admin and usuario.empresa_id %}<td data-label="Profesora">{{ h.profesora or '—' }}</td>{% endif %}
-                        <td data-label="Estado">
-                            <span class="badge {{ 'badge-on' if h.activo else 'badge-off' }}">
-                                {{ 'Activo' if h.activo else 'Inactivo' }}
-                            </span>
-                        </td>
-                        <td class="acciones">
-                            <a class="btn btn-chico" href="/profesora/horarios/{{ h.id }}/editar">Editar</a>
-                            <form action="/profesora/horarios/{{ h.id }}/toggle" method="post">
-                                <button type="submit" class="link-btn">
-                                    {{ 'Desactivar' if h.activo else 'Activar' }}
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
+                    {% for h in activos %}
+                    {{ fila(h) }}
                     {% else %}
                     <tr>
-                        <td colspan="{{ 6 if usuario.es_admin and usuario.empresa_id else 5 }}" class="empty">No hay horarios cargados.</td>
+                        <td colspan="{{ 6 if usuario.es_admin and usuario.empresa_id else 5 }}" class="empty">{{ 'No hay horarios cargados.' if not inactivos else 'No hay horarios activos.' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+
+        {# Los inactivos se conservan (tienen clases e historial) pero no ocupan el listado: quedan plegados al final #}
+        <details class="seccion-inactivos">
+            <summary>Inactivos ({{ inactivos | length }})</summary>
+            {% if inactivos %}
+            <div class="tabla-scroll">
+                <table class="horario-table tabla-tarjetas">
+                    {{ cabecera() }}
+                    <tbody>
+                        {% for h in inactivos %}
+                        {{ fila(h) }}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="vacio vacio-izq inactivos-vacio">No hay horarios inactivos</p>
+            {% endif %}
+        </details>
     </main>
 </body>
 </html>
