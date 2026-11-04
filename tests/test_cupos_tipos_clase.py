@@ -66,22 +66,40 @@ class TarjetasTiposClase(Base):
 
 
 class InactivosPlegados(Base):
+    DEMO = dict(id=81, nombre="Gimnasia (demostración)", activo=False, horarios_activos=0, horarios=1)
+
+    def listado(self, tipos):
+        with mock.patch.object(tipos_clase, "listar", return_value=tipos):
+            return self.client.get("/profesora/tipos-clase").text
+
     def test_inactivos_al_final_en_seccion_cerrada(self):
-        demo = tipo(id=81, nombre="Gimnasia (demostración)", activo=False, horarios_activos=0, horarios=1)
-        with mock.patch.object(tipos_clase, "listar", return_value=[demo, tipo()]):
-            html = self.client.get("/profesora/tipos-clase").text
-        plegable = html[html.index('<details class="seccion-inactivos">'):]
-        self.assertIn("<summary>Inactivos (1)</summary>", plegable)
-        self.assertNotIn("<details class=\"seccion-inactivos\" open", html)  # cerrada por defecto
-        self.assertIn("Gimnasia (demostración)", plegable)
-        self.assertIn(">Activar</button>", plegable)  # las acciones se conservan
-        self.assertNotIn("Gimnasia (demostración)", html[:html.index('<details class="seccion-inactivos">')])
-        self.assertIn('href="/profesora/tipos-clase/1/editar"', html[:html.index('<details class="seccion-inactivos">')])
+        html = self.listado([tipo(), tipo(id=82, nombre="Yoga", activo=False, horarios_activos=0)])
+        corte = html.index('<details class="seccion-inactivos">')
+        self.assertIn("<summary>Inactivos (1)</summary>", html[corte:])
+        self.assertNotIn('<details class="seccion-inactivos" open', html)  # cerrada por defecto
+        self.assertIn("Yoga", html[corte:])
+        self.assertIn(">Activar</button>", html[corte:])  # las acciones se conservan
+        self.assertNotIn("Yoga", html[:corte])
+        self.assertIn('href="/profesora/tipos-clase/1/editar"', html[:corte])
 
     def test_sin_inactivos_no_hay_seccion(self):
-        with mock.patch.object(tipos_clase, "listar", return_value=[tipo()]):
-            html = self.client.get("/profesora/tipos-clase").text
-        self.assertNotIn("seccion-inactivos", html)
+        self.assertNotIn("seccion-inactivos", self.listado([tipo()]))
+
+    def test_el_tipo_de_demostracion_no_aparece_ni_en_inactivos(self):
+        html = self.listado([tipo(), tipo(**self.DEMO)])
+        self.assertNotIn("demostración", html)
+        self.assertNotIn("seccion-inactivos", html)  # sin otros inactivos, no hay sección vacía
+        html = self.listado([tipo(), tipo(**self.DEMO), tipo(id=82, nombre="Yoga", activo=False)])
+        self.assertIn("<summary>Inactivos (1)</summary>", html)
+        self.assertNotIn("demostración", html)
+
+    def test_la_exclusion_es_por_id_y_no_solo_por_nombre(self):
+        mismo_nombre = self.listado([tipo(), tipo(**{**self.DEMO, "id": 99})])
+        self.assertIn("Gimnasia (demostración)", mismo_nombre)
+        otro_nombre = self.listado([tipo(), tipo(**{**self.DEMO, "nombre": "Otra"})])
+        self.assertIn("Otra", otro_nombre)
+        activo = self.listado([tipo(), tipo(**{**self.DEMO, "activo": True})])
+        self.assertIn("Gimnasia (demostración)", activo)
 
 
 class RevisarCambioDeTipo(Base):

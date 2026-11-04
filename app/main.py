@@ -12,7 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import auth, clases, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones
+from app import auth, clases, demostracion, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones
 from app.auth import (ErrorAuth, Redirigir, Usuario, requiere_admin, requiere_alumna, requiere_login, requiere_profesora,
                       requiere_superadmin)
 from app.clases import DIAS_ORDEN
@@ -508,7 +508,8 @@ def profesora_horarios(request: Request, ok: int = 0, aviso: str = "", usuario: 
     supabase = _sb(usuario)
     result = supabase.table(TABLE).select("*, tipo_clase(nombre, activo)").execute()
     mias = _mias(usuario)
-    horarios = sorted((h for h in result.data if mias is None or h.get("id_profesora") == mias), key=_orden_horario)
+    horarios = sorted((h for h in result.data if (mias is None or h.get("id_profesora") == mias)
+                       and not demostracion.horario_oculto(h)), key=_orden_horario)
     if usuario.es_admin and usuario.empresa_id is not None:
         nombres = personas.nombres_profesoras(supabase)
         for h in horarios:
@@ -705,8 +706,9 @@ def _redirigir_tipos(ok: bool, aviso: str) -> RedirectResponse:
 @app.get("/profesora/tipos-clase")
 def profesora_tipos_clase(request: Request, ok: int = 0, aviso: str = "",
                           usuario: Usuario = Depends(requiere_admin)):
+    tipos = [t for t in tipos_clase.listar(_sb(usuario)) if not demostracion.tipo_oculto(t)]
     return _render(request, "profesora_tipos_clase.html", usuario,
-                   tipos=tipos_clase.listar(_sb(usuario)), aviso=aviso, aviso_ok=bool(ok))
+                   tipos=tipos, aviso=aviso, aviso_ok=bool(ok))
 
 
 @app.get("/profesora/tipos-clase/nuevo")
