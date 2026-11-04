@@ -419,6 +419,16 @@ class Permisos(unittest.TestCase):
             self.client.get("/profesora/estadisticas?tipo_clase=7")
         self.assertEqual(calc.call_args.args[4], 7)
 
+    def test_aclaracion_de_pendientes_para_administradora(self):
+        self.como(ADMIN)
+        r = self.client.get("/profesora/estadisticas")
+        self.assertIn("Total de pendientes de la empresa, independientemente de los filtros", r.text)
+
+    def test_aclaracion_de_pendientes_para_profesora_comun(self):
+        self.como(PROFESORA_COMUN)
+        r = self.client.get("/profesora/estadisticas")
+        self.assertIn("Total de pendientes de tus clases, independientemente de los filtros", r.text)
+
 
 class SoloLectura(unittest.TestCase):
     """Punto 9: Estadísticas no debe escribir nada en la base bajo ningún filtro."""
