@@ -199,9 +199,10 @@ ok("panel: las dos empresas con sus cifras", "Just Show Up" in lista and "Pilate
 ok("panel: sin datos operativos ni personales (no muestra alumnas, cédulas ni facturas)",
    "rocio.pilates" not in lista and "Factura" not in lista)
 g = texto(SA.get(f"/admin/empresas/{PIL}").text)
-ok("Gestionar Pilates Centro: administradora y vigencia del 25 % desde el 1° de este mes",
+VIG = (hoy.replace(day=1) - timedelta(days=1)).replace(day=1)  # el escenario aplica el 25 % desde el mes anterior
+ok("Gestionar Pilates Centro: administradora y vigencia del 25 % desde el 1° del mes anterior (sin poder moverla)",
    "Lucía Bentancor" in g and "Cobro por inasistencia" in g
-   and f"Rige desde el <strong>1/{hoy.month}/{hoy.year}</strong>" in g)
+   and f"Rige desde el <strong>1/{VIG.month}/{VIG.year}</strong>" in g)
 r = SA.post(f"/admin/empresas/{PIL}/editar", data={"nombre": "Pilates Centro Demo", "codigo": "PIL"}, follow_redirects=False)
 ok("editar el nombre de la empresa", "ok=1" in r.headers["location"]
    and sql("select nombre from empresa where id = %s", (PIL,), True)["nombre"] == "Pilates Centro Demo")
@@ -227,8 +228,8 @@ ok("desactivar una administradora con vista previa (queda inactiva y registrada)
    "select activa from membresia where id_usuario = %s and id_empresa = %s", (ADM2_P, PIL), True)["activa"] is False
    and sql("select count(*) n from baja_docente where id_empresa = %s", (PIL,), True)["n"] == 1, r.headers.get("location"))
 r = SA.post(f"/admin/empresas/{PIL}/cobro-inasistencia", data={"desde": hoy.replace(day=1).isoformat()}, follow_redirects=False)
-ok("la superadministradora confirma la vigencia (misma fecha: sin cambios)", "ok=1" in r.headers["location"]
-   and sql("select cobro_inasistencia_desde d from empresa where id = %s", (PIL,), True)["d"] == hoy.replace(day=1))
+ok("la vigencia ya rige desde un mes anterior: la superadministradora no puede moverla (no cambia lo facturado)",
+   "ok=0" in r.headers["location"] and sql("select cobro_inasistencia_desde d from empresa where id = %s", (PIL,), True)["d"] == VIG)
 r = SA.post(f"/admin/empresas/{PIL}/estado", data={"activa": 0}, follow_redirects=False)
 ok("desactivar la empresa: sus usuarias no pueden entrar", "ok=1" in r.headers["location"]
    and entrar("Pilates Centro", "admin.pilates@demo.invalid", CL["admin.pilates@demo.invalid"]) is None)
@@ -319,8 +320,8 @@ ok("Pilates: facturas del mes anterior confirmadas con su propia numeración (PI
 ines = sql("select d.porcentaje, d.importe_final, d.precio_original from resumen_mensual_detalle d join resumen_mensual f "
            "on f.id = d.id_resumen_mensual join profiles p on p.id = f.id_alumna where p.mail = %s and d.asistencia = 'ausente'",
            (empresa_demo.INES,))
-ok("Pilates: la inasistencia de Inés del mes anterior se cobró al 100 % (antes de la vigencia)", ines and all(
-   x["porcentaje"] == 100 and x["importe_final"] == x["precio_original"] for x in ines), ines)
+ok("Pilates: la inasistencia de Inés del mes anterior se cobró al 25 %", ines and all(
+   x["porcentaje"] == 25 and x["importe_final"] == round(x["precio_original"] * 25 / 100, 2) for x in ines), ines)
 fp = next(f for f in fac if f["mail"] == empresa_demo.ROCIO)
 ok("Pilates: la factura de Rocío pagada por transferencia, en su empresa", fp["estado_pago"] == "pagado" and sql(
    "select id_empresa, medio_pago from pago where id_resumen_mensual = %s and estado = 'vigente'", (fp["id"],), True)

@@ -55,19 +55,51 @@ class Escenario(unittest.TestCase):
             p = ED.fechas(hoy)
             r = p["reglas"]
             self.assertEqual(p["inicio_mes"], date(2026, 11, 1))
-            self.assertEqual(r["ines_ausente_100"][0].month, 10)   # antes de la vigencia: 100 %
-            self.assertEqual(r["ines_ausente_25"][0].month, 11)    # desde la vigencia: 25 %
-            self.assertEqual(r["sabrina_sin_registrar"][0].month, 11)
+            self.assertEqual(p["vigencia_25"], date(2026, 10, 1))  # el 25 % rige para todo el escenario
+            self.assertEqual(r["ines_ausente_mes_anterior"][0].month, 10)
+            self.assertEqual(r["ines_ausente_mes"][0].month, 11)
+            self.assertNotIn("sabrina_sin_registrar", r)  # ninguna asistencia queda sin registrar a propósito
             self.assertEqual(r["julia_cancelada"][0].month, 10)
             self.assertTrue(all(c["fecha"] != hoy for c in p["clases"]))  # el día de hoy lo genera la app
             jueves = [c for c in p["clases"] if c["semana"] == 1 and ED.HORARIOS[c["horario"]][0] == "jueves"][0]
             self.assertEqual(len(jueves["reservas"]), ED.TIPOS[1][4])  # completa: cupo del reformer
-        self.assertEqual(ED.fechas(date(2026, 11, 17))["reglas"]["ines_ausente_25"], (date(2026, 11, 16), 0))
+        self.assertEqual(ED.fechas(date(2026, 11, 17))["reglas"]["ines_ausente_mes"], (date(2026, 11, 16), 0))
 
     def test_la_compartida_solo_desde_este_mes(self):
         p = ED.fechas(date(2026, 11, 17))
         con = [c["fecha"] for c in p["clases"] if ED.ALUMNA_COMPARTIDA in c["reservas"]]
         self.assertTrue(con and all(f >= date(2026, 11, 1) for f in con))
+
+
+class Asignaciones(unittest.TestCase):
+    def archivo(self, d, filas):
+        ruta = Path(d) / "asignaciones.csv"
+        ruta.write_text(";".join(ED.COLUMNAS) + "\n" + "\n".join(
+            ";".join([str(rid), "2026-11-05", "18:00", "Pilates mat", "x@demo.invalid", "900.00", "900.00", "225.00", e]) for rid, e in filas) + "\n")
+        return ruta
+
+    def test_solo_las_filas_con_estado_y_huella_del_archivo(self):
+        with tempfile.TemporaryDirectory() as d:
+            ruta = self.archivo(d, [(1, "presente"), (2, ""), (3, " Ausente ")])
+            asig, sha = ED.leer_asignaciones(ruta)
+            self.assertEqual(asig, {1: "presente", 3: "ausente"})  # la fila vacía queda pendiente
+            import hashlib
+            self.assertEqual(sha, hashlib.sha256(ruta.read_bytes()).hexdigest())
+
+    def test_errores_no_aplican_nada(self):
+        for filas in ([(1, "presente"), (1, "ausente")], [(1, "tarde")], [("abc", "presente")]):
+            with self.subTest(filas=filas), tempfile.TemporaryDirectory() as d:
+                with self.assertRaises(SystemExit):
+                    ED.leer_asignaciones(self.archivo(d, filas))
+
+    def test_la_propuesta_no_sugiere_estados(self):
+        p = {"id_reserva": 7, "fecha": "2026-11-05", "hora": "18:00", "clase": "Pilates mat", "alumna": ED.ROCIO,
+             "precio": "900.00", "cobro_si_presente": "900.00", "cobro_si_ausente": "225.00"}
+        with tempfile.TemporaryDirectory() as d:
+            ruta = Path(d) / "propuesta.csv"
+            self.assertEqual(ED.escribir_propuesta([p], ruta), 1)
+            self.assertEqual(ED.leer_asignaciones(ruta)[0], {})  # sin completar no se asigna nada
+            self.assertTrue(ruta.read_text().splitlines()[1].endswith(";"))
 
 
 if __name__ == "__main__":
