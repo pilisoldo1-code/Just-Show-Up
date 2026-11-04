@@ -1191,7 +1191,7 @@ Para cada módulo, en este orden:
   previa local); ojo: `.tipo-imagen` pone `display: block` y anula el atributo `hidden`. Facturación del mes usa
   `.lista-facturas` / `.factura-item` y la confirmación masiva va al final. La pantalla ya no ofrece el cambio de rol
   alumna ↔ profesora (la ruta `/roles` del servidor sigue).
-  Tipos de clase y Horarios fijos pliegan lo inactivo al final («Inactivos (n)», sin sección si no hay). El tipo
+  Tipos de clase y Horarios fijos pliegan lo inactivo al final («Inactivos (n)», siempre visible; con 0, un mensaje). El tipo
   «Gimnasia (demostración)» (id 81) y su horario lunes 10:00 (id 204) **no se muestran** (`app/demostracion.py`: por id
   real + nombre + inactivo); se conservan en la base porque sostienen la factura de demostración de Mercado Pago. En
   otra base (Supabase local) los ids se indican con `DEMO_TIPOS_OCULTOS` / `DEMO_HORARIOS_OCULTOS` al levantar la app.

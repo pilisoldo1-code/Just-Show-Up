@@ -1553,6 +1553,11 @@ circle.est-punto-ausentes {
     outline-offset: 2px;
 }
 
+.seccion-inactivos .inactivos-vacio {
+    margin: 0;
+    padding: 4px 16px 8px;
+}
+
 /* selector de imagen propio: botón + nombre del archivo elegido (sin el texto cortado del control del navegador) */
 .panel-imagen {
     margin-top: 28px;

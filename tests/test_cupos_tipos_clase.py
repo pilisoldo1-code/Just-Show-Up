@@ -82,13 +82,15 @@ class InactivosPlegados(Base):
         self.assertNotIn("Yoga", html[:corte])
         self.assertIn('href="/profesora/tipos-clase/1/editar"', html[:corte])
 
-    def test_sin_inactivos_no_hay_seccion(self):
-        self.assertNotIn("seccion-inactivos", self.listado([tipo()]))
+    def test_sin_inactivos_la_seccion_queda_en_cero(self):
+        html = self.listado([tipo()])
+        self.assertIn("<summary>Inactivos (0)</summary>", html)
+        self.assertIn("No hay tipos de clase inactivos", html)
 
     def test_el_tipo_de_demostracion_no_aparece_ni_en_inactivos(self):
         html = self.listado([tipo(), tipo(**self.DEMO)])
         self.assertNotIn("demostración", html)
-        self.assertNotIn("seccion-inactivos", html)  # sin otros inactivos, no hay sección vacía
+        self.assertIn("<summary>Inactivos (0)</summary>", html)  # sin otros inactivos, la sección dice 0
         html = self.listado([tipo(), tipo(**self.DEMO), tipo(id=82, nombre="Yoga", activo=False)])
         self.assertIn("<summary>Inactivos (1)</summary>", html)
         self.assertNotIn("demostración", html)

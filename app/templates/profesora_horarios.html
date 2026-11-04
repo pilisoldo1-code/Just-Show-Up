@@ -69,10 +69,10 @@
             </table>
         </div>
 
-        {% if inactivos %}
         {# Los inactivos se conservan (tienen clases e historial) pero no ocupan el listado: quedan plegados al final #}
         <details class="seccion-inactivos">
             <summary>Inactivos ({{ inactivos | length }})</summary>
+            {% if inactivos %}
             <div class="tabla-scroll">
                 <table class="horario-table tabla-tarjetas">
                     {{ cabecera() }}
@@ -83,8 +83,10 @@
                     </tbody>
                 </table>
             </div>
+            {% else %}
+            <p class="vacio vacio-izq inactivos-vacio">No hay horarios inactivos</p>
+            {% endif %}
         </details>
-        {% endif %}
     </main>
 </body>
 </html>

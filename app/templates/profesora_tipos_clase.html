@@ -53,17 +53,19 @@
             {% endfor %}
         </div>
 
-        {% if inactivos %}
         {# Los inactivos se conservan (tienen clases e historial) pero no ocupan el listado: quedan plegados al final #}
         <details class="seccion-inactivos">
             <summary>Inactivos ({{ inactivos | length }})</summary>
+            {% if inactivos %}
             <div class="tipos-grid">
                 {% for t in inactivos %}
                 {{ tarjeta(t) }}
                 {% endfor %}
             </div>
+            {% else %}
+            <p class="vacio vacio-izq inactivos-vacio">No hay tipos de clase inactivos</p>
+            {% endif %}
         </details>
-        {% endif %}
     </main>
 </body>
 </html>

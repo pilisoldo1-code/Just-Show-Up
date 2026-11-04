@@ -200,11 +200,12 @@ class Pantallas(unittest.TestCase):
         self.assertIn('href="/profesora/horarios/300/editar"', html[corte:])
         self.assertIn("Activar", html[corte:])
 
-    def test_horario_de_demostracion_oculto_y_sin_seccion_vacia(self):
+    def test_horario_de_demostracion_oculto_y_seccion_en_cero(self):
         html = self._horarios([self.ACTIVO, self.DEMO])
         self.assertNotIn("/profesora/horarios/204/", html)
         self.assertNotIn("demostración", html)
-        self.assertNotIn("seccion-inactivos", html)
+        self.assertIn("<summary>Inactivos (0)</summary>", html)
+        self.assertIn("No hay horarios inactivos", html)
         html = self._horarios([self.ACTIVO, self.DEMO, self.INACTIVO])
         self.assertIn("<summary>Inactivos (1)</summary>", html)
         self.assertNotIn("/profesora/horarios/204/", html)
