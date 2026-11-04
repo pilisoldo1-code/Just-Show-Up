@@ -38,7 +38,7 @@
         <div class="cards cards-semana">
             {% for d in dias %}
             {% if d.sin_clases_disponibles %}
-            <div class="card card-pasada">
+            <div class="card card-pasada{{ ' card-finalizada' if d.todas_pasadas else '' }}">
             {% else %}
             <a class="card card-dia-link" href="/dia/{{ d.fecha }}">
             {% endif %}

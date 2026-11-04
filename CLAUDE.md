@@ -1018,9 +1018,9 @@ Para cada módulo, en este orden:
   alumna (o está activa); con valor = la canceló la profesora con ese bloqueo.
 - **CSS: `.btn-secundario` está definido antes que `.btn`** en `style.css`, así
   que en elementos con las dos clases gana el fondo verde de `.btn` (pasa en
-  "Semana anterior/siguiente" y en el "Volver" de los diálogos). Pendiente de
-  corregir; en Planificación se corrigió solo para esa pantalla
-  (`.acciones-confirmar`) para no cambiar el diseño del resto sin pedirlo.
+  "Semana anterior/siguiente" y en el "Volver" de los diálogos). En los diálogos se
+  corrigió el 04/11 (`.modal-botones .btn.btn-secundario`); en Planificación ya estaba
+  (`.acciones-confirmar`). Fuera de los diálogos sigue igual.
 - **No aplicar `20261021000000_resumen_mensual_pagos.sql` (rama de Josefina, PR #13)**:
   la reemplaza `20261021150000_resumen_mensual_pagos.sql` (facturación completa con sus
   protecciones). Aplicar las dos crearía conflicto.
@@ -1222,6 +1222,9 @@ Para cada módulo, en este orden:
   «Gimnasia (demostración)» (id 81) y su horario lunes 10:00 (id 204) **no se muestran** (`app/demostracion.py`: por id
   real + nombre + inactivo); se conservan en la base porque sostienen la factura de demostración de Mercado Pago. En
   otra base (Supabase local) los ids se indican con `DEMO_TIPOS_OCULTOS` / `DEMO_HORARIOS_OCULTOS` al levantar la app.
+  Alumna (primera ronda, 04/11): en celular los días ya terminados de Reservar clases son una franja baja
+  (`.card-finalizada`, solo `todas_pasadas`; los cancelados por la profesora no cambian), precios con `|pesos` en el día y
+  Mis inscripciones, «Descargar PDF» de 44 px y `body` con 20 px arriba hasta 600 px (afecta a todos los perfiles).
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
 - Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).

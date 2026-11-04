@@ -27,6 +27,13 @@ main {
     max-width: 960px;
 }
 
+/* celular: menos espacio vacío arriba del encabezado (en escritorio sigue en 48px) */
+@media (max-width: 600px) {
+    body {
+        padding-top: 20px;
+    }
+}
+
 h1 {
     font-size: 1.5rem;
     margin-bottom: 4px;
@@ -416,6 +423,55 @@ main.ancho {
     }
 }
 
+/* Reservar clases en celular: un día ya terminado ocupa una franja baja (día · horas · Finalizado), así los días con
+   clases disponibles quedan arriba a la vista. Mantiene su lugar en la semana. */
+@media (max-width: 600px) {
+    .cards-semana .card.card-finalizada {
+        flex-basis: 100%;
+        min-height: 0;
+        padding: 10px 14px;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px 12px;
+        text-align: left;
+    }
+
+    .cards-semana .card-finalizada .card-top {
+        flex-direction: row;
+        align-items: baseline;
+        gap: 6px;
+        font-size: 0.85rem;
+    }
+
+    .cards-semana .card-finalizada .card-dia {
+        font-size: 1rem;
+    }
+
+    .cards-semana .card-finalizada .horas {
+        flex: 1 1 auto;
+        justify-content: flex-start;
+        gap: 4px 8px;
+    }
+
+    .cards-semana .card-finalizada .hora-chip {
+        font-size: 0.95rem;
+        padding: 2px 8px;
+        border: none;
+        background: transparent;
+    }
+
+    .cards-semana .card-finalizada .hora-tipo {
+        display: inline;
+        margin-left: 4px;
+    }
+
+    .cards-semana .card-finalizada .card-accion {
+        margin: 0;
+    }
+}
+
 .cards-semana .card {
     align-items: center;
     text-align: center;
@@ -472,6 +528,17 @@ main.ancho {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+}
+
+.modal-botones .btn.btn-secundario {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid #3a3f4a;
+}
+
+.modal-botones .btn.btn-secundario:hover {
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 .btn-peligro-solido {
@@ -2124,6 +2191,15 @@ circle.est-punto-ausentes {
 .factura-cabecera-alumna {
     flex-wrap: nowrap;
     margin-bottom: 8px;
+}
+
+@media (max-width: 600px) {
+    .factura-cabecera-alumna .factura-lado .btn {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 14px;
+    }
 }
 
 .factura-titulo {

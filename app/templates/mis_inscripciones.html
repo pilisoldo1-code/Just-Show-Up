@@ -48,7 +48,7 @@
             {% for c in proximas %}
             <li>
                 <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
-                <div class="lc-detalle">{{ c.duracion }} min · ${{ '%g'|format(c.precio) }}</div>
+                <div class="lc-detalle">{{ c.duracion }} min · {{ c.precio|pesos }}</div>
                 <a class="lc-accion" href="/dia/{{ c.fecha }}">Ver o cancelar ›</a>
             </li>
             {% endfor %}
