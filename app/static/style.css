@@ -533,6 +533,10 @@ main.ancho {
     padding-bottom: 2px;
 }
 
+.menu-fondo {
+    display: none;
+}
+
 .menu-cuenta {
     display: flex;
     align-items: center;
@@ -592,6 +596,15 @@ main.ancho {
     /* el menú se superpone al contenido (no lo empuja hacia abajo) */
     .menu {
         position: relative;
+        z-index: 40;
+    }
+
+    .menu.abierto + .menu-fondo {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 35;
+        background: rgba(0, 0, 0, 0.4);
     }
 
     .menu-links {
@@ -1018,11 +1031,25 @@ main.ancho {
     font-weight: 600;
 }
 
-/* Asistencias: en celular los próximos días van en 3 columnas parejas (6 días = 2 filas de 3) */
+/* Asistencias: en celular los próximos días van de a 3 por fila (6 columnas, cada día ocupa 2). Si la última fila
+   queda con 2 días, ocupan media fila cada uno; si queda 1, la fila entera: nunca hay huecos (4, 5, 7 u 8 días). */
 @media (max-width: 600px) {
     .dias-grilla {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .dias-grilla .dia-chip {
+        grid-column: span 2;
+    }
+
+    .dias-grilla .dia-chip:nth-child(3n + 1):nth-last-child(2),
+    .dias-grilla .dia-chip:nth-child(3n + 2):last-child {
+        grid-column: span 3;
+    }
+
+    .dias-grilla .dia-chip:nth-child(3n + 1):last-child {
+        grid-column: span 6;
     }
 
     .dias-grilla .dia-chip {
@@ -1494,8 +1521,15 @@ circle.est-punto-ausentes {
     color: var(--muted);
 }
 
-.selector-archivo-previa {
+/* la vista previa muestra la imagen entera (sin recortar ni deformar), dentro del recuadro */
+.campo-imagen .selector-archivo-previa {
+    width: 100%;
     max-width: 320px;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: contain;
+    background: var(--bg);
+    border: 1px solid #2a2e37;
     border-radius: 8px;
 }
 
@@ -1561,8 +1595,10 @@ circle.est-punto-ausentes {
 }
 
 .selector-archivo-nombre {
+    flex: 1 1 160px;
     color: var(--muted);
     font-size: 0.9rem;
+    line-height: 1.35;
     overflow-wrap: anywhere;
     min-width: 0;
 }
@@ -1581,7 +1617,7 @@ circle.est-punto-ausentes {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .selector-archivo-previa {
+    .campo-imagen .selector-archivo-previa {
         max-width: 100%;
     }
 
@@ -1589,6 +1625,10 @@ circle.est-punto-ausentes {
     .form-imagen .selector-archivo {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .selector-archivo-nombre {
+        flex: none;  /* en columna, la base de 160px sería una altura */
     }
 
     .form-imagen .btn,
