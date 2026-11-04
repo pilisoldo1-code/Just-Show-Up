@@ -12,11 +12,11 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import auth, clases, demostracion, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones
+from app import auth, clases, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones
 from app.auth import (ErrorAuth, Redirigir, Usuario, requiere_admin, requiere_alumna, requiere_login, requiere_profesora,
                       requiere_superadmin)
 from app.clases import DIAS_ORDEN
-from app import tipos_clase
+from app import demostracion, tipos_clase
 
 BASE_DIR = Path(__file__).resolve().parent
 
