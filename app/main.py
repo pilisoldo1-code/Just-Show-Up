@@ -2234,13 +2234,35 @@ def baja_admin_confirmar(request: Request, empresa_id: int, persona_id: str, mot
 # ---------- Videos On Demand ----------
 
 @app.get("/videos")
-def videos_lista(request: Request, aviso: str = "", usuario: Usuario = Depends(requiere_espectadora)):
+def videos_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_espectadora)):
     try:
         lista = videos.disponibles(_sb(usuario))
     except Exception:
         logging.exception("No se pudieron cargar los videos")
-        lista, aviso = [], "No pudimos cargar los videos. Probá de nuevo."
-    return _render(request, "videos.html", usuario, videos=lista, aviso=aviso, aviso_ok=False)
+        lista, aviso, ok = [], "No pudimos cargar los videos. Probá de nuevo.", 0
+    return _render(request, "videos.html", usuario, videos=lista, aviso=aviso, aviso_ok=bool(ok))
+
+
+# Antes de /videos/{video_id}: si no, «configuracion» se toma como un id.
+@app.get("/videos/configuracion")
+def videos_configuracion(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_admin)):
+    try:
+        horarios = videos.configuracion(_sb(usuario))
+    except Exception:
+        logging.exception("No se pudo cargar la configuración de videos")
+        horarios, aviso, ok = [], "No pudimos cargar la configuración. Probá de nuevo.", 0
+    return _render(request, "videos_configuracion.html", usuario, horarios=horarios, aviso=aviso, aviso_ok=bool(ok))
+
+
+@app.post("/videos/configuracion/{horario_id}")
+def videos_programar(horario_id: int, activa: bool = Form(False), usuario: Usuario = Depends(requiere_admin)):
+    try:
+        resultado = videos.programar(_sb(usuario), horario_id, activa)
+    except Exception:
+        logging.exception("No se pudo guardar la configuración de videos")
+        resultado = None
+    query = urlencode({"ok": int(resultado == "ok"), "aviso": videos.MSG_PROGRAMAR.get(resultado, auth.MSG_GENERICO)})
+    return RedirectResponse(url=f"/videos/configuracion?{query}", status_code=303)
 
 
 @app.get("/videos/{video_id}")
@@ -2255,6 +2277,26 @@ def video_ver(request: Request, video_id: int, usuario: Usuario = Depends(requie
     return _render(request, "video.html", usuario, video=video)
 
 
+@app.post("/videos/{video_id}/iniciar")
+def video_iniciar(video_id: int, usuario: Usuario = Depends(requiere_espectadora)):
+    try:
+        estado = videos.iniciar(_sb(usuario), video_id)
+    except Exception:
+        logging.exception("No se pudo iniciar la reproducción")
+        return Response(status_code=503)
+    return Response(status_code=204 if estado == "ok" else videos.CODIGOS_REPRODUCCION.get(estado, 404))
+
+
+@app.post("/videos/{video_id}/progreso")
+def video_progreso(video_id: int, segundos: int = Form(0), usuario: Usuario = Depends(requiere_espectadora)):
+    try:
+        estado = videos.progreso(_sb(usuario), video_id, segundos)
+    except Exception:
+        logging.exception("No se pudo guardar el progreso")
+        return Response(status_code=503)
+    return Response(status_code=204 if estado == "ok" else videos.CODIGOS_REPRODUCCION.get(estado, 404))
+
+
 @app.get("/videos/{video_id}/lista.m3u8")
 def video_lista_hls(video_id: int, usuario: Usuario = Depends(requiere_espectadora)):
     try:
@@ -2265,6 +2307,11 @@ def video_lista_hls(video_id: int, usuario: Usuario = Depends(requiere_espectado
     if estado != "ok":
         return Response(status_code=videos.CODIGOS_REPRODUCCION.get(estado, 404))
     return Response(content=lista, media_type="application/vnd.apple.mpegurl")
+
+
+class VideoConsulta(BaseModel):
+    inicio: str
+    duracion_seg: int
 
 
 class VideoRegistro(BaseModel):
@@ -2293,6 +2340,11 @@ def _video_del_agente(video_id: int, id_profesora: str) -> dict:
     if video is None:
         raise HTTPException(status_code=404, detail="Video no encontrado")
     return video
+
+
+@app.post("/api/videos/agente/consultar")
+def video_agente_consultar(datos: VideoConsulta, id_profesora: str = Depends(_agente)):
+    return videos.consultar(id_profesora, datos.inicio, datos.duracion_seg)
 
 
 @app.post("/api/videos/agente/registrar")
@@ -2325,4 +2377,4 @@ def video_limpieza(request: Request):
         return Response(status_code=503)
     if not videos.secreto_valido(request.headers.get("authorization", ""), secreto):
         return Response(status_code=401)
-    return {"eliminados": videos.limpiar()}
+    return videos.limpiar()

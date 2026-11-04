@@ -1,5 +1,7 @@
 {
-  "url": "https://just-show-up-theta.vercel.app",
+  "url": "http://127.0.0.1:8000",
   "token": "PEGAR_ACA_EL_TOKEN_DE_ESTA_COMPUTADORA",
-  "carpeta_zoom": "~/Documents/Zoom"
+  "carpeta_zoom": "~/Documents/Zoom",
+  "ffmpeg": "ffmpeg",
+  "ffprobe": "ffprobe"
 }

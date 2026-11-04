@@ -1,10 +1,12 @@
 """Programa local de Videos On Demand: corre en la computadora donde la profesora da la clase con Zoom.
 
-Mira la carpeta de grabaciones, espera a que el archivo esté completo, lo comprime con FFmpeg, lo divide en partes
-de hasta 45 MB, lo sube a Supabase y pide publicarlo. Si algo falla, reintenta más tarde sin duplicar nada: el
+Mira la carpeta de grabaciones y espera a que el archivo esté completo. Le pregunta al servidor si esa clase está
+autorizada ANTES de comprimir: lo que no lo está no se procesa ni se sube. Lo autorizado se comprime con FFmpeg, se
+divide en partes de hasta 45 MB, se sube a Supabase y se publica. Si algo falla, reintenta más tarde sin duplicar: el
 estado queda en un SQLite local y el servidor identifica cada archivo por su huella.
 
-Solo necesita Python 3.10+ y FFmpeg (sin paquetes extra). Configuración e instalación: agente/README.md.
+Solo necesita Python 3.10+ y FFmpeg (sin paquetes extra). Usa la zona horaria de la computadora, que tiene que ser la
+de las clases. Configuración e instalación: agente/README.md.
 
 Uso:
     python agente_videos.py             # queda mirando la carpeta
@@ -14,27 +16,29 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import re
 import shutil
 import sqlite3
 import subprocess
 import sys
 import time
-import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 AQUI = Path(__file__).resolve().parent
-TZ = ZoneInfo("America/Montevideo")
 TAMANO_MAXIMO_PARTE = 45_000_000
 SEGUNDOS_ESTABLE = 180
 SEGUNDOS_ENTRE_PASADAS = 60
-DURACION_MINIMA_SEG = 20 * 60
 ESPERAS_REINTENTO_SEG = [60, 300, 900, 3600]
-# El servidor ya decidió y reintentar no cambia nada.
-RESULTADOS_FINALES = {"ya_publicado", "ya_eliminado", "sin_clase", "clase_ambigua", "huella_repetida", "datos_invalidos"}
+ESPERA_DECISION_SEG = 1800
+HORAS_REINTENTO_DECISION = 24
+ANTIGUEDAD_MAXIMA_HORAS = 72
+TAMANO_MINIMO_VIDEO = 1_000_000
+# Las clases se generan cuando alguien abre ciertas pantallas: una clase puede aparecer después, y el espacio se libera.
+RESULTADOS_REINTENTABLES = {"sin_clase", "sin_espacio"}
+PROGRAMAS = {"ffmpeg": "ffmpeg", "ffprobe": "ffprobe"}
 COMPRESION = [
     "-vf", "scale=-2:360,fps=24", "-c:v", "libx264", "-preset", "slow", "-crf", "28", "-maxrate", "340k",
     "-bufsize", "680k", "-g", "144", "-c:a", "aac", "-b:a", "64k", "-ac", "1",
@@ -99,20 +103,22 @@ def cortar_archivo(origen: Path, partes: list[dict], destino: Path) -> None:
 # ---------- grabaciones de Zoom ----------
 
 def hora_de_carpeta(nombre: str) -> datetime | None:
-    """Zoom nombra la carpeta «2026-11-16 08.01.23 Tema de la reunión»."""
+    """Zoom nombra la carpeta «2026-11-16 08.01.23 Tema de la reunión», con la hora local de la computadora."""
     m = re.match(r"(\d{4}-\d{2}-\d{2}) (\d{2})\.(\d{2})\.(\d{2})", nombre)
     if not m:
         return None
-    return datetime.fromisoformat(f"{m[1]}T{m[2]}:{m[3]}:{m[4]}").replace(tzinfo=TZ)
+    return datetime.fromisoformat(f"{m[1]}T{m[2]}:{m[3]}:{m[4]}").astimezone()
 
 
-def buscar_grabaciones(carpeta: Path) -> list[Path]:
-    """El .mp4 más grande de cada carpeta de reunión (los nombres cambian según la versión de Zoom)."""
+def buscar_grabaciones(carpeta: Path) -> list[tuple[Path, int]]:
+    """Por cada carpeta de reunión: su .mp4 más grande y cuántos videos tiene. Los nombres cambian según la versión de
+    Zoom; detener y volver a grabar deja más de un archivo."""
     encontrados = []
     for reunion in sorted(p for p in carpeta.iterdir() if p.is_dir()):
         videos = list(reunion.glob("*.mp4"))
         if videos:
-            encontrados.append(max(videos, key=lambda p: p.stat().st_size))
+            grandes = [v for v in videos if v.stat().st_size >= TAMANO_MINIMO_VIDEO]
+            encontrados.append((max(videos, key=lambda p: p.stat().st_size), len(grandes)))
     return encontrados
 
 
@@ -125,7 +131,7 @@ def huella_archivo(ruta: Path) -> str:
 
 
 def duracion_segundos(ruta: Path) -> int:
-    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(ruta)],
+    r = subprocess.run([PROGRAMAS["ffprobe"], "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(ruta)],
                        capture_output=True, text=True)
     if r.returncode != 0 or not r.stdout.strip():
         raise ErrorAgente(f"FFmpeg no pudo leer el archivo: {r.stderr.strip()[:200]}")
@@ -140,7 +146,7 @@ def comprimir(origen: Path, carpeta: Path) -> tuple[list[dict], str]:
         return datos["partes"], datos["lista_hls"]
     carpeta.mkdir(parents=True, exist_ok=True)
     lista = carpeta / "salida.m3u8"
-    r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(origen), *COMPRESION, str(lista)],
+    r = subprocess.run([PROGRAMAS["ffmpeg"], "-y", "-v", "error", "-i", str(origen), *COMPRESION, str(lista)],
                        capture_output=True, text=True)
     if r.returncode != 0:
         raise ErrorAgente(f"Falló la compresión: {r.stderr.strip()[:300]}")
@@ -180,19 +186,24 @@ def avisar_error(servidor: Servidor, id_video: int, mensaje: str) -> None:
         logging.info("No se pudo avisar el error del video %s", id_video)
 
 
-def procesar(servidor: Servidor, video: Path, huella: str, trabajo: Path) -> tuple[str, int | None]:
-    """Devuelve el resultado final del servidor y el id del video, si se llegó a registrar."""
+def inicio_de(video: Path, duracion: int) -> datetime:
     inicio = hora_de_carpeta(video.parent.name)
-    duracion = duracion_segundos(video)
-    if duracion < DURACION_MINIMA_SEG:
-        return "muy_corta", None
-    if inicio is None:
-        inicio = datetime.fromtimestamp(video.stat().st_mtime, TZ) - timedelta(seconds=duracion)
+    return inicio or datetime.fromtimestamp(video.stat().st_mtime).astimezone() - timedelta(seconds=duracion)
 
+
+def procesar(servidor: Servidor, video: Path, trabajo: Path) -> tuple[str, int | None]:
+    """Devuelve la decisión del servidor (o «publicado») y el id del video, si existe."""
+    duracion = duracion_segundos(video)
+    inicio = inicio_de(video, duracion).isoformat()
+    consulta = servidor.post("consultar", {"inicio": inicio, "duracion_seg": duracion})
+    if consulta["resultado"] != "autorizada":
+        return consulta["resultado"], consulta.get("id_video")
+
+    huella = huella_archivo(video)
     carpeta = trabajo / huella
     partes, lista_hls = comprimir(video, carpeta)
     registro = servidor.post("registrar", {
-        "inicio": inicio.isoformat(), "huella": huella, "duracion_seg": duracion,
+        "inicio": inicio, "huella": huella, "duracion_seg": duracion,
         "tamano_bytes": sum(p["bytes"] for p in partes),
         "partes": [{"nombre": p["nombre"], "bytes": p["bytes"]} for p in partes],
         "lista_hls": lista_hls,
@@ -221,10 +232,21 @@ def abrir_cola(ruta: Path) -> sqlite3.Connection:
     cola = sqlite3.connect(ruta)
     cola.row_factory = sqlite3.Row
     cola.execute("""create table if not exists grabacion (
-        ruta text primary key, tamano integer, visto_en real, huella text, id_video integer,
+        ruta text primary key, tamano integer, visto_en real, detectado_en real, id_video integer,
         estado text not null default 'esperando', intentos integer not null default 0, proximo_intento real not null default 0,
         ultimo_error text)""")
     return cola
+
+
+def tomar_candado(ruta: Path) -> sqlite3.Connection | None:
+    """Evita dos ejecuciones a la vez. El sistema libera el candado aunque el programa se corte."""
+    candado = sqlite3.connect(ruta, timeout=0, isolation_level=None)
+    try:
+        candado.execute("BEGIN EXCLUSIVE")
+    except sqlite3.OperationalError:
+        candado.close()
+        return None
+    return candado
 
 
 def estable(cola: sqlite3.Connection, video: Path, ahora: float) -> bool:
@@ -232,7 +254,8 @@ def estable(cola: sqlite3.Connection, video: Path, ahora: float) -> bool:
     tamano = video.stat().st_size
     fila = cola.execute("select tamano, visto_en from grabacion where ruta = ?", (str(video),)).fetchone()
     if fila is None:
-        cola.execute("insert into grabacion (ruta, tamano, visto_en) values (?, ?, ?)", (str(video), tamano, ahora))
+        cola.execute("insert into grabacion (ruta, tamano, visto_en, detectado_en) values (?, ?, ?, ?)",
+                     (str(video), tamano, ahora, ahora))
     elif fila["tamano"] != tamano:
         cola.execute("update grabacion set tamano = ?, visto_en = ? where ruta = ?", (tamano, ahora, str(video)))
     else:
@@ -244,29 +267,45 @@ def espera_reintento(intentos: int) -> int:
     return ESPERAS_REINTENTO_SEG[min(intentos, len(ESPERAS_REINTENTO_SEG)) - 1]
 
 
+def cerrar(cola: sqlite3.Connection, video: Path, estado: str, id_video: int | None = None) -> None:
+    logging.info("%s: %s", video.parent.name, estado)
+    with cola:
+        cola.execute("update grabacion set estado = ?, id_video = ?, ultimo_error = null where ruta = ?",
+                     (estado, id_video, str(video)))
+
+
+def esperar(cola: sqlite3.Connection, video: Path, intentos: int, proximo: float, motivo: str) -> None:
+    logging.warning("%s: intento %s: %s", video.parent.name, intentos, motivo)
+    with cola:
+        cola.execute("update grabacion set intentos = ?, proximo_intento = ?, ultimo_error = ? where ruta = ?",
+                     (intentos, proximo, motivo[:500], str(video)))
+
+
 def pasada(servidor: Servidor, carpeta_zoom: Path, trabajo: Path, cola: sqlite3.Connection, ahora: float) -> None:
-    for video in buscar_grabaciones(carpeta_zoom):
+    for video, cantidad in buscar_grabaciones(carpeta_zoom):
         with cola:
             listo = estable(cola, video, ahora)
         fila = cola.execute("select * from grabacion where ruta = ?", (str(video),)).fetchone()
         if not listo or fila["estado"] != "esperando" or ahora < fila["proximo_intento"]:
             continue
-        huella = fila["huella"] or huella_archivo(video)
-        with cola:
-            cola.execute("update grabacion set huella = ? where ruta = ?", (huella, str(video)))
-        try:
-            resultado, id_video = procesar(servidor, video, huella, trabajo)
-        except (ErrorAgente, OSError, urllib.error.URLError, KeyError, ValueError) as e:
-            intentos = fila["intentos"] + 1
-            logging.warning("%s: falló el intento %s: %s", video.parent.name, intentos, e)
-            with cola:
-                cola.execute("update grabacion set intentos = ?, proximo_intento = ?, ultimo_error = ? where ruta = ?",
-                             (intentos, ahora + espera_reintento(intentos), str(e)[:500], str(video)))
+        if cantidad > 1:  # no se sabe cuál es la clase: no se adivina
+            cerrar(cola, video, "varios_archivos")
             continue
-        logging.info("%s: %s", video.parent.name, resultado)
-        with cola:
-            cola.execute("update grabacion set estado = ?, id_video = ?, ultimo_error = null where ruta = ?",
-                         (resultado, id_video, str(video)))
+        fecha = hora_de_carpeta(video.parent.name)
+        if fecha and ahora - fecha.timestamp() > ANTIGUEDAD_MAXIMA_HORAS * 3600:
+            cerrar(cola, video, "antigua")
+            continue
+        intentos = fila["intentos"] + 1
+        try:
+            resultado, id_video = procesar(servidor, video, trabajo)
+        except (ErrorAgente, OSError, KeyError, ValueError) as e:
+            esperar(cola, video, intentos, ahora + espera_reintento(intentos), str(e))
+            continue
+        vigente = ahora - fila["detectado_en"] < HORAS_REINTENTO_DECISION * 3600
+        if resultado in RESULTADOS_REINTENTABLES and vigente:
+            esperar(cola, video, intentos, ahora + ESPERA_DECISION_SEG, resultado)
+        else:
+            cerrar(cola, video, resultado, id_video)
 
 
 def main() -> int:
@@ -280,18 +319,32 @@ def main() -> int:
     trabajo.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(filename=trabajo / "agente.log", level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
-    for programa in ("ffmpeg", "ffprobe"):
-        if shutil.which(programa) is None:
-            logging.error("No encontré %s", programa)
-            print(f"Falta instalar {programa}", file=sys.stderr)
+    if os.name == "posix" and args.config.stat().st_mode & 0o077:
+        logging.warning("config.json tiene el token y lo pueden leer otras cuentas: chmod 600 config.json")
+    candado = tomar_candado(trabajo / "candado.sqlite")
+    if candado is None:
+        logging.info("Ya hay otra ejecución en curso")
+        return 0
+    for programa in PROGRAMAS:
+        PROGRAMAS[programa] = config.get(programa, programa)
+        if shutil.which(PROGRAMAS[programa]) is None:
+            logging.error("No encontré %s", PROGRAMAS[programa])
+            print(f"Falta instalar {programa} o indicar su ruta en config.json", file=sys.stderr)
             return 1
 
     servidor = Servidor(config["url"], config["token"])
     carpeta_zoom = Path(config.get("carpeta_zoom", "~/Documents/Zoom")).expanduser()
     cola = abrir_cola(trabajo / "cola.sqlite")
     while True:
-        if carpeta_zoom.is_dir():
-            pasada(servidor, carpeta_zoom, trabajo, cola, time.time())
+        try:
+            if carpeta_zoom.is_dir():
+                pasada(servidor, carpeta_zoom, trabajo, cola, time.time())
+            else:
+                logging.warning("No existe la carpeta %s", carpeta_zoom)
+        except PermissionError:
+            logging.error("Sin permiso para leer %s (en Mac: Acceso total al disco)", carpeta_zoom)
+        except OSError as e:
+            logging.error("No se pudo revisar %s: %s", carpeta_zoom, e)
         if args.una_vez:
             return 0
         time.sleep(SEGUNDOS_ENTRE_PASADAS)

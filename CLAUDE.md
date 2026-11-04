@@ -506,28 +506,45 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   cambiarla** (no está en su permiso de UPDATE por columna). La profesora la carga en el alta o
   después con "Cargar/Corregir cédula" en Alumnas (función `actualizar_cedula`, verifica rol;
   vacía = quitarla).
-- **Videos On Demand (rama `feature/videos-on-demand`, Pilar, 03/11; migración
-  `20261106000000_videos_on_demand.sql` SIN APLICAR y sin integrar en `main`)**: la profesora da la clase con Zoom Basic,
-  `agente/agente_videos.py` (en su computadora) detecta la grabación, la comprime a ~400 kbps (~120 MB para 40 min), la
-  divide en partes de hasta 45 MB y la sube con URLs firmadas directo a Supabase (Vercel limita los pedidos a 4,5 MB).
-  El video se ve 24 h desde la publicación en `/videos` (alumna, profesora y administradora de esa empresa, solo para
-  mirar); después `/api/videos/limpieza` (cron diario de Vercel, y cada vez que se publica otro) borra los archivos y
-  conserva la fila.
-  - Reproducción: HLS con una lista de rangos de bytes sobre pocas partes; `GET /videos/{id}/lista.m3u8` firma las
-    URLs al momento, por `min(90 min, tiempo restante)`. Safari usa HLS nativo y Chrome de Android `hls.js`.
-  - Tablas `video` (una fila por clase, la empresa y la profesora salen de la clase), `video_agente` (huella del token de
-    cada computadora; se crea con `scripts/video_agente.py`) y `video_reproduccion` (topes). «Vencido» no es un estado:
-    se calcula con `vence_en`, así el corte es exacto aunque el cron se atrase.
+- **Videos On Demand (rama `feature/videos-on-demand`, Pilar; migración `20261106000000_videos_on_demand.sql` SIN
+  APLICAR y sin integrar en `main`)**: **sin probar todavía con Zoom, FFmpeg, Supabase Storage real, iPhone ni Android**;
+  todo lo de abajo tiene solo pruebas locales con datos simulados. Mux Free sigue en evaluación.
+  - **Selección**: la administradora activa los horarios en `/videos/configuracion` (`video_programacion`; solo
+    horarios de `duracion_clase_min`, 40). Después de cada clase es automático. Lo no activado no se comprime ni se sube.
+  - **Flujo**: `agente/agente_videos.py`, en la computadora de la profesora, detecta el `.mp4`, consulta
+    `/api/videos/agente/consultar` **antes de comprimir** y, si está autorizada, comprime a ~400 kbps (~120 MB para 40
+    min, estimado), divide en partes de hasta 45 MB y sube con URLs firmadas directo a Storage (Vercel limita los
+    pedidos a 4,5 MB). `video_registrar` y `video_publicar` vuelven a verificar. El programa no lleva claves de
+    Supabase: solo la `url` y un token propio (`scripts/video_agente.py`, que exige `--remoto` fuera de localhost).
+  - **Identificación**: `_video_evaluar` exige una sola clase de esa profesora dentro de ±15 min; si no, no publica.
+    `sin_clase` y `sin_espacio` se reintentan durante 24 h porque las clases se generan a demanda. La empresa sale de la
+    clase, nunca del programa.
+  - **Duración**: entre `clase.duracion` − 6 min y + 1 min (34 a 41 para 40). **Margen técnico provisorio**, pendiente
+    de validar con grabaciones reales; se cambia en `video_parametros`. La biblioteca muestra la duración real.
+  - **Acceso**: 24 h desde `publicado_en`. «Vencido» no es un estado: se calcula con `vence_en`, sin depender del cron.
+    Las URLs duran `min(90 min, restante − 15 s)`: el margen cubre la demora entre calcular y firmar. No se puede borrar lo
+    que un dispositivo ya descargó, ni impedir grabar la pantalla.
+  - **Reproductor**: el video se pide recién al tocar Reproducir (`video_iniciar`); abrir la página no descarga ni
+    cuenta. iPhone usa HLS nativo y el resto `hls.js`: no decidir con `canPlayType`, porque Chrome también responde
+    «maybe». Lista HLS de rangos de bytes sobre pocas partes, firmada al pedirla.
+  - **Consumo (solo una estimación)**: el archivo va directo del proveedor al navegador y **el servidor no ve la
+    transferencia**: `video_reproduccion` (una fila por persona y video) estima por tiempo reproducido, informado por el
+    navegador. Pausar, adelantar o recargar no cuenta como otro inicio. Topes en `video_parametros`: 3 GB por ciclo con
+    margen de 1,25 y 300 MB por persona y video. `dia_inicio_ciclo` tiene que coincidir con la facturación de Supabase.
+    Esto reduce el riesgo, no lo garantiza: superar la cuota puede dar 402 en toda la organización. Por eso existen
+    `VIDEOS_SUPABASE_URL` y `VIDEOS_SUPABASE_SERVICE_KEY`, para guardar los archivos en otra organización.
   - **El bucket privado `videos-clases` no tiene políticas para usuarias a propósito**: `createSignedUrl` solo necesita
     `select` en `storage.objects`, así que con esa política una sesión podría firmar URLs con el vencimiento que quiera.
-  - **Topes en `video_reproducir`**: 4 GB estimados por mes en total y 3 inicios por usuaria y video (reabrir antes de
-    90 min no cuenta). Superar la cuota de Supabase puede bloquear con 402 toda la organización: la app entera. Por eso
-    `VIDEOS_SUPABASE_URL` y `VIDEOS_SUPABASE_SERVICE_KEY` permiten guardar los archivos en un proyecto aparte, de otra
-    organización (`scripts/video_agente.py bucket` crea ahí el bucket); sin ellas se usa el proyecto principal.
-  - Límite real: unas 33 reproducciones completas por mes en total; no alcanza para grabar todas las clases.
-  - Pruebas: `python tests/base_local/test_videos_base.py` (81), `tests.test_videos` y `tests.test_agente_videos`.
-    **Sin probar todavía**: una grabación real de Zoom, FFmpeg, Supabase Storage real (rangos de bytes con URL firmada) y
-    Safari de iPhone (si manda la cookie al pedir la lista HLS). Variables nuevas en Vercel: `CRON_SECRET`. Vuelta atrás:
+  - **Limpieza**: `/api/videos/limpieza` (cron diario de Vercel, y al publicar otro video) borra, verifica listando el
+    bucket y marca; el registro se conserva. Los errores quedan en `limpieza_error` y se reintentan primero los que hace
+    más que no se intentan. Las subidas se consideran abandonadas por `actualizado_en`, no por `creado_en`; las nunca
+    publicadas se pueden volver a subir.
+  - **Menú**: la administradora tiene Videos en el menú de cuenta y no en las secciones: una décima sección desborda el
+    header a 1120 px. Alumna y profesora lo tienen en sus secciones. No se tocó el CSS del header.
+  - **Borrar cuentas**: `video_reproduccion.id_usuario` queda vacío y `video_agente` cae en cascada. `video.id_clase` no:
+    `empresa_demo.py borrar` borra primero los videos; sus archivos en Storage hay que limpiarlos aparte.
+  - Pruebas: `python tests/base_local/test_videos_base.py` (143), `tests.test_videos` y `tests.test_agente_videos`.
+    Variables nuevas: `CRON_SECRET` y, si Storage va aparte, las dos `VIDEOS_SUPABASE_*`. Vuelta atrás:
     `supabase/pendientes/vuelta_atras_videos_on_demand.sql`. **Orden de despliegue: primero la migración y después el
     merge**: el menú ya muestra la sección y sin las funciones la pantalla da aviso de error.
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio

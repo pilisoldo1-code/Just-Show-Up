@@ -9,10 +9,17 @@ from supabase import Client, create_client
 from app import auth, clases
 
 BUCKET = "videos-clases"
-TTL_URL_MAXIMO = 90 * 60  # alcanza para 40 minutos con pausas; igual al margen de video_reproducir
+TTL_URL_MAXIMO = 90 * 60  # alcanza para 40 minutos con pausas; después el reproductor pide una lista nueva
+MARGEN_URL_SEG = 15  # la URL se firma un momento después de calcular el tiempo: nunca debe pasar el vencimiento
 LIMITE_LIMPIEZA = 20
 MSG_NO_DISPONIBLE = "Ese video ya no está disponible."
-CODIGOS_REPRODUCCION = {"no_disponible": 404, "limite_usuaria": 429, "sin_presupuesto": 429}
+CODIGOS_REPRODUCCION = {"no_disponible": 404, "sin_iniciar": 409, "limite_usuaria": 429, "sin_presupuesto": 429}
+MSG_PROGRAMAR = {
+    "ok": "Listo, se guardó la configuración.",
+    "duracion_no_valida": "Solo se pueden grabar horarios de la duración prevista para Videos On Demand.",
+    "no_encontrado": "No encontramos ese horario.",
+    "no_autorizada": "Solo la administradora puede cambiar esta configuración.",
+}
 
 
 def almacen():
@@ -38,7 +45,9 @@ def texto_restante(segundos: int) -> str:
 
 
 def texto_duracion(segundos: int) -> str:
-    return f"{round(segundos / 60)} minutos"
+    """Duración real del archivo: no redondea a 40 minutos."""
+    minutos, resto = divmod(segundos, 60)
+    return f"{minutos} min {resto} s" if resto else f"{minutos} min"
 
 
 def _tarjeta(v: dict) -> dict:
@@ -71,11 +80,21 @@ def firmar_lista(lista: str, urls: dict[str, str]) -> str:
     return "\n".join(urls.get(linea.strip(), linea) for linea in lista.splitlines()) + "\n"
 
 
+def iniciar(sb: Client, id_video: int) -> str:
+    """Al tocar Play. Abrir la página no pasa por acá."""
+    return (sb.rpc("video_iniciar", {"p_id_video": id_video}).execute().data or {}).get("resultado", "no_disponible")
+
+
+def progreso(sb: Client, id_video: int, segundos: int) -> str:
+    r = sb.rpc("video_progreso", {"p_id_video": id_video, "p_segundos": segundos}).execute().data or {}
+    return r.get("resultado", "no_disponible")
+
+
 def lista_para_reproducir(sb: Client, id_video: int) -> tuple[str, str]:
-    r = sb.rpc("video_reproducir", {"p_id_video": id_video}).execute().data or {}
+    r = sb.rpc("video_para_firmar", {"p_id_video": id_video}).execute().data or {}
     if r.get("resultado") != "ok":
         return r.get("resultado", "no_disponible"), ""
-    ttl = min(TTL_URL_MAXIMO, int(r["segundos_restantes"]))  # ninguna URL dura más que el video
+    ttl = min(TTL_URL_MAXIMO, int(r["segundos_restantes"]) - MARGEN_URL_SEG)
     if ttl < 1:
         return "no_disponible", ""
     nombres = [p["nombre"] for p in r["partes"]]
@@ -86,6 +105,18 @@ def lista_para_reproducir(sb: Client, id_video: int) -> tuple[str, str]:
         logging.error("Faltan partes firmadas del video %s", id_video)
         return "no_disponible", ""
     return "ok", firmar_lista(r["lista_hls"], urls)
+
+
+# ---------- configuración (administradora) ----------
+
+def configuracion(sb: Client) -> list[dict]:
+    filas = sb.rpc("videos_configuracion", {}).execute().data or []
+    return sorted(filas, key=lambda h: (clases.DIAS_ORDEN.index(h["dia_semana"]), h["hora_inicio"]))
+
+
+def programar(sb: Client, id_horario: int, activa: bool) -> str:
+    r = sb.rpc("video_programar", {"p_id_horario": id_horario, "p_activa": activa}).execute().data or {}
+    return r.get("resultado", "no_encontrado")
 
 
 # ---------- programa local ----------
@@ -103,6 +134,13 @@ def identificar_agente(cabecera: str) -> str | None:
 
 def video_de_agente(id_video: int, id_profesora: str) -> dict | None:
     return auth.cliente_admin().rpc("video_de_agente", {"p_id_video": id_video, "p_id_profesora": id_profesora}).execute().data
+
+
+def consultar(id_profesora: str, inicio: str, duracion_seg: int) -> dict:
+    """Se pregunta antes de comprimir: lo no autorizado no se procesa."""
+    return auth.cliente_admin().rpc("video_consultar", {
+        "p_id_profesora": id_profesora, "p_inicio": inicio, "p_duracion_seg": duracion_seg,
+    }).execute().data
 
 
 def registrar(id_profesora: str, datos: dict) -> dict:
@@ -136,11 +174,14 @@ def urls_subida(video: dict) -> dict:
     return {"resultado": "ok", "urls": urls}
 
 
+def faltantes(video: dict, subidas: dict[str, int]) -> list[str]:
+    """Partes que no están o no tienen el tamaño esperado."""
+    return [p["nombre"] for p in video["partes"] if subidas.get(p["nombre"]) != p["bytes"]]
+
+
 def publicar(video: dict, id_profesora: str) -> dict:
-    if video["estado"] == "subiendo":
-        subidas = _subidas(video, almacen())
-        if any(subidas.get(p["nombre"]) != p["bytes"] for p in video["partes"]):
-            return {"resultado": "partes_incompletas"}
+    if video["estado"] == "subiendo" and faltantes(video, _subidas(video, almacen())):
+        return {"resultado": "partes_incompletas"}
     return auth.cliente_admin().rpc("video_publicar", {"p_id_video": video["id"], "p_id_profesora": id_profesora}).execute().data
 
 
@@ -155,20 +196,26 @@ def secreto_valido(cabecera: str, secreto: str) -> bool:
     return hmac.compare_digest(cabecera, f"Bearer {secreto}")
 
 
-def limpiar() -> int:
-    """Borra los archivos vencidos y conserva el registro. Si un borrado falla, el video queda para la próxima."""
+def limpiar() -> dict:
+    """Borra los archivos vencidos y conserva el registro. No decide el acceso: eso lo hace vence_en. Lo que falla
+    queda anotado en la fila y se vuelve a intentar en la próxima pasada."""
     admin = auth.cliente_admin()
     pendientes = admin.rpc("videos_a_limpiar", {"p_limite": LIMITE_LIMPIEZA}).execute().data or []
     bucket = almacen() if pendientes else None
-    eliminados = 0
+    resultado = {"eliminados": 0, "errores": 0}
     for v in pendientes:
         try:
             bucket.remove([ruta(v["id_empresa"], v["id"], p["nombre"]) for p in v["partes"]])
+            quedan = {p["nombre"] for p in v["partes"]} & set(_subidas(v, bucket))
+            if quedan:
+                raise RuntimeError(f"Siguen en Storage: {', '.join(sorted(quedan))}")
             admin.rpc("video_marcar_eliminado", {"p_id_video": v["id"]}).execute()
-            eliminados += 1
-        except Exception:
+            resultado["eliminados"] += 1
+        except Exception as e:
             logging.exception("No se pudieron borrar los archivos del video %s", v["id"])
-    return eliminados
+            resultado["errores"] += 1
+            admin.rpc("video_limpieza_error", {"p_id_video": v["id"], "p_mensaje": str(e)}).execute()
+    return resultado
 
 
 def limpiar_sin_fallar() -> None:

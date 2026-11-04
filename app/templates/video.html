@@ -12,57 +12,146 @@
         <h1>{{ video.clase }}</h1>
         <p class="subtitle">{{ video.fecha_txt }} · {{ video.hora }} · {{ video.profesora }} · {{ video.duracion_txt }}</p>
 
-        <video id="reproductor" class="video-reproductor" controls playsinline preload="metadata"
-               data-lista="/videos/{{ video.id }}/lista.m3u8" data-restante="{{ video.segundos_restantes }}"></video>
+        <div class="video-contenedor">
+            <video id="reproductor" class="video-reproductor" playsinline preload="none"
+                   data-base="/videos/{{ video.id }}" data-restante="{{ video.segundos_restantes }}"></video>
+            <button type="button" id="video-iniciar" class="btn video-iniciar">Reproducir</button>
+        </div>
         <div id="video-aviso" class="aviso aviso-error" hidden></div>
         <p class="video-restante" id="video-restante">{{ video.restante_txt }}</p>
         <p><a class="video-volver" href="/videos">Volver a Videos On Demand</a></p>
     </main>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"
+            integrity="sha384-V5ruNBgmYcC3SJRUQeNykAAAgde5gOFq/Hu0CZj7bygDP0yRIhkvX8+w0u/7mRvr" crossorigin="anonymous"></script>
     <script>
         (function () {
             var video = document.getElementById("reproductor");
+            var boton = document.getElementById("video-iniciar");
             var aviso = document.getElementById("video-aviso");
-            var lista = video.dataset.lista;
+            var base = video.dataset.base;
+            var lista = base + "/lista.m3u8";
+            var MENSAJES = {
+                404: "Este video ya no está disponible.",
+                429: "Por ahora no se puede reproducir este video: se alcanzó el límite estimado de reproducción."
+            };
             var hls = null;
+            var iniciado = false;
+            var vencido = false;
+            var ultimoReintento = 0;
+            var ultimoTiempo = 0;
+            var segundos = 0;
 
             function mostrar(texto) {
                 aviso.textContent = texto;
                 aviso.hidden = false;
             }
 
-            function fallo() {
-                fetch(lista, { method: "GET" }).then(function (r) {
-                    mostrar(r.status === 429
-                        ? "Por ahora no se puede reproducir este video: se alcanzó el límite de reproducciones."
-                        : "No pudimos reproducir el video. Probá de nuevo más tarde.");
+            function detener() {
+                video.pause();
+                if (hls) { hls.destroy(); hls = null; }
+                video.removeAttribute("src");
+                video.load();
+            }
+
+            // iPhone (todos sus navegadores usan WebKit) va por HLS nativo; el resto, por hls.js. Chrome también
+            // responde «maybe» a canPlayType, así que esa pregunta no alcanza para decidir.
+            function esWebKit() {
+                var ua = navigator.userAgent;
+                return /iPad|iPhone|iPod/.test(ua) || (/Safari/.test(ua) && !/Chrome|Chromium|Android/.test(ua));
+            }
+
+            function cargar(desde) {
+                if (!esWebKit() && window.Hls && Hls.isSupported()) {
+                    if (hls) hls.destroy();
+                    hls = new Hls({ startPosition: desde || -1 });
+                    hls.on(Hls.Events.ERROR, function (_, datos) {
+                        if (datos.fatal) reintentar();
+                    });
+                    hls.loadSource(lista);
+                    hls.attachMedia(video);
+                } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+                    video.src = lista;
+                    if (desde) {
+                        video.addEventListener("loadedmetadata", function () { video.currentTime = desde; }, { once: true });
+                    }
+                } else {
+                    mostrar("Este navegador no puede reproducir el video.");
+                    return;
+                }
+                var intento = video.play();
+                if (intento) intento.catch(function () { video.controls = true; });
+            }
+
+            // Las URLs vencen a los 90 minutos: una pausa larga se resuelve pidiendo una lista nueva, sin que cuente
+            // como otro inicio. Una sola vez por minuto, para no insistir si el problema es otro.
+            function reintentar() {
+                if (vencido) return;
+                var ahora = Date.now();
+                if (ahora - ultimoReintento < 60000) {
+                    mostrar("No pudimos reproducir el video. Probá de nuevo más tarde.");
+                    return;
+                }
+                ultimoReintento = ahora;
+                fetch(lista).then(function (r) {
+                    if (r.ok) cargar(video.currentTime);
+                    else mostrar(MENSAJES[r.status] || "No pudimos reproducir el video. Probá de nuevo más tarde.");
                 }).catch(function () {
                     mostrar("No pudimos reproducir el video. Revisá tu conexión.");
                 });
             }
 
-            // Safari de iPhone reproduce HLS solo; Chrome de Android necesita hls.js.
-            if (video.canPlayType("application/vnd.apple.mpegurl")) {
-                video.src = lista;
-                video.addEventListener("error", fallo);
-            } else if (window.Hls && Hls.isSupported()) {
-                hls = new Hls();
-                hls.on(Hls.Events.ERROR, function (_, datos) {
-                    if (datos.fatal) { hls.destroy(); fallo(); }
+            boton.addEventListener("click", function () {
+                boton.disabled = true;
+                fetch(base + "/iniciar", { method: "POST" }).then(function (r) {
+                    if (r.status === 204) {
+                        iniciado = true;
+                        boton.hidden = true;
+                        video.controls = true;
+                        cargar();
+                    } else {
+                        boton.disabled = false;
+                        mostrar(MENSAJES[r.status] || "No pudimos iniciar el video. Probá de nuevo.");
+                    }
+                }).catch(function () {
+                    boton.disabled = false;
+                    mostrar("No pudimos iniciar el video. Revisá tu conexión.");
                 });
-                hls.loadSource(lista);
-                hls.attachMedia(video);
-            } else {
-                mostrar("Este navegador no puede reproducir el video.");
+            });
+
+            video.addEventListener("error", function () {
+                if (iniciado) reintentar();
+            });
+
+            // Tiempo realmente reproducido: pausar o adelantar no suma. Es una estimación del consumo, no una medición.
+            video.addEventListener("timeupdate", function () {
+                var diferencia = video.currentTime - ultimoTiempo;
+                if (diferencia > 0 && diferencia < 2) segundos += diferencia;
+                ultimoTiempo = video.currentTime;
+            });
+
+            function informar() {
+                if (segundos < 1) return;
+                var cuerpo = new URLSearchParams({ segundos: String(Math.round(segundos)) });
+                segundos = 0;
+                fetch(base + "/progreso", { method: "POST", body: cuerpo, keepalive: true }).then(function (r) {
+                    if (r.status === 429 || r.status === 404) {
+                        detener();
+                        mostrar(MENSAJES[r.status]);
+                    }
+                }).catch(function () {});
             }
 
+            setInterval(informar, 60000);
+            document.addEventListener("visibilitychange", function () {
+                if (document.visibilityState === "hidden") informar();
+            });
+
             setTimeout(function () {
-                video.pause();
-                if (hls) hls.destroy();
-                video.removeAttribute("src");
-                video.load();
+                vencido = true;
+                boton.hidden = true;
+                detener();
                 document.getElementById("video-restante").hidden = true;
-                mostrar("Este video ya no está disponible.");
+                mostrar(MENSAJES[404]);
             }, Number(video.dataset.restante) * 1000);
         })();
     </script>

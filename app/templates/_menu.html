@@ -17,7 +17,6 @@
     ("/profesora/profesoras", "Profesoras", ruta.startswith("/profesora/profesoras")),
     ("/profesora/resumenes", "Facturación", ruta.startswith("/profesora/resumenes")),
     ("/profesora/estadisticas", "Estadísticas", ruta.startswith("/profesora/estadisticas")),
-    ("/videos", "Videos On Demand", ruta.startswith("/videos")),
 ] %}
 {% elif usuario.es_profesora %}
 {% set secciones = [
@@ -60,6 +59,8 @@
             <div class="cuenta-opciones">
                 {% if usuario.empresa_nombre %}<span class="cuenta-empresa">{{ usuario.empresa_nombre }}</span>{% endif %}
                 <a href="/perfil">Mi perfil</a>
+                {# Acá y no en las secciones: una décima sección desbordaba el header de la administradora en escritorio #}
+                {% if usuario.es_admin and not usuario.es_superadmin %}<a href="/videos">Videos On Demand</a>{% endif %}
                 <form action="/logout" method="post">
                     <button type="submit">Cerrar sesión</button>
                 </form>

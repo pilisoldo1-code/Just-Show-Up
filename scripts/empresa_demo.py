@@ -461,6 +461,11 @@ def borrar(db, guardar_contrasenas=True) -> dict:
         print("Aviso: la empresa tenía facturas confirmadas de demostración; se borran también.")
     for f in db.leer("resumen_mensual", "id", id_empresa=e2):
         db.actualizar("resumen_mensual", {"reemplaza_a": None}, id=f["id"])
+    for tabla in ("video_reproduccion", "video", "video_programacion"):
+        try:
+            db.borrar(tabla, id_empresa=e2)
+        except Exception:
+            print(f"Aviso: no se pudo limpiar {tabla} (¿todavía sin la migración de videos?).")
     for tabla in ("mp_intento", "pago_anulacion", "pago", "factura_historial", "resumen_mensual_detalle", "resumen_mensual",
                   "asistencia_historial", "asistencia", "listadeespera", "reserva", "baja_docente", "bloqueo", "clase", "horario",
                   "tipo_clase", "sesion_empresa"):

@@ -1,16 +1,18 @@
 """Autoriza una computadora para subir videos (programa local de Videos On Demand) y prepara el bucket.
 
-El token se muestra una sola vez: en la base queda solo su huella.
+El token se muestra una sola vez: en la base queda solo su huella. Por defecto se niega a correr fuera de localhost:
+contra un proyecto remoto exige --remoto (y autorización).
 
 Uso:
-    python scripts/video_agente.py crear <mail de la profesora> "<nombre de la computadora>"
-    python scripts/video_agente.py desactivar <mail de la profesora>
-    python scripts/video_agente.py bucket    # solo si los archivos van en un proyecto de Supabase aparte
+    python scripts/video_agente.py crear <mail de la profesora> "<nombre de la computadora>" [--remoto]
+    python scripts/video_agente.py desactivar <mail de la profesora> [--remoto]
+    python scripts/video_agente.py bucket [--remoto]    # solo si los archivos van en un proyecto de Supabase aparte
 """
 import os
 import secrets
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -53,12 +55,19 @@ def bucket() -> None:
     print(f"Bucket privado {videos.BUCKET} creado.")
 
 
+def es_local(url: str) -> bool:
+    return (urlparse(url).hostname or "") in ("localhost", "127.0.0.1", "::1")
+
+
 if __name__ == "__main__":
-    accion = sys.argv[1] if len(sys.argv) > 1 else ""
-    if accion == "crear" and len(sys.argv) == 4:
-        crear(sys.argv[2], sys.argv[3])
-    elif accion == "desactivar" and len(sys.argv) == 3:
-        desactivar(sys.argv[2])
+    args = [a for a in sys.argv[1:] if a != "--remoto"]
+    if not es_local(os.environ.get("SUPABASE_URL", "")) and "--remoto" not in sys.argv:
+        sys.exit("SUPABASE_URL no es local: para usarlo igual, agregá --remoto (y tené autorización).")
+    accion = args[0] if args else ""
+    if accion == "crear" and len(args) == 3:
+        crear(args[1], args[2])
+    elif accion == "desactivar" and len(args) == 2:
+        desactivar(args[1])
     elif accion == "bucket":
         bucket()
     else:

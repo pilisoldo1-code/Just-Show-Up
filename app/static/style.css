@@ -3786,3 +3786,37 @@ a.video-card:hover {
 .video-volver {
     color: var(--accent);
 }
+
+.video-contenedor {
+    position: relative;
+    margin-bottom: 12px;
+}
+
+.video-contenedor .video-reproductor {
+    margin-bottom: 0;
+}
+
+.video-iniciar {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: auto;
+}
+
+.videos-acciones {
+    margin: 0 0 16px;
+}
+
+.videos-config {
+    display: grid;
+    gap: 12px;
+}
+
+.videos-config .video-card {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+}

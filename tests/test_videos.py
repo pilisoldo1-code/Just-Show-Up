@@ -1,5 +1,5 @@
-"""Videos On Demand: textos, lista firmada, permisos de las rutas, programa local y limpieza. La base y Storage se
-simulan; las reglas de la base se prueban en tests/base_local/test_videos_base.py.
+"""Videos On Demand: textos, lista firmada, reproductor, permisos de las rutas, configuración, programa local y limpieza.
+La base y Storage se simulan; las reglas de la base se prueban en tests/base_local/test_videos_base.py.
 
 Uso: python -m unittest tests.test_videos -v
 """
@@ -10,13 +10,18 @@ from unittest import mock
 os.environ.setdefault("SUPABASE_URL", "http://local")
 os.environ.setdefault("SUPABASE_KEY", "local")
 
+from pathlib import Path
+from types import SimpleNamespace
+
 from fastapi.testclient import TestClient
 
 from app import auth, main, videos
 from app.auth import Usuario
 
 ALUMNA = Usuario(id="a", mail="a@prueba.invalid", nombre="Ana", apellido="P", rol="alumna", token="t")
-PROFESORA = Usuario(id="p", mail="p@prueba.invalid", nombre="Pía", apellido="P", rol="profesora", token="t")
+ADMIN = Usuario(id="d", mail="d@prueba.invalid", nombre="Ada", apellido="P", rol="profesora", token="t")
+PROFESORA = Usuario(id="p", mail="p@prueba.invalid", nombre="Pía", apellido="P", rol="alumna", token="t", empresa_id=1,
+                    con_membresias=True, es_docente=True)
 SUPERADMIN = Usuario(id="s", mail="s@prueba.invalid", nombre="Sol", apellido="P", rol="alumna", token="t",
                      es_superadmin=True, con_membresias=True)
 FILA = {"id": 7, "clase": "Gimnasia", "fecha": "2026-11-16", "hora_inicio": "08:00:00", "profesora": "Pía Pérez",
@@ -41,8 +46,10 @@ class Textos(unittest.TestCase):
         self.assertEqual(videos.texto_restante(600), "Disponible 10 min más")
         self.assertEqual(videos.texto_restante(10), "Disponible 1 min más")
 
-    def test_duracion(self):
-        self.assertEqual(videos.texto_duracion(2400), "40 minutos")
+    def test_duracion_real_sin_redondear_a_40(self):
+        self.assertEqual(videos.texto_duracion(2400), "40 min")
+        self.assertEqual(videos.texto_duracion(2340), "39 min")
+        self.assertEqual(videos.texto_duracion(2395), "39 min 55 s")
 
     def test_tarjeta_con_dia_y_tilde(self):
         fila = dict(FILA, fecha="2026-11-18")
@@ -51,7 +58,7 @@ class Textos(unittest.TestCase):
 
 class Lista(unittest.TestCase):
     def reproducir(self, segundos, firmadas=None):
-        sb = Rpc({"video_reproducir": {"resultado": "ok", "id_empresa": 2, "partes": PARTES, "lista_hls": LISTA,
+        sb = Rpc({"video_para_firmar": {"resultado": "ok", "id_empresa": 2, "partes": PARTES, "lista_hls": LISTA,
                                        "segundos_restantes": segundos}})
         bucket = mock.Mock()
         bucket.create_signed_urls.return_value = firmadas if firmadas is not None else [
@@ -72,12 +79,13 @@ class Lista(unittest.TestCase):
 
     def test_url_no_supera_el_vencimiento(self):
         _, bucket = self.reproducir(120)
-        self.assertEqual(bucket.create_signed_urls.call_args.args[1], 120)
+        self.assertEqual(bucket.create_signed_urls.call_args.args[1], 120 - videos.MARGEN_URL_SEG)
 
-    def test_vencido_no_firma(self):
-        (estado, _), bucket = self.reproducir(0)
-        self.assertEqual(estado, "no_disponible")
-        bucket.create_signed_urls.assert_not_called()
+    def test_sobre_el_vencimiento_no_firma(self):
+        for restante in (0, 1, videos.MARGEN_URL_SEG):
+            (estado, _), bucket = self.reproducir(restante)
+            self.assertEqual(estado, "no_disponible")
+            bucket.create_signed_urls.assert_not_called()
 
     def test_parte_sin_firmar_no_reproduce(self):
         (estado, _), _ = self.reproducir(500, [{"path": "2/7/parte-00.ts", "signedURL": "https://x/a"},
@@ -85,10 +93,11 @@ class Lista(unittest.TestCase):
         self.assertEqual(estado, "no_disponible")
 
     def test_rechazo_de_la_base_no_firma(self):
-        sb = Rpc({"video_reproducir": {"resultado": "sin_presupuesto"}})
-        with mock.patch.object(videos, "almacen") as almacen:
-            self.assertEqual(videos.lista_para_reproducir(sb, 7)[0], "sin_presupuesto")
-        almacen.assert_not_called()
+        for resultado in ("sin_iniciar", "limite_usuaria", "no_disponible"):
+            sb = Rpc({"video_para_firmar": {"resultado": resultado}})
+            with mock.patch.object(videos, "almacen") as almacen:
+                self.assertEqual(videos.lista_para_reproducir(sb, 7)[0], resultado)
+            almacen.assert_not_called()
 
 
 class Pantallas(unittest.TestCase):
@@ -117,12 +126,12 @@ class Pantallas(unittest.TestCase):
         self.assertEqual(r.status_code, 303)
         lista.assert_not_called()
 
-    def test_alumna_y_profesora_ven_la_lista(self):
-        for usuario in (ALUMNA, PROFESORA):
+    def test_alumna_profesora_y_administradora_ven_la_lista(self):
+        for usuario in (ALUMNA, PROFESORA, ADMIN):
             self.como(usuario)
             r = self.client.get("/videos")
             self.assertEqual(r.status_code, 200)
-            for texto in ("Gimnasia", "Lunes 16/11", "Pía Pérez", "39 minutos", "Disponible 1 h 30 min más"):
+            for texto in ("Gimnasia", "Lunes 16/11", "Pía Pérez", "39 min", "Disponible 1 h 30 min más"):
                 self.assertIn(texto, r.text)
 
     def test_sin_videos_estado_vacio(self):
@@ -137,11 +146,36 @@ class Pantallas(unittest.TestCase):
         self.assertEqual(r.status_code, 303)
         self.assertTrue(r.headers["location"].startswith("/videos?"))
 
-    def test_reproductor(self):
+    def test_abrir_la_pagina_no_inicia_ni_descarga(self):
         self.como(ALUMNA)
-        r = self.client.get("/videos/7")
-        self.assertIn('data-lista="/videos/7/lista.m3u8"', r.text)
+        with mock.patch.object(videos, "iniciar") as iniciar, mock.patch.object(videos, "lista_para_reproducir") as lista:
+            r = self.client.get("/videos/7")
+        iniciar.assert_not_called()
+        lista.assert_not_called()
+        self.assertIn('preload="none"', r.text)
         self.assertIn("playsinline", r.text)
+        video = r.text[r.text.index("<video"):r.text.index("</video>")]
+        self.assertNotIn(" src=", video)
+        self.assertNotIn("autoplay", video)
+
+    def test_reproductor_elige_webkit_y_no_canplaytype_solo(self):
+        self.como(ALUMNA)
+        html = self.client.get("/videos/7").text
+        self.assertLess(html.index("!esWebKit() && window.Hls"), html.index('video.canPlayType("application/vnd.apple.mpegurl")'))
+        self.assertIn('integrity="sha384-', html)
+
+    def test_iniciar_y_sus_rechazos(self):
+        self.como(ALUMNA)
+        for estado, codigo in (("ok", 204), ("no_disponible", 404), ("limite_usuaria", 429), ("sin_presupuesto", 429)):
+            with mock.patch.object(videos, "iniciar", return_value=estado):
+                self.assertEqual(self.client.post("/videos/7/iniciar").status_code, codigo, estado)
+
+    def test_progreso(self):
+        self.como(ALUMNA)
+        with mock.patch.object(videos, "progreso", return_value="ok") as progreso:
+            r = self.client.post("/videos/7/progreso", data={"segundos": 60})
+        self.assertEqual(r.status_code, 204)
+        self.assertEqual(progreso.call_args.args[1:], (7, 60))
 
     def test_lista_hls_y_sus_rechazos(self):
         self.como(ALUMNA)
@@ -149,14 +183,99 @@ class Pantallas(unittest.TestCase):
             r = self.client.get("/videos/7/lista.m3u8")
         self.assertEqual(r.headers["content-type"], "application/vnd.apple.mpegurl")
         self.assertEqual(r.headers["cache-control"], "no-store")
-        for estado, codigo in (("no_disponible", 404), ("limite_usuaria", 429), ("sin_presupuesto", 429)):
+        for estado, codigo in (("no_disponible", 404), ("sin_iniciar", 409), ("limite_usuaria", 429)):
             with mock.patch.object(videos, "lista_para_reproducir", return_value=(estado, "")):
                 self.assertEqual(self.client.get("/videos/7/lista.m3u8").status_code, codigo)
+
+    def test_textos_no_prometen_exactitud(self):
+        self.como(ALUMNA)
+        html = self.client.get("/videos/7").text.lower()
+        self.assertIn("límite estimado", html)
+        self.assertNotIn("40 minutos", html)
 
     def test_falla_de_la_base_muestra_aviso(self):
         self.como(ALUMNA)
         with mock.patch.object(main, "_sb", side_effect=RuntimeError("caída")), self.assertLogs(level="ERROR"):
             self.assertIn("No pudimos cargar los videos", self.client.get("/videos").text)
+
+
+class Configuracion(unittest.TestCase):
+    HORARIOS = [
+        {"id": 2, "dia_semana": "miercoles", "hora_inicio": "08:00:00", "clase": "Pilates", "profesora": "Pía", "duracion": 40,
+         "programable": True, "activa": True},
+        {"id": 1, "dia_semana": "lunes", "hora_inicio": "09:00:00", "clase": "Yoga", "profesora": "Pía", "duracion": 40,
+         "programable": True, "activa": False},
+        {"id": 3, "dia_semana": "lunes", "hora_inicio": "10:00:00", "clase": "Gimnasia", "profesora": "Pía", "duracion": 60,
+         "programable": False, "activa": False},
+    ]
+
+    def setUp(self):
+        self.client = TestClient(main.app)
+        self.sb = Rpc({"videos_configuracion": self.HORARIOS, "video_programar": {"resultado": "ok"}, "videos_disponibles": []})
+        p = mock.patch.object(main, "_sb", return_value=self.sb)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def como(self, usuario):
+        p = mock.patch.object(auth, "_usuario_cacheado", return_value=usuario)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_solo_la_administradora(self):
+        for usuario in (ALUMNA, PROFESORA):
+            self.como(usuario)
+            self.assertEqual(self.client.get("/videos/configuracion", follow_redirects=False).status_code, 303)
+            self.assertEqual(self.client.post("/videos/configuracion/1", data={"activa": "true"}, follow_redirects=False).status_code, 303)
+        self.assertNotIn("video_programar", dict(self.sb.llamadas))
+
+    def test_ordena_por_dia_y_muestra_el_estado(self):
+        self.como(ADMIN)
+        html = self.client.get("/videos/configuracion").text
+        self.assertLess(html.index("Yoga"), html.index("Pilates"))
+        self.assertIn("Miércoles 08:00", html)
+        self.assertIn("Se graba", html)
+        self.assertIn("Duración no admitida", html)
+
+    def test_activar_y_desactivar(self):
+        self.como(ADMIN)
+        self.client.post("/videos/configuracion/1", data={"activa": "true"}, follow_redirects=False)
+        self.assertEqual(self.sb.llamadas[-1], ("video_programar", {"p_id_horario": 1, "p_activa": True}))
+        r = self.client.post("/videos/configuracion/2", follow_redirects=False)
+        self.assertEqual(self.sb.llamadas[-1], ("video_programar", {"p_id_horario": 2, "p_activa": False}))
+        self.assertIn("ok=1", r.headers["location"])
+
+    def test_rechazo_muestra_el_motivo(self):
+        self.como(ADMIN)
+        self.sb.respuestas["video_programar"] = {"resultado": "duracion_no_valida"}
+        r = self.client.post("/videos/configuracion/3", data={"activa": "true"}, follow_redirects=False)
+        self.assertIn("ok=0", r.headers["location"])
+
+    def test_solo_la_administradora_ve_el_acceso(self):
+        for usuario, ve in ((ADMIN, True), (PROFESORA, False), (ALUMNA, False)):
+            self.como(usuario)
+            self.assertEqual("/videos/configuracion" in self.client.get("/videos").text, ve)
+
+
+class Menu(unittest.TestCase):
+    def html(self, usuario):
+        request = SimpleNamespace(url=SimpleNamespace(path="/videos"))
+        return main.templates.get_template("_menu.html").render(request=request, usuario=usuario)
+
+    def test_regresion_c4_la_administradora_conserva_nueve_secciones(self):
+        html = self.html(ADMIN)
+        secciones = html[html.index('id="menu-principal"'):html.index("</nav>")]
+        self.assertEqual(secciones.count("<a "), 9)
+        self.assertNotIn('"/videos"', secciones)
+        cuenta = html[html.index('class="cuenta-opciones"'):]
+        self.assertIn('href="/videos"', cuenta)
+
+    def test_alumna_y_profesora_lo_tienen_en_sus_secciones(self):
+        for usuario in (ALUMNA, PROFESORA):
+            html = self.html(usuario)
+            self.assertIn('href="/videos"', html[html.index('id="menu-principal"'):html.index("</nav>")])
+
+    def test_superadministradora_no_lo_tiene(self):
+        self.assertNotIn('href="/videos"', self.html(SUPERADMIN))
 
 
 class Agente(unittest.TestCase):
@@ -166,6 +285,7 @@ class Agente(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(main.app)
         self.admin = Rpc({"video_agente_identificar": "p", "video_registrar": {"resultado": "ok", "id_video": 7},
+                          "video_consultar": {"resultado": "no_autorizada"},
                           "video_de_agente": {"id": 7, "id_empresa": 2, "estado": "subiendo", "partes": PARTES},
                           "video_publicar": {"resultado": "ok"}, "videos_a_limpiar": []})
         p = mock.patch.object(auth, "cliente_admin", return_value=self.admin)
@@ -190,6 +310,16 @@ class Agente(unittest.TestCase):
         self.assertEqual(params["p_id_profesora"], "p")
         self.assertNotIn("p_id_empresa", params)
 
+    def test_consultar_pregunta_a_la_base_con_la_profesora_del_token(self):
+        r = self.client.post("/api/videos/agente/consultar", headers=self.cabecera,
+                             json={"inicio": "2026-11-16T08:01:00-03:00", "duracion_seg": 2340, "id_profesora": "otra"})
+        self.assertEqual(r.json(), {"resultado": "no_autorizada"})
+        self.assertEqual(dict(self.admin.llamadas)["video_consultar"]["p_id_profesora"], "p")
+
+    def test_consultar_sin_token(self):
+        r = self.client.post("/api/videos/agente/consultar", json={"inicio": "x", "duracion_seg": 1})
+        self.assertEqual(r.status_code, 401)
+
     def test_video_de_otra_profesora(self):
         self.admin.respuestas["video_de_agente"] = None
         r = self.client.post("/api/videos/agente/7/urls-subida", headers=self.cabecera)
@@ -213,6 +343,21 @@ class Agente(unittest.TestCase):
         self.assertEqual(r["resultado"], "partes_incompletas")
         self.assertNotIn("video_publicar", dict(self.admin.llamadas))
 
+    def test_no_publica_si_una_parte_tiene_otro_tamano(self):
+        bucket = mock.Mock()
+        bucket.list.return_value = [{"name": "parte-00.ts", "metadata": {"size": 10}},
+                                    {"name": "parte-01.ts", "metadata": {"size": 4}}]
+        with mock.patch.object(videos, "almacen", return_value=bucket):
+            r = self.client.post("/api/videos/agente/7/publicar", headers=self.cabecera).json()
+        self.assertEqual(r["resultado"], "partes_incompletas")
+
+    def test_regresion_a1_en_error_decide_la_base(self):
+        self.admin.respuestas["video_de_agente"]["estado"] = "error"
+        self.admin.respuestas["video_publicar"] = {"resultado": "no_subiendo"}
+        with mock.patch.object(videos, "almacen"):
+            r = self.client.post("/api/videos/agente/7/publicar", headers=self.cabecera).json()
+        self.assertEqual(r["resultado"], "no_subiendo")
+
     def test_publica_con_todas_las_partes(self):
         bucket = mock.Mock()
         bucket.list.return_value = [{"name": p["nombre"], "metadata": {"size": p["bytes"]}} for p in PARTES]
@@ -234,25 +379,53 @@ class Limpieza(unittest.TestCase):
             r = self.client.get("/api/videos/limpieza", headers={"Authorization": "Bearer mal"})
         self.assertEqual(r.status_code, 401)
 
-    def test_borra_archivos_y_marca(self):
+    def limpiar(self, listado, remove=None):
         admin = Rpc({"videos_a_limpiar": [{"id": 7, "id_empresa": 2, "partes": PARTES}]})
         bucket = mock.Mock()
+        bucket.list.return_value = listado
+        bucket.remove.side_effect = remove
         with mock.patch.object(auth, "cliente_admin", return_value=admin), \
-                mock.patch.object(videos, "almacen", return_value=bucket), \
-                mock.patch.dict(os.environ, {"CRON_SECRET": "bien"}):
-            r = self.client.get("/api/videos/limpieza", headers={"Authorization": "Bearer bien"})
-        self.assertEqual(r.json(), {"eliminados": 1})
+                mock.patch.object(videos, "almacen", return_value=bucket):
+            return videos.limpiar(), admin, bucket
+
+    def test_borra_verifica_y_marca(self):
+        resultado, admin, bucket = self.limpiar([])
+        self.assertEqual(resultado, {"eliminados": 1, "errores": 0})
         bucket.remove.assert_called_once_with(["2/7/parte-00.ts", "2/7/parte-01.ts"])
         self.assertIn("video_marcar_eliminado", dict(admin.llamadas))
 
-    def test_si_falla_el_borrado_no_marca(self):
-        admin = Rpc({"videos_a_limpiar": [{"id": 7, "id_empresa": 2, "partes": PARTES}]})
-        bucket = mock.Mock()
-        bucket.remove.side_effect = RuntimeError("caída")
-        with mock.patch.object(auth, "cliente_admin", return_value=admin), \
-                mock.patch.object(videos, "almacen", return_value=bucket), self.assertLogs(level="ERROR"):
-            self.assertEqual(videos.limpiar(), 0)
+    def test_regresion_a7_si_falla_el_borrado_registra_y_no_marca(self):
+        with self.assertLogs(level="ERROR"):
+            resultado, admin, _ = self.limpiar([], RuntimeError("caída"))
+        self.assertEqual(resultado, {"eliminados": 0, "errores": 1})
+        llamadas = dict(admin.llamadas)
+        self.assertNotIn("video_marcar_eliminado", llamadas)
+        self.assertEqual(llamadas["video_limpieza_error"], {"p_id_video": 7, "p_mensaje": "caída"})
+
+    def test_si_quedan_archivos_no_marca(self):
+        with self.assertLogs(level="ERROR"):
+            resultado, admin, _ = self.limpiar([{"name": "parte-01.ts", "metadata": {"size": 5}}])
+        self.assertEqual(resultado["errores"], 1)
         self.assertNotIn("video_marcar_eliminado", dict(admin.llamadas))
+        self.assertIn("parte-01.ts", dict(admin.llamadas)["video_limpieza_error"]["p_mensaje"])
+
+    def test_el_cron_informa_el_resultado(self):
+        with mock.patch.object(videos, "limpiar", return_value={"eliminados": 2, "errores": 1}), \
+                mock.patch.dict(os.environ, {"CRON_SECRET": "bien"}):
+            r = self.client.get("/api/videos/limpieza", headers={"Authorization": "Bearer bien"})
+        self.assertEqual(r.json(), {"eliminados": 2, "errores": 1})
+
+
+class Configuraciones(unittest.TestCase):
+    def test_ningun_ejemplo_apunta_a_produccion(self):
+        raiz = Path(__file__).resolve().parent.parent
+        for archivo in (raiz / ".env.example", raiz / "agente" / "config.ejemplo.json"):
+            self.assertNotIn("vercel.app", archivo.read_text())
+
+    def test_script_del_token_se_niega_fuera_de_localhost(self):
+        raiz = Path(__file__).resolve().parent.parent
+        fuente = (raiz / "scripts" / "video_agente.py").read_text()
+        self.assertIn("--remoto", fuente)
 
 
 if __name__ == "__main__":

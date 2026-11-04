@@ -12,6 +12,10 @@
         <h1>Videos On Demand</h1>
         <p class="subtitle">Las clases grabadas se pueden ver durante 24 horas desde que se publican.</p>
 
+        {% if usuario.es_admin %}
+        <p class="videos-acciones"><a class="video-volver" href="/videos/configuracion">Elegir qué horarios se graban</a></p>
+        {% endif %}
+
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}

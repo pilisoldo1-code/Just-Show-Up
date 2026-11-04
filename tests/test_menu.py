@@ -21,7 +21,6 @@ SECCIONES_PROFESORA = [
     ("/administracion", "Inicio"), ("/profesora/horarios", "Horarios"), ("/profesora/tipos-clase", "Tipos de clase"),
     ("/profesora/planificacion", "Planificación"), ("/profesora/clases", "Asistencias"), ("/profesora/alumnas", "Alumnas"),
     ("/profesora/profesoras", "Profesoras"), ("/profesora/resumenes", "Facturación"), ("/profesora/estadisticas", "Estadísticas"),
-    ("/videos", "Videos On Demand"),
 ]
 SECCIONES_ALUMNA = [
     ("/", "Reservar clases"), ("/mis-inscripciones", "Mis inscripciones"),
@@ -51,7 +50,7 @@ def activos(html):
 
 
 class MenuPrincipal(unittest.TestCase):
-    def test_administradora_tiene_sus_diez_secciones_en_orden(self):
+    def test_administradora_tiene_sus_nueve_secciones_en_orden(self):
         self.assertEqual(enlaces(bloque(menu_de(PROFESORA, "/profesora/horarios"), "menu-links")), SECCIONES_PROFESORA)
 
     def test_alumna_tiene_sus_cinco_secciones_en_orden(self):
@@ -63,7 +62,7 @@ class MenuPrincipal(unittest.TestCase):
     def test_profesora_no_ve_secciones_de_la_alumna(self):
         menu = bloque(menu_de(PROFESORA, "/profesora/horarios"), "menu-links")
         for href, _ in SECCIONES_ALUMNA:
-            if href != "/videos":  # Videos On Demand es de los dos roles
+            if href != "/videos":  # lo ve toda docente, pero la administradora lo tiene en el menú de cuenta
                 self.assertNotIn(f'href="{href}"', menu)
 
 
@@ -114,9 +113,9 @@ class MenuPerfil(unittest.TestCase):
         for href in ("/mis-inscripciones", "/mi-historial", "/mis-facturas"):
             self.assertEqual(html.count(f'href="{href}"'), 1, href)
 
-    def test_profesora_solo_mi_perfil_y_cerrar_sesion(self):
+    def test_administradora_mi_perfil_videos_y_cerrar_sesion(self):
         cuenta = bloque(menu_de(PROFESORA, "/profesora/horarios"), "cuenta-opciones")
-        self.assertEqual(re.findall(r'<a href="([^"]+)"', cuenta), ["/perfil"])
+        self.assertEqual(re.findall(r'<a href="([^"]+)"', cuenta), ["/perfil", "/videos"])
         self.assertIn('action="/logout"', cuenta)
 
 
