@@ -181,6 +181,20 @@ class Pantallas(unittest.TestCase):
         self.assertRegex(contenido, r'<div class="tabla-scroll">\s*<table class="horario-table tabla-tarjetas">')
 
 
+    def test_horarios_inactivos_plegados_al_final(self):
+        self.como(PROFESORA)
+        main._sb.return_value.table.return_value.select.return_value.execute.return_value.data = [
+            {"id": 1, "dia_semana": "lunes", "hora_inicio": "08:00:00", "activo": True, "tipo_clase": {"nombre": "Gimnasia", "activo": True}},
+            {"id": 204, "dia_semana": "lunes", "hora_inicio": "10:00:00", "activo": False,
+             "tipo_clase": {"nombre": "Gimnasia (demostración)", "activo": False}}]
+        html = self.client.get("/profesora/horarios").text
+        corte = html.index('<details class="seccion-inactivos">')
+        self.assertIn('href="/profesora/horarios/1/editar"', html[:corte])
+        self.assertNotIn("Gimnasia (demostración)", html[:corte])
+        self.assertIn("<summary>Inactivos (1)</summary>", html[corte:])
+        self.assertIn('href="/profesora/horarios/204/editar"', html[corte:])
+        self.assertIn("Activar", html[corte:])
+
     def test_horarios_encabezado_con_separacion(self):
         self.como(PROFESORA)
         main._sb.return_value.table.return_value.select.return_value.execute.return_value.data = []

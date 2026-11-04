@@ -6,6 +6,31 @@
     <title>Just Show Up - Tipos de clase</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
+{% macro tarjeta(t) %}
+<article class="card tipo-card {{ '' if t.activo else 'card-pasada' }}">
+    {% if t.imagen_url %}
+    <img class="tipo-imagen" src="{{ t.imagen_url }}" alt="{{ t.nombre }}" loading="lazy" />
+    {% else %}
+    <div class="tipo-imagen tipo-imagen-vacia" aria-hidden="true">{{ t.nombre[:1] | upper }}</div>
+    {% endif %}
+    <div class="tipo-cuerpo">
+        <div class="tipo-titulo">
+            <h2>{{ t.nombre }}</h2>
+            <span class="badge {{ 'badge-on' if t.activo else 'badge-off' }}">{{ 'Activo' if t.activo else 'Inactivo' }}</span>
+        </div>
+        {% if t.descripcion %}<p class="nota">{{ t.descripcion }}</p>{% endif %}
+        <p class="tipo-datos">{{ t.duracion }} min · ${{ '%g'|format(t.precio_presencial|float) }} · {{ t.cupo_max }} {{ 'cupo' if t.cupo_max == 1 else 'cupos' }}</p>
+        <p class="nota">{{ t.horarios_activos }} {{ 'horario activo' if t.horarios_activos == 1 else 'horarios activos' }}{% if t.horarios > t.horarios_activos %} · {{ t.horarios - t.horarios_activos }} inactivo{{ 's' if t.horarios - t.horarios_activos != 1 }}{% endif %}</p>
+        <div class="tipo-acciones">
+            <a class="btn btn-chico" href="/profesora/tipos-clase/{{ t.id }}/editar">Editar</a>
+            <form action="/profesora/tipos-clase/{{ t.id }}/estado" method="post">
+                {% if not t.activo %}<input type="hidden" name="activo" value="true" />{% endif %}
+                <button type="submit" class="btn btn-chico {{ 'btn-peligro' if t.activo else 'btn-secundario-claro' }}">{{ 'Desactivar' if t.activo else 'Activar' }}</button>
+            </form>
+        </div>
+    </div>
+</article>
+{% endmacro %}
 <body>
     {% include "_menu.html" %}
     <main>
@@ -18,35 +43,27 @@
         </div>
         <p class="subtitle"><a href="/profesora/horarios">‹ Volver a los horarios</a> · Cada horario pertenece a un tipo: de acá salen su duración, precio y cupo.</p>
 
+        {% set activos = tipos | selectattr('activo') | list %}
+        {% set inactivos = tipos | rejectattr('activo') | list %}
         <div class="tipos-grid">
-            {% for t in tipos %}
-            <article class="card tipo-card {{ '' if t.activo else 'card-pasada' }}">
-                {% if t.imagen_url %}
-                <img class="tipo-imagen" src="{{ t.imagen_url }}" alt="{{ t.nombre }}" loading="lazy" />
-                {% else %}
-                <div class="tipo-imagen tipo-imagen-vacia" aria-hidden="true">{{ t.nombre[:1] | upper }}</div>
-                {% endif %}
-                <div class="tipo-cuerpo">
-                    <div class="tipo-titulo">
-                        <h2>{{ t.nombre }}</h2>
-                        <span class="badge {{ 'badge-on' if t.activo else 'badge-off' }}">{{ 'Activo' if t.activo else 'Inactivo' }}</span>
-                    </div>
-                    {% if t.descripcion %}<p class="nota">{{ t.descripcion }}</p>{% endif %}
-                    <p class="tipo-datos">{{ t.duracion }} min · ${{ '%g'|format(t.precio_presencial|float) }} · {{ t.cupo_max }} {{ 'cupo' if t.cupo_max == 1 else 'cupos' }}</p>
-                    <p class="nota">{{ t.horarios_activos }} {{ 'horario activo' if t.horarios_activos == 1 else 'horarios activos' }}{% if t.horarios > t.horarios_activos %} · {{ t.horarios - t.horarios_activos }} inactivo{{ 's' if t.horarios - t.horarios_activos != 1 }}{% endif %}</p>
-                    <div class="tipo-acciones">
-                        <a class="btn btn-chico" href="/profesora/tipos-clase/{{ t.id }}/editar">Editar</a>
-                        <form action="/profesora/tipos-clase/{{ t.id }}/estado" method="post">
-                            {% if not t.activo %}<input type="hidden" name="activo" value="true" />{% endif %}
-                            <button type="submit" class="btn btn-chico {{ 'btn-peligro' if t.activo else 'btn-secundario-claro' }}">{{ 'Desactivar' if t.activo else 'Activar' }}</button>
-                        </form>
-                    </div>
-                </div>
-            </article>
+            {% for t in activos %}
+            {{ tarjeta(t) }}
             {% else %}
-            <p class="vacio vacio-izq">Todavía no hay tipos de clase.</p>
+            <p class="vacio vacio-izq">{{ 'Todavía no hay tipos de clase.' if not inactivos else 'No hay tipos de clase activos.' }}</p>
             {% endfor %}
         </div>
+
+        {% if inactivos %}
+        {# Los inactivos se conservan (tienen clases e historial) pero no ocupan el listado: quedan plegados al final #}
+        <details class="seccion-inactivos">
+            <summary>Inactivos ({{ inactivos | length }})</summary>
+            <div class="tipos-grid">
+                {% for t in inactivos %}
+                {{ tarjeta(t) }}
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
     </main>
 </body>
 </html>

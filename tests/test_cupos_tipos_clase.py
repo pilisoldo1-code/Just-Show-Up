@@ -65,6 +65,25 @@ class TarjetasTiposClase(Base):
         self.assertNotIn("cupo 7", r.text)
 
 
+class InactivosPlegados(Base):
+    def test_inactivos_al_final_en_seccion_cerrada(self):
+        demo = tipo(id=81, nombre="Gimnasia (demostración)", activo=False, horarios_activos=0, horarios=1)
+        with mock.patch.object(tipos_clase, "listar", return_value=[demo, tipo()]):
+            html = self.client.get("/profesora/tipos-clase").text
+        plegable = html[html.index('<details class="seccion-inactivos">'):]
+        self.assertIn("<summary>Inactivos (1)</summary>", plegable)
+        self.assertNotIn("<details class=\"seccion-inactivos\" open", html)  # cerrada por defecto
+        self.assertIn("Gimnasia (demostración)", plegable)
+        self.assertIn(">Activar</button>", plegable)  # las acciones se conservan
+        self.assertNotIn("Gimnasia (demostración)", html[:html.index('<details class="seccion-inactivos">')])
+        self.assertIn('href="/profesora/tipos-clase/1/editar"', html[:html.index('<details class="seccion-inactivos">')])
+
+    def test_sin_inactivos_no_hay_seccion(self):
+        with mock.patch.object(tipos_clase, "listar", return_value=[tipo()]):
+            html = self.client.get("/profesora/tipos-clase").text
+        self.assertNotIn("seccion-inactivos", html)
+
+
 class RevisarCambioDeTipo(Base):
     def _post(self, sb, datos):
         with mock.patch.object(main, "_sb", return_value=sb):
