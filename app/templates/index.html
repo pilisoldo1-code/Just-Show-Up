@@ -37,36 +37,32 @@
         {% if dias %}
         <div class="cards cards-semana">
             {% for d in dias %}
-            {% if d.sin_clases_disponibles %}
-            <div class="card card-pasada{{ ' card-finalizada' if d.todas_pasadas else '' }}">
-            {% else %}
-            <a class="card card-dia-link" href="/dia/{{ d.fecha }}">
-            {% endif %}
+            {# una tarjeta resumida por día (sirve igual con 2 o con 10 horarios); el detalle con cada clase está al entrar al día.
+               Los días ya terminados se pueden abrir para consultar, pero no se reservan: el día muestra sus clases como finalizadas #}
+            <a class="card card-dia-link{{ ' card-finalizada' if d.todas_pasadas else '' }}{{ ' card-pasada' if d.sin_clases_disponibles else '' }}"
+               href="/dia/{{ d.fecha }}" aria-label="{{ d.dia }} {{ d.fecha_txt }}: {{ d.cantidad }} {{ 'horario' if d.cantidad == 1 else 'horarios' }}{{ ', finalizado' if d.todas_pasadas else '' }}">
                 <div class="card-top">
                     <span class="card-dia">{{ d.dia }}</span>
                     <span class="card-fecha">{{ d.fecha_txt }}</span>
                 </div>
-                <div class="horas">
-                    {% for h in d.horas %}<span class="hora-chip {{ 'hora-chip-cancelada' if h in d.canceladas_en else '' }}">{{ h }}{% if d.tipos and d.tipos[h] %}<small class="hora-tipo">{{ d.tipos[h] }}</small>{% endif %}</span>{% endfor %}
-                </div>
+                <p class="dia-resumen">{{ d.cantidad }} {{ 'horario' if d.cantidad == 1 else 'horarios' }}
+                    · {% if d.cantidad == 1 %}{{ d.desde }}{% else %}de {{ d.desde }} a {{ d.hasta }}{% endif %}</p>
                 <div class="card-accion">
                     {% if d.todas_pasadas %}
                     <span class="badge badge-off">Finalizado</span>
-                    {% elif d.sin_clases_disponibles %}
-                    <span class="badge badge-espera">Clases canceladas por la profesora</span>
                     {% else %}
-                        {% if d.canceladas_en %}<span class="badge badge-espera">Cancelada {{ d.canceladas_en | join(', ') }}</span>{% endif %}
                         {% for h in d.inscripta_en %}<span class="badge badge-on">Reservada {{ h }}</span>{% endfor %}
                         {% for h in d.oferta_en %}<span class="badge badge-on">¡Lugar disponible! {{ h }}</span>{% endfor %}
-                        {% for h in d.espera_en %}<span class="badge badge-espera">En espera {{ h }}</span>{% endfor %}
-                        <span class="ver-dia">Ver clases ›</span>
+                        {% for h in d.espera_en %}<span class="badge badge-espera">En lista de espera {{ h }}</span>{% endfor %}
+                        {% if d.sin_clases_disponibles %}<span class="badge badge-espera">Clases canceladas por la profesora</span>
+                        {% elif d.canceladas_en %}<span class="badge badge-espera">Cancelada {{ d.canceladas_en | join(', ') }}</span>{% endif %}
+                        {% if not (d.inscripta_en or d.oferta_en or d.espera_en or d.sin_clases_disponibles) %}
+                        <span class="dia-lugares">{% if d.con_lugar %}{{ d.con_lugar }} {{ 'horario con lugar' if d.con_lugar == 1 else 'horarios con lugar' }}{% else %}Sin lugares: podés anotarte en la lista de espera{% endif %}</span>
+                        {% endif %}
+                        <span class="ver-dia">Ver día ›</span>
                     {% endif %}
                 </div>
-            {% if d.sin_clases_disponibles %}
-            </div>
-            {% else %}
             </a>
-            {% endif %}
             {% endfor %}
         </div>
         {% else %}

@@ -153,6 +153,10 @@ def agrupar_por_dia(clases: list[dict]) -> list[dict]:
         )
         d["horas"].append(c["hora"])
         d.setdefault("tipos", {})[c["hora"]] = c["tipo"]
+        # resumen de la tarjeta del día: cuántos horarios hay, entre qué horas y cuántos tienen lugar
+        d["cantidad"] = len(d["horas"])
+        d["desde"], d["hasta"] = min(d["horas"]), max(d["horas"])
+        d["con_lugar"] = d.get("con_lugar", 0) + (c["estado"] == "disponible")
         if c["estado"] != "pasada":
             d["todas_pasadas"] = False
         if c["estado"] not in ("pasada", "cancelada"):

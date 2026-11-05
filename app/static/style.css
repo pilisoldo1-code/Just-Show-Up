@@ -423,53 +423,57 @@ main.ancho {
     }
 }
 
-/* Reservar clases en celular: un día ya terminado ocupa una franja baja (día · horas · Finalizado), así los días con
-   clases disponibles quedan arriba a la vista. Mantiene su lugar en la semana. */
+/* Reservar clases: un día ya terminado ocupa una franja baja (día · horarios · Finalizado) y sigue abriéndose para
+   consultar. Mantiene su lugar en la semana; en celular ocupa todo el ancho, así los días con clases quedan a la vista. */
+.cards-semana .card.card-finalizada {
+    min-height: 0;
+    padding: 12px 16px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 12px;
+    text-align: left;
+    opacity: 0.6;
+}
+
+.cards-semana .card-finalizada .card-top {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 0.85rem;
+}
+
+.cards-semana .card-finalizada .card-dia {
+    font-size: 1rem;
+}
+
+.cards-semana .card-finalizada .dia-resumen {
+    flex: 1 1 auto;
+    font-size: 0.9rem;
+}
+
+.cards-semana .card-finalizada .card-accion {
+    margin: 0;
+}
+
 @media (max-width: 600px) {
     .cards-semana .card.card-finalizada {
         flex-basis: 100%;
-        min-height: 0;
-        padding: 10px 14px;
-        flex-direction: row;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 6px 12px;
-        text-align: left;
     }
+}
 
-    .cards-semana .card-finalizada .card-top {
-        flex-direction: row;
-        align-items: baseline;
-        gap: 6px;
-        font-size: 0.85rem;
-    }
+/* resumen del día: cuántos horarios hay y entre qué horas; cuántos tienen lugar si la alumna no tiene nada ese día */
+.dia-resumen {
+    margin: 0;
+    color: var(--text);
+    font-size: 1.05rem;
+    font-weight: 600;
+}
 
-    .cards-semana .card-finalizada .card-dia {
-        font-size: 1rem;
-    }
-
-    .cards-semana .card-finalizada .horas {
-        flex: 1 1 auto;
-        justify-content: flex-start;
-        gap: 4px 8px;
-    }
-
-    .cards-semana .card-finalizada .hora-chip {
-        font-size: 0.95rem;
-        padding: 2px 8px;
-        border: none;
-        background: transparent;
-    }
-
-    .cards-semana .card-finalizada .hora-tipo {
-        display: inline;
-        margin-left: 4px;
-    }
-
-    .cards-semana .card-finalizada .card-accion {
-        margin: 0;
-    }
+.dia-lugares {
+    color: var(--muted);
+    font-size: 0.9rem;
 }
 
 .cards-semana .card {
