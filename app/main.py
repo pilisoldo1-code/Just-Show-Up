@@ -413,9 +413,19 @@ def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
         for c in historial:
             pct = facturas.porcentaje_cobro(c["fecha"], "ausente", desde) if c["estado_txt"] == "Ausente" else 100
             c["cobro_reducido"] = pct != 100
-            c["importe_estimado"] = facturas.importe_base(c["precio"], pct)
+            c["porcentaje"] = pct
+            c["importe_reducido"] = facturas.importe_base(c["precio"], pct)
+    # por mes: el más reciente primero y, dentro de cada mes, las clases en orden (historial viene de la más reciente)
+    meses = []
+    for c in historial:
+        f = date.fromisoformat(c["fecha"])
+        if not meses or meses[-1]["clave"] != (f.year, f.month):
+            meses.append({"clave": (f.year, f.month), "titulo": f"{MESES[f.month].capitalize()} {f.year}", "clases": []})
+        meses[-1]["clases"].insert(0, c)
+    for m in meses:
+        m["con_reduccion"] = any(c.get("cobro_reducido") for c in m["clases"])
     return _render(
-        request, "mi_historial.html", usuario, historial=historial, aviso=aviso, aviso_ok=False,
+        request, "mi_historial.html", usuario, historial=historial, meses=meses, aviso=aviso, aviso_ok=False,
         presentes=sum(c["estado_txt"] == "Presente" for c in historial),
         ausentes=sum(c["estado_txt"] == "Ausente" for c in historial),
     )

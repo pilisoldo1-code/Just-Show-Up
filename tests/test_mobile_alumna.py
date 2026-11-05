@@ -163,5 +163,43 @@ class MisInscripciones(Base):
         self.assertEqual((proxima["tipo"], proxima["profesora"]), ("Pilates mat", "Lucía Bentancor"))
 
 
+class MiHistorial(Base):
+    def pagina(self, historial, desde=None):
+        from app import facturas
+        with mock.patch.object(clases, "mis_inscripciones", return_value={"historial": historial}), \
+                mock.patch.object(facturas, "cobro_inasistencia_desde", return_value={None: desde}):
+            return texto(self.client.get("/mi-historial").text)
+
+    @staticmethod
+    def item(fecha, estado="Presente", hora="08:00"):
+        return clase(fecha=fecha, hora=hora, estado_txt=estado, badge="badge-on", cancelada_por_profesora=False,
+                     precio=900)
+
+    def test_por_mes_el_mas_reciente_primero_y_en_orden_dentro_del_mes(self):
+        # mis_inscripciones lo devuelve de la más reciente a la más antigua
+        t = self.pagina([self.item("2026-11-04"), self.item("2026-11-02", hora="19:00"), self.item("2026-11-02"),
+                         self.item("2026-10-28"), self.item("2026-10-06")])
+        self.assertLess(t.index("Noviembre 2026"), t.index("Octubre 2026"))
+        noviembre = t[t.index("Noviembre 2026"):t.index("Octubre 2026")]
+        self.assertLess(noviembre.index("2/11 Presente 08:00"), noviembre.index("2/11 Presente 19:00"))
+        self.assertLess(noviembre.index("2/11 Presente 19:00"), noviembre.index("4/11"))
+        octubre = t[t.index("Octubre 2026"):]
+        self.assertLess(octubre.index("6/10"), octubre.index("28/10"))
+        self.assertIn("por mes: el más reciente primero", t)
+
+    def test_inasistencia_con_porcentaje_e_importe_reales_y_nota_una_vez_por_mes(self):
+        from datetime import date
+        t = self.pagina([self.item("2026-11-04", "Ausente"), self.item("2026-11-03", "Ausente"),
+                         self.item("2026-10-20", "Ausente")], desde=date(2026, 11, 1))
+        self.assertEqual(t.count("Inasistencia: se cobra el 25 % del precio ($225,00)"), 2)
+        self.assertEqual(t.count("figuran en Mis facturas"), 1)  # solo noviembre, una vez
+        self.assertNotIn("Importe estimado", t)
+
+    def test_sin_regla_no_hay_nota(self):
+        t = self.pagina([self.item("2026-11-04", "Ausente")])
+        self.assertNotIn("Inasistencia", t)
+        self.assertNotIn("figuran en Mis facturas", t)
+
+
 if __name__ == "__main__":
     unittest.main()

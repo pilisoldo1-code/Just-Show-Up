@@ -180,9 +180,10 @@ class Pantallas(Base):
                 mock.patch.object(facturas, "cobro_inasistencia_desde", return_value={None: date(2026, 11, 1)}):
             t = self.client.get("/mi-historial").text
         t = " ".join(t.split())
-        self.assertEqual(t.count("Inasistencia: se factura el 25 % ($200,00)"), 1)  # solo la ausencia desde la fecha de inicio
+        self.assertEqual(t.count("Inasistencia: se cobra el 25 % del precio ($200,00)"), 1)  # solo desde la fecha de inicio
         self.assertIn("Precio de la clase: $800,00", t)
-        self.assertIn("Importe estimado: el definitivo figura en Mis facturas.", t)
+        self.assertNotIn("Importe estimado", t)
+        self.assertEqual(t.count("el importe final de cada clase y el total figuran en Mis facturas"), 1)  # solo noviembre
 
 
 class FechaPorEmpresa(Base):
