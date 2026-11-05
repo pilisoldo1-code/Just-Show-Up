@@ -240,7 +240,7 @@ def _hora_local(iso: str, con_fecha: bool = False) -> str:
     return datetime.fromisoformat(iso).astimezone(TZ).strftime("%d/%m %H:%M" if con_fecha else "%H:%M")
 
 
-def _item_clase(c: dict, **extra) -> dict:
+def _item_clase(c: dict, profesoras: dict | None = None, **extra) -> dict:
     fecha = date.fromisoformat(c["fecha"])
     return {
         "fecha": c["fecha"],
@@ -249,6 +249,8 @@ def _item_clase(c: dict, **extra) -> dict:
         "hora": c["hora_inicio"][:5],
         "duracion": c["duracion"],
         "precio": c["precio"],
+        "tipo": (c.get("tipo_clase") or {}).get("nombre", ""),
+        "profesora": (profesoras or {}).get(c.get("id_profesora"), ""),
         "inicio": _inicio_clase(c),
         **extra,
     }
@@ -273,7 +275,8 @@ def _estado_historial(reserva: dict) -> tuple[str, str]:
 
 
 def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
-    columnas_clase = "clase(id, fecha, hora_inicio, duracion, precio)"
+    datos = "id, fecha, hora_inicio, duracion, precio, id_profesora, tipo_clase(nombre)"
+    columnas_clase = f"clase({datos})"
     reservas = (
         sb.table("reserva").select(f"id, estado, fecha_cancelacion, id_bloqueo, asistencia(estado), {columnas_clase}")
         .eq("id_alumna", alumna_id).execute().data
@@ -284,13 +287,15 @@ def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
         sb.rpc("actualizar_listas_espera", {"p_ids": [m["id_clase"] for m in mias]}).execute()
     espera = sb.rpc("mi_lista_espera", {}).execute().data
     datos_clase = {
-        c["id"]: c for c in (sb.table("clase").select("id, fecha, hora_inicio, duracion, precio")
+        c["id"]: c for c in (sb.table("clase").select(datos)
                              .in_("id", [e["id_clase"] for e in espera]).execute().data if espera else [])
     }
+    ids_profesoras = {c.get("id_profesora") for c in [r["clase"] for r in reservas] + list(datos_clase.values())}
+    profesoras = personas.nombres_profesoras(sb) if ids_profesoras - {None} else {}
     ahora_dt = ahora()
     proximas, historial, en_espera, canceladas_profesora, ofertas = [], [], [], [], []
     for r in reservas:
-        item = _item_clase(r["clase"], estado=r["estado"])
+        item = _item_clase(r["clase"], profesoras, estado=r["estado"])
         if r["estado"] == "confirmada" and item["inicio"] > ahora_dt:
             proximas.append(item)
         else:
@@ -305,7 +310,7 @@ def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
         c = datos_clase.get(e["id_clase"])
         if not c:
             continue
-        item = _item_clase(c, id=c["id"], posicion=e["posicion"],
+        item = _item_clase(c, profesoras, id=c["id"], posicion=e["posicion"],
                            oferta_vence=_hora_local(e["oferta_vence_en"]) if e["oferta_vence_en"] else "")
         if item["inicio"] <= ahora_dt:
             continue

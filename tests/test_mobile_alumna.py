@@ -119,5 +119,49 @@ class Dia(Base):
         self.assertEqual(clases._limite_cancelacion(datetime(2026, 11, 10, 0, 30, tzinfo=tz)), "23:30 del 9/11")
 
 
+class MisInscripciones(Base):
+    def pagina(self, **datos):
+        base = {"proximas": [], "en_espera": [], "ofertas": [], "canceladas_profesora": [], "historial": []}
+        with mock.patch.object(clases, "mis_inscripciones", return_value={**base, **datos}):
+            return self.client.get("/mis-inscripciones").text
+
+    def test_tarjeta_con_todos_los_datos(self):
+        html = self.pagina(proximas=[clase(estado="confirmada")])
+        t = texto(html)
+        for x in ("Martes 10/11", "08:00", "Pilates mat", "Profesora: Lucía Bentancor", "Duración: 50 min",
+                  "Precio: $1.200", "Reservada", "Ver o cancelar"):
+            self.assertIn(x, t)
+        self.assertIn('class="card card-inscripcion card-inscripta"', html)
+        self.assertIn('href="/dia/2026-11-10">Ver o cancelar', html)
+
+    def test_lista_de_espera_oferta_y_cancelada(self):
+        t = texto(self.pagina(en_espera=[clase(posicion=3)], ofertas=[clase(hora="09:00", oferta_vence="07:45")],
+                              canceladas_profesora=[clase(hora="10:00")]))
+        for x in ("En lista de espera · posición 3", "Ver o salir de la lista", "¡Lugar disponible!",
+                  "Confirmalo antes de las 07:45.", "Confirmar o liberar", "Cancelada",
+                  "Estas clases no se van a dictar y no se cobran."):
+            self.assertIn(x, t)
+
+    def test_sin_reservas(self):
+        self.assertIn("No tenés clases reservadas.", texto(self.pagina()))
+
+    def test_datos_de_tipo_y_profesora(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        sb = mock.MagicMock()
+        c = {"id": 1, "fecha": "2026-11-10", "hora_inicio": "08:00:00", "duracion": 50, "precio": 1200,
+             "id_profesora": "p1", "tipo_clase": {"nombre": "Pilates mat"}}
+        tablas = {"reserva": mock.MagicMock(), "listadeespera": mock.MagicMock()}
+        tablas["reserva"].select.return_value.eq.return_value.execute.return_value.data = [
+            {"id": 9, "estado": "confirmada", "id_bloqueo": None, "asistencia": [], "clase": c}]
+        tablas["listadeespera"].select.return_value.eq.return_value.in_.return_value.execute.return_value.data = []
+        sb.table.side_effect = lambda t: tablas[t]
+        sb.rpc.return_value.execute.return_value.data = []
+        with mock.patch.object(clases, "ahora", return_value=datetime(2026, 11, 5, 10, 0, tzinfo=ZoneInfo("America/Montevideo"))), \
+                mock.patch.object(clases.personas, "nombres_profesoras", return_value={"p1": "Lucía Bentancor"}):
+            proxima = clases.mis_inscripciones(sb, "a")["proximas"][0]
+        self.assertEqual((proxima["tipo"], proxima["profesora"]), ("Pilates mat", "Lucía Bentancor"))
+
+
 if __name__ == "__main__":
     unittest.main()

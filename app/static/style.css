@@ -1473,6 +1473,19 @@ circle.est-punto-ausentes {
     border-color: var(--accent);
 }
 
+/* Mis inscripciones: misma tarjeta que el día; el botón lleva al día para cancelar, confirmar o salir */
+.card-inscripcion .card-accion .btn {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.card-espera {
+    border-color: rgba(250, 204, 21, 0.5);
+}
+
 .lc-oferta {
     border-color: var(--accent) !important;
 }
