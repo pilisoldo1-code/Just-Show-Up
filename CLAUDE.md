@@ -1018,9 +1018,9 @@ Para cada módulo, en este orden:
   alumna (o está activa); con valor = la canceló la profesora con ese bloqueo.
 - **CSS: `.btn-secundario` está definido antes que `.btn`** en `style.css`, así
   que en elementos con las dos clases gana el fondo verde de `.btn` (pasa en
-  "Semana anterior/siguiente" y en el "Volver" de los diálogos). Pendiente de
-  corregir; en Planificación se corrigió solo para esa pantalla
-  (`.acciones-confirmar`) para no cambiar el diseño del resto sin pedirlo.
+  "Semana anterior/siguiente" y en el "Volver" de los diálogos). En los diálogos se
+  corrigió el 04/11 (`.modal-botones .btn.btn-secundario`); en Planificación ya estaba
+  (`.acciones-confirmar`). Fuera de los diálogos sigue igual.
 - **No aplicar `20261021000000_resumen_mensual_pagos.sql` (rama de Josefina, PR #13)**:
   la reemplaza `20261021150000_resumen_mensual_pagos.sql` (facturación completa con sus
   protecciones). Aplicar las dos crearía conflicto.
@@ -1222,6 +1222,21 @@ Para cada módulo, en este orden:
   «Gimnasia (demostración)» (id 81) y su horario lunes 10:00 (id 204) **no se muestran** (`app/demostracion.py`: por id
   real + nombre + inactivo); se conservan en la base porque sostienen la factura de demostración de Mercado Pago. En
   otra base (Supabase local) los ids se indican con `DEMO_TIPOS_OCULTOS` / `DEMO_HORARIOS_OCULTOS` al levantar la app.
+  Alumna (primera ronda, 04/11): en celular los días ya terminados de Reservar clases son una franja baja
+  (`.card-finalizada`, solo `todas_pasadas`; los cancelados por la profesora no cambian), precios con `|pesos` en el día y
+  Mis inscripciones, «Descargar PDF» de 44 px y `body` con 20 px arriba hasta 600 px (afecta a todos los perfiles).
+  Alumna (segunda ronda, 05/11): la tarjeta semanal de Reservar clases es toda un enlace al día, alineada a la izquierda:
+  «Martes 10/11», «N horarios», solo las etiquetas «Reservada HH» y «En lista de espera HH» (una oferta cuenta como lista
+  de espera) y «Ver horarios ›» abajo a la derecha. Lugares libres, ofertas y cancelaciones se ven en el día y en Mis
+  inscripciones. Lista de espera: «Posición N» con mayúscula. En Mis facturas la inasistencia va junto a la clase
+  («Inasistencia · 25 %» y «$900,00 → $225,00»), sin la nota larga al pie (el PDF la conserva).
+- **Formularios de la alumna**: `{% include "_envio_unico.html" %}` al final de la página evita el doble envío en todo
+  `form[method=post]` sin `onsubmit` propio (el botón pasa a `data-cargando`, p. ej. «Reservando…», y se reactiva al
+  volver con «atrás»). `{% include "_ojo_contrasena.html" %}` agrega el ojo dentro de cada campo de contraseña. Botones
+  táctiles de 44 px: `.btn-tactil` (y todo `.card-accion .btn`). Páginas que muestran teléfonos llevan
+  `<meta name="format-detection" content="telephone=no">` (Safari los convierte en enlaces).
+- **Plazo de cancelación en pantalla**: vencido el plazo no se muestra «Cancelar reserva» (ni en el día ni en Mis
+  inscripciones): se explica qué se cobra según `empresa.cobro_inasistencia_desde` (25 % o precio completo).
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
 - Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).

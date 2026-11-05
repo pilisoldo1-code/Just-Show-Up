@@ -10,7 +10,7 @@
     {% include "_menu.html" %}
     <main>
         <h1>Mi historial</h1>
-        <p class="subtitle">Tus clases pasadas con tu asistencia, de la más reciente a la más antigua.</p>
+        <p class="subtitle">Tus clases pasadas con tu asistencia, por mes: el más reciente primero y, dentro de cada mes, en orden de fecha.</p>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
@@ -23,8 +23,10 @@
             <span class="historial-cifra"><strong>{{ ausentes }}</strong> {{ 'ausencia' if ausentes == 1 else 'ausencias' }}</span>
         </div>
         {% endif %}
+        {% for m in meses %}
+        <h2 class="seccion historial-mes">{{ m.titulo }}</h2>
         <ul class="historial">
-            {% for c in historial %}
+            {% for c in m.clases %}
             {% set cancelada = c.cancelada_por_profesora %}
             <li class="historial-item">
                 <div class="historial-cabecera">
@@ -33,18 +35,21 @@
                 </div>
 
                 <div class="historial-detalle">
-                    <span>{{ c.hora }} · {{ c.duracion }} min</span>
+                    <span>{{ c.hora }}{% if c.tipo %} · {{ c.tipo }}{% endif %} · {{ c.duracion }} min</span>
                     {% if not cancelada %}<span class="historial-precio{{ ' historial-precio-original' if c.cobro_reducido }}">{% if c.cobro_reducido %}Precio de la clase: {% endif %}{{ c.precio|pesos }}</span>{% endif %}
                 </div>
                 {% if c.cobro_reducido %}
                 <div class="historial-cobro">
-                    <p>Inasistencia: se factura el {{ porcentaje_inasistencia }} % ({{ c.importe_estimado|pesos }})</p>
-                    <p class="nota-chica">Importe estimado: el definitivo figura en Mis facturas.</p>
+                    <p>Inasistencia: se cobra el {{ c.porcentaje }} % del precio ({{ c.importe_reducido|pesos }})</p>
                 </div>
                 {% endif %}
             </li>
             {% endfor %}
         </ul>
+        {% if m.con_reduccion %}
+        <p class="nota historial-nota">Si la factura del mes tiene descuentos o bonificaciones, el importe final de cada clase y el total figuran en Mis facturas.</p>
+        {% endif %}
+        {% endfor %}
         {% else %}
         <p class="vacio vacio-izq">Todavía no tenés clases en tu historial.</p>
         {% endif %}

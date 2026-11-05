@@ -372,11 +372,13 @@ def dia(request: Request, fecha: str, ok: int = 0, aviso: str = "", usuario: Usu
         return RedirectResponse(url="/", status_code=303)
     sb = _sb(usuario)
     clases.generar_clases(sb, f - timedelta(days=f.weekday()))
+    # qué se cobra si no cancela a tiempo y no asiste: depende de la regla de la empresa para esa fecha
+    desde = facturas.cobro_inasistencia_desde(sb, [usuario.empresa_id]).get(usuario.empresa_id)
     return _render(
         request, "dia.html", usuario,
         clases=clases.clases_entre(sb, f, f, usuario.id),
+        cobro_ausente=(f"el {facturas.PORCENTAJE_INASISTENCIA} % del precio" if desde and f >= desde else "el precio completo"),
         titulo_dia=f"{clases.nombre_dia(f)} {f.day}/{f.month}",
-        mensaje_plazo=clases.MENSAJE_PLAZO,
         semana=semana,
         fecha=f.isoformat(),
         aviso=aviso,
@@ -410,9 +412,19 @@ def mi_historial(request: Request, usuario: Usuario = Depends(requiere_alumna)):
         for c in historial:
             pct = facturas.porcentaje_cobro(c["fecha"], "ausente", desde) if c["estado_txt"] == "Ausente" else 100
             c["cobro_reducido"] = pct != 100
-            c["importe_estimado"] = facturas.importe_base(c["precio"], pct)
+            c["porcentaje"] = pct
+            c["importe_reducido"] = facturas.importe_base(c["precio"], pct)
+    # por mes: el más reciente primero y, dentro de cada mes, las clases en orden (historial viene de la más reciente)
+    meses = []
+    for c in historial:
+        f = date.fromisoformat(c["fecha"])
+        if not meses or meses[-1]["clave"] != (f.year, f.month):
+            meses.append({"clave": (f.year, f.month), "titulo": f"{MESES[f.month].capitalize()} {f.year}", "clases": []})
+        meses[-1]["clases"].insert(0, c)
+    for m in meses:
+        m["con_reduccion"] = any(c.get("cobro_reducido") for c in m["clases"])
     return _render(
-        request, "mi_historial.html", usuario, historial=historial, aviso=aviso, aviso_ok=False,
+        request, "mi_historial.html", usuario, historial=historial, meses=meses, aviso=aviso, aviso_ok=False,
         presentes=sum(c["estado_txt"] == "Presente" for c in historial),
         ausentes=sum(c["estado_txt"] == "Ausente" for c in historial),
     )

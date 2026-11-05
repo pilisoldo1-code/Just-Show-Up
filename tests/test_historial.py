@@ -63,7 +63,8 @@ class Historial(unittest.TestCase):
         html = main.templates.get_template("mi_historial.html").render(
             request=SimpleNamespace(url=SimpleNamespace(path="/mi-historial")),
             usuario=Usuario(id="a", mail="a@prueba.invalid", nombre="Ana", apellido="P", rol="alumna", token="t"),
-            historial=self.historial, presentes=1, ausentes=1)
+            historial=self.historial, presentes=1, ausentes=1,
+            meses=[{"titulo": "Octubre 2026", "clases": self.historial, "con_reduccion": False}])
         tarjetas = html.split('<li class="historial-item">')[1:]
         cancelada = tarjetas[1]
         self.assertIn(">Cancelada</span>", cancelada)

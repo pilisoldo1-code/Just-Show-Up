@@ -114,10 +114,10 @@ class Pantallas(Base):
         f = con_lineas(estado_factura="confirmada", numero="JSU-2026-11-0001")
         with mock.patch.object(facturas, "mis_facturas", return_value=[f]):
             t = self.client.get("/mis-facturas").text
-        for texto in ("Inasistencia (25 %)", '$800,00</s><span class="precio-base">$200,00</span>',
-                      "Inasistencia (25 %): clase reservada que no se canceló a tiempo y a la que no asististe"):
+        self.assertNotIn("clase reservada que no se canceló a tiempo", t)  # ya no va la explicación larga al pie
+        for texto in ("Inasistencia · 25 %", '$800,00</s><span class="precio-base">$200,00</span>'):
             self.assertIn(texto, t)
-        for interno in ("Sin registrar", "Incluye 2 inasistencias", "Completar asistencias", "Inasistencia · 25 %"):
+        for interno in ("Sin registrar", "Incluye 2 inasistencias", "Completar asistencias"):
             self.assertNotIn(interno, t)
 
     def test_alumna_sin_inasistencias_no_ve_la_nota(self):
@@ -180,9 +180,10 @@ class Pantallas(Base):
                 mock.patch.object(facturas, "cobro_inasistencia_desde", return_value={None: date(2026, 11, 1)}):
             t = self.client.get("/mi-historial").text
         t = " ".join(t.split())
-        self.assertEqual(t.count("Inasistencia: se factura el 25 % ($200,00)"), 1)  # solo la ausencia desde la fecha de inicio
+        self.assertEqual(t.count("Inasistencia: se cobra el 25 % del precio ($200,00)"), 1)  # solo desde la fecha de inicio
         self.assertIn("Precio de la clase: $800,00", t)
-        self.assertIn("Importe estimado: el definitivo figura en Mis facturas.", t)
+        self.assertNotIn("Importe estimado", t)
+        self.assertEqual(t.count("el importe final de cada clase y el total figuran en Mis facturas"), 1)  # solo noviembre
 
 
 class FechaPorEmpresa(Base):

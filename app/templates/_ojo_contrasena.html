@@ -1,0 +1,22 @@
+{# Ojo dentro de cada campo de contraseña para mostrarla u ocultarla. Incluir una vez, al final de la página. #}
+<script>
+document.querySelectorAll('input[type=password]').forEach(function (campo) {
+    var caja = document.createElement('span');
+    caja.className = 'campo-clave';
+    campo.parentNode.insertBefore(caja, campo);
+    caja.appendChild(campo);
+    var ojo = document.createElement('button');
+    ojo.type = 'button';
+    ojo.className = 'ojo-clave';
+    ojo.setAttribute('aria-label', 'Mostrar contraseña');
+    ojo.setAttribute('aria-pressed', 'false');
+    ojo.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><line class="ojo-tachado" x1="3" y1="3" x2="21" y2="21"/></svg>';
+    ojo.addEventListener('click', function () {
+        var ver = campo.type === 'password';
+        campo.type = ver ? 'text' : 'password';
+        ojo.setAttribute('aria-pressed', String(ver));
+        ojo.setAttribute('aria-label', ver ? 'Ocultar contraseña' : 'Mostrar contraseña');
+    });
+    caja.appendChild(ojo);
+});
+</script>

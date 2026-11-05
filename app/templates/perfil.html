@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="format-detection" content="telephone=no" />
     <title>Just Show Up - Mi perfil</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
@@ -48,9 +49,11 @@
                     Repetir contraseña nueva
                     <input type="password" name="repetir" autocomplete="new-password" minlength="8" required />
                 </label>
-                <button type="submit" class="btn">Guardar contraseña</button>
+                <button type="submit" class="btn btn-tactil" data-cargando="Guardando…">Guardar contraseña</button>
             </form>
         </section>
     </main>
+    {% include "_ojo_contrasena.html" %}
+    {% include "_envio_unico.html" %}
 </body>
 </html>

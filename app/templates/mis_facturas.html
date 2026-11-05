@@ -43,7 +43,7 @@
             {% include "_factura_lineas.html" %}
             {% if f.pago %}<p class="nota">Pagada el {{ f.pago.fecha }} · {{ f.pago.medio }}</p>
             {% elif f.estado_factura == 'confirmada' and f.estado_pago == 'pendiente' and f.vence_txt %}
-            <p class="nota vence-linea{% if f.vencida %} vence-vencida{% endif %}">{% if f.vencida %}Venció el {{ f.vence_txt }}: podés pagarla igual.{% else %}Pagala hasta el {{ f.vence_txt }} inclusive.{% endif %}</p>
+            <p class="nota vence-linea{% if f.vencida %} vence-vencida{% endif %}">Fecha límite de pago: {{ f.vence_txt }}{% if f.vencida %} (vencida: podés pagarla igual){% endif %}</p>
             {% endif %}
             {% if pago_mp and f.estado_factura == 'confirmada' and f.estado_pago == 'pendiente' %}
             <div class="factura-acciones">

@@ -27,6 +27,13 @@ main {
     max-width: 960px;
 }
 
+/* celular: menos espacio vacío arriba del encabezado (en escritorio sigue en 48px) */
+@media (max-width: 600px) {
+    body {
+        padding-top: 20px;
+    }
+}
+
 h1 {
     font-size: 1.5rem;
     margin-bottom: 4px;
@@ -327,10 +334,81 @@ input[type="time"]::-webkit-date-and-time-value {
     color: var(--muted);
 }
 
+/* áreas táctiles de al menos 44 px en las pantallas de la alumna */
+.card-accion .btn,
+.btn-tactil {
+    min-height: 44px;
+}
+
+a.btn-tactil {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.volver-semana {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+}
+
+button[aria-busy="true"] {
+    opacity: 0.7;
+    cursor: progress;
+}
+
+/* ojo para mostrar u ocultar la contraseña, dentro del campo (_ojo_contrasena.html) */
+.campo-clave {
+    position: relative;
+    display: block;
+}
+
+.campo-clave input {
+    width: 100%;
+    box-sizing: border-box;
+    padding-right: 48px;
+    min-height: 44px;
+}
+
+.ojo-clave {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0;
+}
+
+.ojo-clave:hover,
+.ojo-clave:focus-visible {
+    color: var(--accent);
+}
+
+.ojo-clave[aria-pressed="false"] .ojo-tachado {
+    display: none;
+}
+
 .vacio {
     color: var(--muted);
     text-align: center;
     padding: 32px 0;
+}
+
+/* día: hora límite de cancelación y qué pasa en la lista de espera, debajo del estado */
+.nota-estado {
+    line-height: 1.4;
+}
+
+.nota-plazo {
+    color: #facc15;
 }
 
 a.card-dia-link {
@@ -416,27 +494,60 @@ main.ancho {
     }
 }
 
+/* Reservar clases: un día ya terminado ocupa una franja baja (día · horarios · Finalizado) y sigue abriéndose para
+   consultar. Mantiene su lugar en la semana; en celular ocupa todo el ancho, así los días con clases quedan a la vista. */
+.cards-semana .card.card-finalizada {
+    min-height: 0;
+    padding: 12px 16px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 12px;
+    text-align: left;
+    opacity: 0.6;
+}
+
+.cards-semana .card-finalizada .card-dia {
+    font-size: 1rem;
+}
+
+.cards-semana .card-finalizada .dia-resumen {
+    flex: 1 1 auto;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 600px) {
+    .cards-semana .card.card-finalizada {
+        flex-basis: 100%;
+    }
+}
+
+/* resumen del día: cuántos horarios hay */
+.dia-resumen {
+    margin: 0;
+    color: var(--muted);
+    font-size: 1rem;
+}
+
+/* tarjeta semanal: todo a la izquierda y «Ver horarios ›» abajo a la derecha; toda la tarjeta es el enlace */
 .cards-semana .card {
-    align-items: center;
-    text-align: center;
+    align-items: flex-start;
+    text-align: left;
+    justify-content: flex-start;
+    gap: 8px;
 }
 
-.cards-semana .card-top {
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
+.dia-etiquetas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
-.cards-semana .horas {
-    justify-content: center;
-}
-
-.cards-semana .card-accion {
-    align-items: center;
-}
-
-.cards-semana .card-accion .badge {
-    align-self: center;
+.cards-semana .ver-dia {
+    margin-top: auto;
+    align-self: flex-end;
+    padding-top: 4px;
 }
 
 
@@ -472,6 +583,17 @@ main.ancho {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+}
+
+.modal-botones .btn.btn-secundario {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid #3a3f4a;
+}
+
+.modal-botones .btn.btn-secundario:hover {
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 .btn-peligro-solido {
@@ -1393,6 +1515,19 @@ circle.est-punto-ausentes {
     border-color: var(--accent);
 }
 
+/* Mis inscripciones: misma tarjeta que el día; el botón lleva al día para cancelar, confirmar o salir */
+.card-inscripcion .card-accion .btn {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.card-espera {
+    border-color: rgba(250, 204, 21, 0.5);
+}
+
 .lc-oferta {
     border-color: var(--accent) !important;
 }
@@ -2124,6 +2259,15 @@ circle.est-punto-ausentes {
 .factura-cabecera-alumna {
     flex-wrap: nowrap;
     margin-bottom: 8px;
+}
+
+@media (max-width: 600px) {
+    .factura-cabecera-alumna .factura-lado .btn {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 14px;
+    }
 }
 
 .factura-titulo {
@@ -4043,6 +4187,14 @@ main.baja-pagina h1 {
     margin-top: 4px;
 }
 
+.historial-mes {
+    margin-top: 24px;
+}
+
+.historial-nota {
+    margin-top: 8px;
+}
+
 .historial-cobro {
     margin-top: 8px;
     padding: 8px 10px;
@@ -4159,6 +4311,37 @@ main.baja-pagina h1 {
 
     .factura-tabla tbody .ft-prof {
         font-size: 0.9rem;
+    }
+
+    /* la alumna ve el tipo y la profesora en renglones distintos (la profesora los ve juntos) */
+    .factura-alumna .factura-tabla tbody .ft-prof {
+        display: block;
+    }
+
+    .factura-alumna .factura-tabla tbody .ft-prof::before {
+        content: none;
+    }
+
+    /* inasistencia, para la alumna: una referencia breve «$900,00 → $225,00» debajo de la etiqueta (el importe a pagar
+       ya está arriba a la derecha) */
+    .factura-alumna .factura-tabla tbody .ft-precio {
+        color: var(--muted);
+        font-size: 0.85rem;
+        text-align: left;
+    }
+
+    .factura-alumna .factura-tabla tbody .ft-precio::before {
+        content: none;
+    }
+
+    .factura-alumna .factura-tabla tbody .ft-precio .precio-tachado {
+        font-size: inherit;
+        text-decoration: none;
+    }
+
+    .factura-alumna .factura-tabla tbody .ft-precio .precio-base {
+        margin-left: 4px;
+        font-weight: 400;
     }
 
     .factura-tabla tbody .ft-asis {
