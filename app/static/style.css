@@ -4271,6 +4271,15 @@ main.baja-pagina h1 {
         font-size: 0.9rem;
     }
 
+    /* la alumna ve el tipo y la profesora en renglones distintos (la profesora los ve juntos) */
+    .factura-alumna .factura-tabla tbody .ft-prof {
+        display: block;
+    }
+
+    .factura-alumna .factura-tabla tbody .ft-prof::before {
+        content: none;
+    }
+
     .factura-tabla tbody .ft-asis {
         display: block;
         width: fit-content;

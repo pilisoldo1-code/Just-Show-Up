@@ -201,5 +201,31 @@ class MiHistorial(Base):
         self.assertNotIn("figuran en Mis facturas", t)
 
 
+class MisFacturas(Base):
+    def pagina(self, **factura):
+        from app import facturas, mercadopago
+        f = {"id": 1, "numero": "PIL-2026-10-0001", "mes": 10, "anio": 2026, "periodo_txt": "Octubre 2026",
+             "estado_factura": "confirmada", "estado_pago": "pendiente", "estado_pago_txt": "Pendiente",
+             "estado_pago_clase": "badge-espera", "vence_txt": "10/11/2026", "vencida": False, "pago": None,
+             "lineas": [{"fecha_txt": "Lunes 5/10", "hora": "08:00", "tipo": "Pilates mat", "profesora": "Lucía Bentancor",
+                         "inasistencia": False, "precio_original": 900, "ajuste_tipo": "ninguno", "importe_final": 900}],
+             "cantidad_clases": 1, "total_lineas": 900, "total": 900, "descuento_tipo": None, "inasistencias": 0}
+        f.update(factura)
+        with mock.patch.object(facturas, "mis_facturas", return_value=[f]), \
+                mock.patch.object(mercadopago, "disponible_para", return_value=False):
+            return self.client.get("/mis-facturas").text
+
+    def test_fecha_limite_de_pago(self):
+        self.assertIn("Fecha límite de pago: 10/11/2026", texto(self.pagina()))
+        self.assertIn("Fecha límite de pago: 10/11/2026 (vencida: podés pagarla igual)", texto(self.pagina(vencida=True)))
+
+    def test_tipo_y_profesora_en_renglones_distintos_solo_para_la_alumna(self):
+        html = self.pagina()
+        self.assertIn('<span class="ft-tipo">Pilates mat</span><span class="nota-chica ft-prof">Lucía Bentancor</span>', html)
+        css = open("app/static/style.css").read()
+        self.assertIn(".factura-alumna .factura-tabla tbody .ft-prof {\n        display: block;", css)
+        self.assertIn(".factura-alumna .factura-tabla tbody .ft-prof::before {\n        content: none;", css)
+
+
 if __name__ == "__main__":
     unittest.main()
