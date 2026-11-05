@@ -10,7 +10,7 @@
     {% include "_menu.html" %}
     <main>
         <h1>{{ titulo_dia }}</h1>
-        <p class="subtitle"><a href="/?semana={{ semana }}">‹ Volver a la semana</a></p>
+        <p class="subtitle"><a class="volver-semana" href="/?semana={{ semana }}">‹ Volver a la semana</a></p>
 
         {% if aviso %}
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
@@ -49,13 +49,13 @@
                     {% if c.estado == 'disponible' %}
                     <form action="/clases/{{ c.id }}/inscribirse" method="post">
                         <input type="hidden" name="fecha" value="{{ fecha }}" />
-                        <button type="submit" class="btn btn-block">Reservar clase</button>
+                        <button type="submit" class="btn btn-block" data-cargando="Reservando…">Reservar clase</button>
                     </form>
 
                     {% elif c.estado == 'completa' %}
                     <form action="/clases/{{ c.id }}/lista-espera" method="post">
                         <input type="hidden" name="fecha" value="{{ fecha }}" />
-                        <button type="submit" class="btn btn-block btn-secundario">Anotarme en lista de espera</button>
+                        <button type="submit" class="btn btn-block btn-secundario" data-cargando="Anotando…">Anotarme en lista de espera</button>
                     </form>
                     <p class="nota nota-estado">Si se libera un lugar, se le ofrece a la primera de la lista, que tiene 30 minutos para confirmarlo.</p>
 
@@ -79,7 +79,7 @@
                             <div class="modal-botones">
                                 <button type="button" class="btn btn-secundario"
                                         onclick="this.closest('dialog').close()">Volver</button>
-                                <button type="submit" class="btn btn-peligro-solido">Confirmar cancelación</button>
+                                <button type="submit" class="btn btn-peligro-solido" data-cargando="Cancelando…">Confirmar cancelación</button>
                             </div>
                         </form>
                         {% else %}
@@ -104,7 +104,7 @@
                     </div>
                     <form action="/clases/{{ c.id }}/confirmar-oferta" method="post">
                         <input type="hidden" name="fecha" value="{{ fecha }}" />
-                        <button type="submit" class="btn btn-block">Confirmar lugar</button>
+                        <button type="submit" class="btn btn-block" data-cargando="Confirmando…">Confirmar lugar</button>
                     </form>
                     <button type="button" class="btn btn-block btn-peligro"
                             onclick="document.getElementById('rechazar-{{ c.id }}').showModal()">No me interesa</button>
@@ -117,7 +117,7 @@
                             <div class="modal-botones">
                                 <button type="button" class="btn btn-secundario"
                                         onclick="this.closest('dialog').close()">Volver</button>
-                                <button type="submit" class="btn btn-peligro-solido">Liberar lugar</button>
+                                <button type="submit" class="btn btn-peligro-solido" data-cargando="Liberando…">Liberar lugar</button>
                             </div>
                         </form>
                     </dialog>
@@ -136,7 +136,7 @@
                             <div class="modal-botones">
                                 <button type="button" class="btn btn-secundario"
                                         onclick="this.closest('dialog').close()">Volver</button>
-                                <button type="submit" class="btn btn-peligro-solido">Salir de la lista</button>
+                                <button type="submit" class="btn btn-peligro-solido" data-cargando="Saliendo…">Salir de la lista</button>
                             </div>
                         </form>
                     </dialog>
@@ -152,5 +152,6 @@
         <p class="vacio">No hay clases este día.</p>
         {% endif %}
     </main>
+    {% include "_envio_unico.html" %}
 </body>
 </html>

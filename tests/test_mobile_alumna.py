@@ -244,5 +244,22 @@ class MiPerfil(Base):
                 self.assertIn("ojo-clave", self.client.get(ruta).text, ruta)
 
 
+class EnvioUnico(Base):
+    def test_botones_del_dia_dicen_que_estan_haciendo_y_no_se_envian_dos_veces(self):
+        with mock.patch.object(clases, "generar_clases"), mock.patch.object(clases, "clases_entre", return_value=[
+                clase(estado="disponible")]), mock.patch.object(main, "_parse_fecha",
+                return_value=__import__("datetime").date(2026, 11, 10)), mock.patch.object(clases, "offset_semana", return_value=1):
+            html = self.client.get("/dia/2026-11-10").text
+        self.assertIn('data-cargando="Reservando…">Reservar clase', html)
+        self.assertIn("form.dataset.enviando", html)
+        self.assertIn('class="volver-semana"', html)
+
+    def test_guardar_contrasena(self):
+        with mock.patch.object(main, "_datos_perfil", return_value={}):
+            html = self.client.get("/perfil").text
+        self.assertIn('class="btn btn-tactil" data-cargando="Guardando…">Guardar contraseña', html)
+        self.assertIn("form.dataset.enviando", html)
+
+
 if __name__ == "__main__":
     unittest.main()

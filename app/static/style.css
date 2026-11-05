@@ -334,6 +334,23 @@ input[type="time"]::-webkit-date-and-time-value {
     color: var(--muted);
 }
 
+/* áreas táctiles de al menos 44 px en las pantallas de la alumna */
+.card-accion .btn,
+.btn-tactil {
+    min-height: 44px;
+}
+
+.volver-semana {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+}
+
+button[aria-busy="true"] {
+    opacity: 0.7;
+    cursor: progress;
+}
+
 /* ojo para mostrar u ocultar la contraseña, dentro del campo (_ojo_contrasena.html) */
 .campo-clave {
     position: relative;
