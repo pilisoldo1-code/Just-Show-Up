@@ -103,6 +103,8 @@ class Dia(Base):
         sin_regla = self.dia([clase(estado="inscripta", puede_cancelar=False, cancelar_hasta="18:00")])
         self.assertIn("si no asistís, se cobra el precio completo.", sin_regla)
         self.assertNotIn("Podés cancelar sin cargo", sin_regla)
+        self.assertNotIn("Cancelar reserva", sin_regla)  # vencido el plazo no se ofrece un botón que no sirve
+        self.assertIn("Cancelar reserva", self.dia([clase(estado="inscripta", cancelar_hasta="18:00")]))
 
     def test_completa_y_lista_de_espera_explican_que_pasa(self):
         self.assertIn("se le ofrece a la primera de la lista, que tiene 30 minutos para confirmarlo",
@@ -126,13 +128,19 @@ class MisInscripciones(Base):
             return self.client.get("/mis-inscripciones").text
 
     def test_tarjeta_con_todos_los_datos(self):
-        html = self.pagina(proximas=[clase(estado="confirmada")])
+        html = self.pagina(proximas=[clase(estado="confirmada", cancelar_hasta="07:00")])
         t = texto(html)
         for x in ("Martes 10/11", "08:00", "Pilates mat", "Profesora: Lucía Bentancor", "Duración: 50 min",
                   "Precio: $1.200", "Reservada", "Ver o cancelar"):
             self.assertIn(x, t)
         self.assertIn('class="card card-inscripcion card-inscripta"', html)
         self.assertIn('href="/dia/2026-11-10">Ver o cancelar', html)
+
+    def test_con_el_plazo_vencido_no_ofrece_cancelar(self):
+        t = texto(self.pagina(proximas=[clase(estado="confirmada", puede_cancelar=False, cancelar_hasta="11:40")]))
+        self.assertIn("El plazo para cancelar venció a las 11:40.", t)
+        self.assertIn("Ver detalle", t)
+        self.assertNotIn("Ver o cancelar", t)
 
     def test_lista_de_espera_oferta_y_cancelada(self):
         t = texto(self.pagina(en_espera=[clase(posicion=3)], ofertas=[clase(hora="09:00", oferta_vence="07:45")],
@@ -161,6 +169,7 @@ class MisInscripciones(Base):
                 mock.patch.object(clases.personas, "nombres_profesoras", return_value={"p1": "Lucía Bentancor"}):
             proxima = clases.mis_inscripciones(sb, "a")["proximas"][0]
         self.assertEqual((proxima["tipo"], proxima["profesora"]), ("Pilates mat", "Lucía Bentancor"))
+        self.assertEqual((proxima["puede_cancelar"], proxima["cancelar_hasta"]), (True, "07:00"))
 
 
 class MiHistorial(Base):

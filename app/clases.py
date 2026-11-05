@@ -297,6 +297,8 @@ def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
     for r in reservas:
         item = _item_clase(r["clase"], profesoras, estado=r["estado"])
         if r["estado"] == "confirmada" and item["inicio"] > ahora_dt:
+            item["puede_cancelar"] = item["inicio"] - timedelta(hours=HORAS_LIMITE_CANCELACION) >= ahora_dt
+            item["cancelar_hasta"] = _limite_cancelacion(item["inicio"])
             proximas.append(item)
         else:
             if r["estado"] == "cancelada" and r["id_bloqueo"] is not None and item["inicio"] > ahora_dt:

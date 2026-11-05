@@ -340,6 +340,12 @@ input[type="time"]::-webkit-date-and-time-value {
     min-height: 44px;
 }
 
+a.btn-tactil {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .volver-semana {
     display: inline-flex;
     align-items: center;

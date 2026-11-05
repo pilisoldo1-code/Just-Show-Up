@@ -379,7 +379,6 @@ def dia(request: Request, fecha: str, ok: int = 0, aviso: str = "", usuario: Usu
         clases=clases.clases_entre(sb, f, f, usuario.id),
         cobro_ausente=(f"el {facturas.PORCENTAJE_INASISTENCIA} % del precio" if desde and f >= desde else "el precio completo"),
         titulo_dia=f"{clases.nombre_dia(f)} {f.day}/{f.month}",
-        mensaje_plazo=clases.MENSAJE_PLAZO,
         semana=semana,
         fecha=f.isoformat(),
         aviso=aviso,

@@ -13,7 +13,7 @@
 
             <div id="link-invalido" {% if not vencido %}hidden{% endif %}>
                 <div class="aviso aviso-error">El link para restablecer la contraseña venció o ya se usó. Pedí uno nuevo.</div>
-                <a class="btn btn-block" href="/olvide-contrasena">Pedir un link nuevo</a>
+                <a class="btn btn-block btn-tactil" href="/olvide-contrasena">Pedir un link nuevo</a>
             </div>
 
             <div id="formulario" {% if vencido or not acceso %}hidden{% endif %}>
@@ -34,7 +34,7 @@
                         Repetir contraseña nueva
                         <input type="password" name="repetir" autocomplete="new-password" minlength="8" required />
                     </label>
-                    <button type="submit" class="btn btn-block">Guardar contraseña</button>
+                    <button type="submit" class="btn btn-block btn-tactil">Guardar contraseña</button>
                 </form>
             </div>
 

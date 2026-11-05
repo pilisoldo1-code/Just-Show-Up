@@ -59,7 +59,13 @@
         {% if proximas %}
         <div class="cards">
             {% for c in proximas %}
-            {{ tarjeta(c, "card-inscripta", "Reservada", "badge-on", "Ver o cancelar") }}
+            {% if c.puede_cancelar %}
+            {{ tarjeta(c, "card-inscripta", "Reservada", "badge-on", "Ver o cancelar",
+                       nota="Podés cancelar sin cargo hasta las " ~ c.cancelar_hasta ~ ".") }}
+            {% else %}
+            {{ tarjeta(c, "card-inscripta", "Reservada", "badge-on", "Ver detalle",
+                       nota="El plazo para cancelar venció a las " ~ c.cancelar_hasta ~ ".") }}
+            {% endif %}
             {% endfor %}
         </div>
         {% else %}

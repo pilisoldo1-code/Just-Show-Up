@@ -1225,6 +1225,13 @@ Para cada módulo, en este orden:
   Alumna (primera ronda, 04/11): en celular los días ya terminados de Reservar clases son una franja baja
   (`.card-finalizada`, solo `todas_pasadas`; los cancelados por la profesora no cambian), precios con `|pesos` en el día y
   Mis inscripciones, «Descargar PDF» de 44 px y `body` con 20 px arriba hasta 600 px (afecta a todos los perfiles).
+- **Formularios de la alumna**: `{% include "_envio_unico.html" %}` al final de la página evita el doble envío en todo
+  `form[method=post]` sin `onsubmit` propio (el botón pasa a `data-cargando`, p. ej. «Reservando…», y se reactiva al
+  volver con «atrás»). `{% include "_ojo_contrasena.html" %}` agrega el ojo dentro de cada campo de contraseña. Botones
+  táctiles de 44 px: `.btn-tactil` (y todo `.card-accion .btn`). Páginas que muestran teléfonos llevan
+  `<meta name="format-detection" content="telephone=no">` (Safari los convierte en enlaces).
+- **Plazo de cancelación en pantalla**: vencido el plazo no se muestra «Cancelar reserva» (ni en el día ni en Mis
+  inscripciones): se explica qué se cobra según `empresa.cobro_inasistencia_desde` (25 % o precio completo).
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
 - Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).
