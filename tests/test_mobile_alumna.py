@@ -227,5 +227,22 @@ class MisFacturas(Base):
         self.assertIn(".factura-alumna .factura-tabla tbody .ft-prof::before {\n        content: none;", css)
 
 
+class MiPerfil(Base):
+    def test_telefono_sin_enlace_y_ojo_en_cada_contrasena(self):
+        datos = {"nombre": "Ana", "apellido": "Prueba", "mail": "alumna@prueba.invalid", "telefono": "099123456",
+                 "cedula": None, "fecha_nacimiento": None, "fecha_vencimiento_carne_salud": None}
+        with mock.patch.object(main, "_datos_perfil", return_value=datos):
+            html = self.client.get("/perfil").text
+        self.assertIn('<meta name="format-detection" content="telephone=no" />', html)
+        self.assertEqual(html.count('type="password"'), 3)
+        self.assertIn("campo-clave", html)
+        self.assertIn("aria-label', 'Mostrar contraseña'", html)
+
+    def test_login_y_restablecer_tambien_tienen_el_ojo(self):
+        for ruta in ("/login", "/restablecer-contrasena"):
+            with mock.patch.object(auth, "_usuario_cacheado", return_value=None):
+                self.assertIn("ojo-clave", self.client.get(ruta).text, ruta)
+
+
 if __name__ == "__main__":
     unittest.main()

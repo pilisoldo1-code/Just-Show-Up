@@ -334,6 +334,45 @@ input[type="time"]::-webkit-date-and-time-value {
     color: var(--muted);
 }
 
+/* ojo para mostrar u ocultar la contraseña, dentro del campo (_ojo_contrasena.html) */
+.campo-clave {
+    position: relative;
+    display: block;
+}
+
+.campo-clave input {
+    width: 100%;
+    box-sizing: border-box;
+    padding-right: 48px;
+    min-height: 44px;
+}
+
+.ojo-clave {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0;
+}
+
+.ojo-clave:hover,
+.ojo-clave:focus-visible {
+    color: var(--accent);
+}
+
+.ojo-clave[aria-pressed="false"] .ojo-tachado {
+    display: none;
+}
+
 .vacio {
     color: var(--muted);
     text-align: center;
