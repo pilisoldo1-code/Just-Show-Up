@@ -76,7 +76,7 @@
         <h2 class="seccion">En lista de espera</h2>
         <div class="cards">
             {% for c in en_espera %}
-            {{ tarjeta(c, "card-espera", "En lista de espera · posición " ~ c.posicion, "badge-espera", "Ver o salir de la lista") }}
+            {{ tarjeta(c, "card-espera", "En lista de espera · Posición " ~ c.posicion, "badge-espera", "Ver o salir de la lista") }}
             {% endfor %}
         </div>
         {% endif %}

@@ -197,7 +197,7 @@ def cancelar(sb: Client, clase_id: int) -> tuple[bool, str]:
 def anotar_en_espera(sb: Client, clase_id: int) -> tuple[bool, str]:
     r = sb.rpc("anotar_en_espera", {"p_id_clase": clase_id}).execute().data
     if r["resultado"] == "ok":
-        return True, f"Quedaste en la lista de espera (posición {r['posicion']})."
+        return True, f"Quedaste en la lista de espera (Posición {r['posicion']})."
     return False, {
         "hay_lugar": "Hay lugares disponibles, podés reservar la clase directamente.",
         "ya_reservada": "Ya tenés esta clase reservada.",

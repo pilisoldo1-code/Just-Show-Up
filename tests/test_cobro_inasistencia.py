@@ -114,10 +114,10 @@ class Pantallas(Base):
         f = con_lineas(estado_factura="confirmada", numero="JSU-2026-11-0001")
         with mock.patch.object(facturas, "mis_facturas", return_value=[f]):
             t = self.client.get("/mis-facturas").text
-        for texto in ("Inasistencia (25 %)", '$800,00</s><span class="precio-base">$200,00</span>',
-                      "Inasistencia (25 %): clase reservada que no se canceló a tiempo y a la que no asististe"):
+        self.assertNotIn("clase reservada que no se canceló a tiempo", t)  # ya no va la explicación larga al pie
+        for texto in ("Inasistencia · 25 %", '$800,00</s><span class="precio-base">$200,00</span>'):
             self.assertIn(texto, t)
-        for interno in ("Sin registrar", "Incluye 2 inasistencias", "Completar asistencias", "Inasistencia · 25 %"):
+        for interno in ("Sin registrar", "Incluye 2 inasistencias", "Completar asistencias"):
             self.assertNotIn(interno, t)
 
     def test_alumna_sin_inasistencias_no_ve_la_nota(self):

@@ -46,29 +46,32 @@ class ResumenSemanal(Base):
     def test_dos_horarios(self):
         html = self.grilla([clase(hora="08:00"), clase(hora="09:00")])
         t = texto(html)
-        self.assertIn("2 horarios · de 08:00 a 09:00", t)
-        self.assertIn("2 horarios con lugar", t)
-        self.assertIn('href="/dia/2026-11-10"', html)
-        self.assertNotIn("hora-chip", html)  # ya no se listan las horas en la semana
+        self.assertIn("Martes 10/11 2 horarios Ver horarios ›", t)  # día y fecha en una línea, solo la cantidad
+        self.assertIn('href="/dia/2026-11-10"', html)  # toda la tarjeta es el enlace
+        for viejo in ("de 08:00 a 09:00", "con lugar", "Ver día", "hora-chip"):
+            self.assertNotIn(viejo, html)
 
     def test_diez_horarios_entran_en_una_tarjeta(self):
         html = self.grilla([clase(hora=f"{h:02d}:00") for h in range(7, 17)])
-        self.assertIn("10 horarios · de 07:00 a 16:00", texto(html))
+        self.assertIn("Martes 10/11 10 horarios", texto(html))
         self.assertEqual(html.count('class="card card-dia-link'), 1)
 
     def test_un_horario(self):
-        self.assertIn("1 horario · 19:00", texto(self.grilla([clase(hora="19:00")])))
+        self.assertIn("1 horario Ver horarios", texto(self.grilla([clase(hora="19:00")])))
 
-    def test_reserva_y_lista_de_espera_a_la_vista(self):
-        t = texto(self.grilla([clase(hora="08:00", estado="inscripta"), clase(hora="09:00", estado="espera"),
-                               clase(hora="10:00", estado="oferta")]))
-        for x in ("Reservada 08:00", "En lista de espera 09:00", "¡Lugar disponible! 10:00", "Ver día ›"):
+    def test_solo_reservas_y_listas_de_espera_con_su_hora(self):
+        t = texto(self.grilla([clase(hora="08:00", estado="inscripta"), clase(hora="09:00", estado="inscripta"),
+                               clase(hora="10:00", estado="espera"), clase(hora="11:00", estado="oferta"),
+                               clase(hora="12:00", estado="cancelada")]))
+        for x in ("Reservada 08:00", "Reservada 09:00", "En lista de espera 10:00", "En lista de espera 11:00"):
             self.assertIn(x, t)
-        self.assertNotIn("con lugar", t)  # si tiene algo ese día, se muestra eso
+        for x in ("¡Lugar disponible!", "Cancelada", "canceladas por la profesora"):
+            self.assertNotIn(x, t)
 
-    def test_dia_completo(self):
-        self.assertIn("Sin lugares: podés anotarte en la lista de espera",
-                      texto(self.grilla([clase(estado="completa"), clase(hora="09:00", estado="completa")])))
+    def test_sin_nada_de_la_alumna_no_hay_etiquetas(self):
+        html = self.grilla([clase(estado="completa"), clase(hora="09:00", estado="cancelada")])
+        self.assertNotIn("dia-etiquetas", html)
+        self.assertNotIn("Sin lugares", texto(html))
 
     def test_dia_terminado_compacto_y_accesible_sin_reservar(self):
         html = self.grilla([clase(fecha="2026-11-03", hora="08:00", estado="pasada"),
@@ -76,11 +79,8 @@ class ResumenSemanal(Base):
         terminado = html[html.index('href="/dia/2026-11-03"') - 200:html.index('href="/dia/2026-11-04"')]
         self.assertIn("card-finalizada", terminado)  # A1: franja compacta
         self.assertIn("Finalizado", terminado)
-        self.assertNotIn("Ver día", terminado)
+        self.assertNotIn("Ver horarios", terminado)
         self.assertNotIn("card-finalizada", html[html.index('href="/dia/2026-11-04"') - 200:])
-
-    def test_clases_canceladas_por_la_profesora(self):
-        self.assertIn("Clases canceladas por la profesora", texto(self.grilla([clase(estado="cancelada")])))
 
 
 class Dia(Base):
@@ -110,7 +110,7 @@ class Dia(Base):
         self.assertIn("se le ofrece a la primera de la lista, que tiene 30 minutos para confirmarlo",
                       self.dia([clase(estado="completa", disponibles=0)]))
         t = self.dia([clase(estado="espera", posicion_espera=2)])
-        self.assertIn("En lista de espera · posición 2", t)
+        self.assertIn("En lista de espera · Posición 2", t)
         self.assertIn("tenés 30 minutos para confirmarlo", t)
 
     def test_limite_de_cancelacion_otro_dia(self):
@@ -145,7 +145,7 @@ class MisInscripciones(Base):
     def test_lista_de_espera_oferta_y_cancelada(self):
         t = texto(self.pagina(en_espera=[clase(posicion=3)], ofertas=[clase(hora="09:00", oferta_vence="07:45")],
                               canceladas_profesora=[clase(hora="10:00")]))
-        for x in ("En lista de espera · posición 3", "Ver o salir de la lista", "¡Lugar disponible!",
+        for x in ("En lista de espera · Posición 3", "Ver o salir de la lista", "¡Lugar disponible!",
                   "Confirmalo antes de las 07:45.", "Confirmar o liberar", "Cancelada",
                   "Estas clases no se van a dictar y no se cobran."):
             self.assertIn(x, t)

@@ -508,13 +508,6 @@ main.ancho {
     opacity: 0.6;
 }
 
-.cards-semana .card-finalizada .card-top {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 6px;
-    font-size: 0.85rem;
-}
-
 .cards-semana .card-finalizada .card-dia {
     font-size: 1rem;
 }
@@ -524,50 +517,37 @@ main.ancho {
     font-size: 0.9rem;
 }
 
-.cards-semana .card-finalizada .card-accion {
-    margin: 0;
-}
-
 @media (max-width: 600px) {
     .cards-semana .card.card-finalizada {
         flex-basis: 100%;
     }
 }
 
-/* resumen del día: cuántos horarios hay y entre qué horas; cuántos tienen lugar si la alumna no tiene nada ese día */
+/* resumen del día: cuántos horarios hay */
 .dia-resumen {
     margin: 0;
-    color: var(--text);
-    font-size: 1.05rem;
-    font-weight: 600;
-}
-
-.dia-lugares {
     color: var(--muted);
-    font-size: 0.9rem;
+    font-size: 1rem;
 }
 
+/* tarjeta semanal: todo a la izquierda y «Ver horarios ›» abajo a la derecha; toda la tarjeta es el enlace */
 .cards-semana .card {
-    align-items: center;
-    text-align: center;
+    align-items: flex-start;
+    text-align: left;
+    justify-content: flex-start;
+    gap: 8px;
 }
 
-.cards-semana .card-top {
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
+.dia-etiquetas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
-.cards-semana .horas {
-    justify-content: center;
-}
-
-.cards-semana .card-accion {
-    align-items: center;
-}
-
-.cards-semana .card-accion .badge {
-    align-self: center;
+.cards-semana .ver-dia {
+    margin-top: auto;
+    align-self: flex-end;
+    padding-top: 4px;
 }
 
 
@@ -4340,6 +4320,28 @@ main.baja-pagina h1 {
 
     .factura-alumna .factura-tabla tbody .ft-prof::before {
         content: none;
+    }
+
+    /* inasistencia, para la alumna: una referencia breve «$900,00 → $225,00» debajo de la etiqueta (el importe a pagar
+       ya está arriba a la derecha) */
+    .factura-alumna .factura-tabla tbody .ft-precio {
+        color: var(--muted);
+        font-size: 0.85rem;
+        text-align: left;
+    }
+
+    .factura-alumna .factura-tabla tbody .ft-precio::before {
+        content: none;
+    }
+
+    .factura-alumna .factura-tabla tbody .ft-precio .precio-tachado {
+        font-size: inherit;
+        text-decoration: none;
+    }
+
+    .factura-alumna .factura-tabla tbody .ft-precio .precio-base {
+        margin-left: 4px;
+        font-weight: 400;
     }
 
     .factura-tabla tbody .ft-asis {

@@ -114,7 +114,7 @@
                     </dialog>
 
                     {% elif c.estado == 'espera' %}
-                    <span class="badge badge-espera">En lista de espera · posición {{ c.posicion_espera }}</span>
+                    <span class="badge badge-espera">En lista de espera · Posición {{ c.posicion_espera }}</span>
                     <p class="nota nota-estado">Si se libera un lugar te lo ofrecemos acá y tenés 30 minutos para confirmarlo (o hasta que empiece la clase).</p>
                     <button type="button" class="btn btn-block btn-peligro"
                             onclick="document.getElementById('salir-{{ c.id }}').showModal()">Salir de la lista</button>

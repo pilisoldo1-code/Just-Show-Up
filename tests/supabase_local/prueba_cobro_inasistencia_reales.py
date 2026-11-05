@@ -196,9 +196,9 @@ ok("con la factura confirmada no se corrige su asistencia", "ok=0" in r.headers[
 
 # lo que ve la alumna (el mes ya está publicado)
 mf = texto(AL.get("/mis-facturas").text)
-ok("Mis facturas: «Inasistencia (25 %)», precio tachado y la nota al pie",
-   mf.count("Inasistencia (25 %)") >= 3 and '$800,00</s><span class="precio-base">$200,00</span>' in mf
-   and "clase reservada que no se canceló a tiempo y a la que no asististe" in mf)
+ok("Mis facturas: «Inasistencia · 25 %» y «$800,00 → $200,00» junto a cada clase, sin nota larga al pie",
+   mf.count("Inasistencia · 25 %") >= 3 and '$800,00</s><span class="precio-base">$200,00</span>' in mf
+   and "clase reservada que no se canceló a tiempo y a la que no asististe" not in mf)
 ok("…sin motivos ni datos internos", all(x not in mf for x in ("Promo", "Planilla", "Sin registrar", "Inasistencia · 25 %")))
 pdf = texto_pdf(AL.get(f"/mis-facturas/{F['id']}/pdf").content)
 ok("PDF: marca, explicación y fila de inasistencias", "Pilates mat *" in pdf and "Inasist. 25 %" in pdf

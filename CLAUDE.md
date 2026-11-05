@@ -1225,6 +1225,11 @@ Para cada módulo, en este orden:
   Alumna (primera ronda, 04/11): en celular los días ya terminados de Reservar clases son una franja baja
   (`.card-finalizada`, solo `todas_pasadas`; los cancelados por la profesora no cambian), precios con `|pesos` en el día y
   Mis inscripciones, «Descargar PDF» de 44 px y `body` con 20 px arriba hasta 600 px (afecta a todos los perfiles).
+  Alumna (segunda ronda, 05/11): la tarjeta semanal de Reservar clases es toda un enlace al día, alineada a la izquierda:
+  «Martes 10/11», «N horarios», solo las etiquetas «Reservada HH» y «En lista de espera HH» (una oferta cuenta como lista
+  de espera) y «Ver horarios ›» abajo a la derecha. Lugares libres, ofertas y cancelaciones se ven en el día y en Mis
+  inscripciones. Lista de espera: «Posición N» con mayúscula. En Mis facturas la inasistencia va junto a la clase
+  («Inasistencia · 25 %» y «$900,00 → $225,00»), sin la nota larga al pie (el PDF la conserva).
 - **Formularios de la alumna**: `{% include "_envio_unico.html" %}` al final de la página evita el doble envío en todo
   `form[method=post]` sin `onsubmit` propio (el botón pasa a `data-cargando`, p. ej. «Reservando…», y se reactiva al
   volver con «atrás»). `{% include "_ojo_contrasena.html" %}` agrega el ojo dentro de cada campo de contraseña. Botones
