@@ -146,9 +146,18 @@ class MisInscripciones(Base):
         t = texto(self.pagina(en_espera=[clase(posicion=3)], ofertas=[clase(hora="09:00", oferta_vence="07:45")],
                               canceladas_profesora=[clase(hora="10:00")]))
         for x in ("En lista de espera · Posición 3", "Ver o salir de la lista", "¡Lugar disponible!",
-                  "Confirmalo antes de las 07:45.", "Confirmar o liberar", "Cancelada",
+                  "Confirmalo antes de las 07:45; si no, pasa a la siguiente de la lista.", "Confirmar lugar",
+                  "No me interesa", "Liberar lugar", "Cancelada",
                   "Estas clases no se van a dictar y no se cobran."):
             self.assertIn(x, t)
+
+    def test_oferta_con_las_mismas_acciones_que_el_dia(self):
+        html = self.pagina(ofertas=[clase(id=77, oferta_vence="07:45")])
+        self.assertIn('action="/clases/77/confirmar-oferta"', html)
+        self.assertIn('action="/clases/77/rechazar-oferta"', html)
+        self.assertIn('<input type="hidden" name="fecha" value="2026-11-10" />', html)
+        self.assertNotIn("Confirmar o liberar", html)
+        self.assertIn("form.dataset.enviando", html)  # un solo envío
 
     def test_sin_reservas(self):
         self.assertIn("No tenés clases reservadas.", texto(self.pagina()))

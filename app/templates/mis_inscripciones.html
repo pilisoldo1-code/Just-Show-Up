@@ -25,6 +25,7 @@
             {% if accion %}
             <a class="btn btn-block{{ '' if accion_principal else ' btn-secundario-claro' }}" href="/dia/{{ c.fecha }}">{{ accion }}</a>
             {% endif %}
+            {% if caller is defined %}{{ caller() }}{% endif %}
         </div>
     </article>
     {% endmacro %}
@@ -39,8 +40,29 @@
         <h2 class="seccion">¡Se liberó un lugar para vos!</h2>
         <div class="cards">
             {% for c in ofertas %}
-            {{ tarjeta(c, "card-oferta", "¡Lugar disponible!", "badge-espera", "Confirmar o liberar", True,
-                       "Confirmalo antes de las " ~ c.oferta_vence ~ ".") }}
+            {# mismas acciones que en el día: confirmar directo o liberar el lugar con confirmación #}
+            {% call tarjeta(c, "card-oferta", "¡Lugar disponible!", "badge-espera",
+                            nota="Confirmalo antes de las " ~ c.oferta_vence ~ "; si no, pasa a la siguiente de la lista.") %}
+            <form action="/clases/{{ c.id }}/confirmar-oferta" method="post">
+                <input type="hidden" name="fecha" value="{{ c.fecha }}" />
+                <button type="submit" class="btn btn-block" data-cargando="Confirmando…">Confirmar lugar</button>
+            </form>
+            <button type="button" class="btn btn-block btn-peligro"
+                    onclick="document.getElementById('rechazar-{{ c.id }}').showModal()">No me interesa</button>
+            <dialog id="rechazar-{{ c.id }}" class="modal">
+                <form action="/clases/{{ c.id }}/rechazar-oferta" method="post">
+                    <input type="hidden" name="fecha" value="{{ c.fecha }}" />
+                    <h2>Liberar el lugar</h2>
+                    <p class="modal-clase">{{ c.dia }} {{ c.fecha_txt }} · {{ c.hora }}</p>
+                    <p class="modal-texto">El lugar se le ofrece a la siguiente de la lista y vos salís de la lista de espera.</p>
+                    <div class="modal-botones">
+                        <button type="button" class="btn btn-secundario"
+                                onclick="this.closest('dialog').close()">Volver</button>
+                        <button type="submit" class="btn btn-peligro-solido" data-cargando="Liberando…">Liberar lugar</button>
+                    </div>
+                </form>
+            </dialog>
+            {% endcall %}
             {% endfor %}
         </div>
         {% endif %}
@@ -81,5 +103,6 @@
         </div>
         {% endif %}
     </main>
+    {% include "_envio_unico.html" %}
 </body>
 </html>
