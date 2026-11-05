@@ -121,6 +121,7 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
                 "posicion_espera": espera["posicion"] if espera else None,
                 "oferta_vence": _hora_local(espera["oferta_vence_en"]) if espera and espera["oferta_vence_en"] else "",
                 "puede_cancelar": ahora_dt <= inicio_dt - timedelta(hours=HORAS_LIMITE_CANCELACION),
+                "cancelar_hasta": _limite_cancelacion(inicio_dt),
             }
         )
     return tarjetas
@@ -226,6 +227,13 @@ def salir_lista_espera(sb: Client, clase_id: int) -> tuple[bool, str]:
     if resultado == "ok":
         return True, "Saliste de la lista de espera."
     return False, "No estabas en la lista de espera de esta clase."
+
+
+def _limite_cancelacion(inicio: datetime) -> str:
+    """Hora (y día, si es otro) hasta la que se puede cancelar sin cargo, en hora de Montevideo."""
+    limite = inicio - timedelta(hours=HORAS_LIMITE_CANCELACION)
+    texto = limite.strftime("%H:%M")
+    return texto if limite.date() == inicio.date() else f"{texto} del {limite.day}/{limite.month}"
 
 
 def _hora_local(iso: str, con_fecha: bool = False) -> str:

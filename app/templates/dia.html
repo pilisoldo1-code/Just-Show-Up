@@ -57,9 +57,15 @@
                         <input type="hidden" name="fecha" value="{{ fecha }}" />
                         <button type="submit" class="btn btn-block btn-secundario">Anotarme en lista de espera</button>
                     </form>
+                    <p class="nota nota-estado">Si se libera un lugar, se le ofrece a la primera de la lista, que tiene 30 minutos para confirmarlo.</p>
 
                     {% elif c.estado == 'inscripta' %}
                     <span class="badge badge-on">Reservada</span>
+                    {% if c.puede_cancelar %}
+                    <p class="nota nota-estado">Podés cancelar sin cargo hasta las {{ c.cancelar_hasta }}.</p>
+                    {% else %}
+                    <p class="nota nota-estado nota-plazo">El plazo para cancelar venció a las {{ c.cancelar_hasta }}: si no asistís, se cobra {{ cobro_ausente }}.</p>
+                    {% endif %}
                     <button type="button" class="btn btn-block btn-peligro"
                             onclick="document.getElementById('cancelar-{{ c.id }}').showModal()">Cancelar reserva</button>
 
@@ -118,6 +124,7 @@
 
                     {% elif c.estado == 'espera' %}
                     <span class="badge badge-espera">En lista de espera · posición {{ c.posicion_espera }}</span>
+                    <p class="nota nota-estado">Si se libera un lugar te lo ofrecemos acá y tenés 30 minutos para confirmarlo (o hasta que empiece la clase).</p>
                     <button type="button" class="btn btn-block btn-peligro"
                             onclick="document.getElementById('salir-{{ c.id }}').showModal()">Salir de la lista</button>
                     <dialog id="salir-{{ c.id }}" class="modal">

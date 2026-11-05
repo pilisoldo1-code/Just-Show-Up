@@ -372,9 +372,12 @@ def dia(request: Request, fecha: str, ok: int = 0, aviso: str = "", usuario: Usu
         return RedirectResponse(url="/", status_code=303)
     sb = _sb(usuario)
     clases.generar_clases(sb, f - timedelta(days=f.weekday()))
+    # qué se cobra si no cancela a tiempo y no asiste: depende de la regla de la empresa para esa fecha
+    desde = facturas.cobro_inasistencia_desde(sb, [usuario.empresa_id]).get(usuario.empresa_id)
     return _render(
         request, "dia.html", usuario,
         clases=clases.clases_entre(sb, f, f, usuario.id),
+        cobro_ausente=(f"el {facturas.PORCENTAJE_INASISTENCIA} % del precio" if desde and f >= desde else "el precio completo"),
         titulo_dia=f"{clases.nombre_dia(f)} {f.day}/{f.month}",
         mensaje_plazo=clases.MENSAJE_PLAZO,
         semana=semana,

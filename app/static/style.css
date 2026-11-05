@@ -340,6 +340,15 @@ input[type="time"]::-webkit-date-and-time-value {
     padding: 32px 0;
 }
 
+/* día: hora límite de cancelación y qué pasa en la lista de espera, debajo del estado */
+.nota-estado {
+    line-height: 1.4;
+}
+
+.nota-plazo {
+    color: #facc15;
+}
+
 a.card-dia-link {
     color: inherit;
     text-decoration: none;

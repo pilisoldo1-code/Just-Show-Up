@@ -83,5 +83,41 @@ class ResumenSemanal(Base):
         self.assertIn("Clases canceladas por la profesora", texto(self.grilla([clase(estado="cancelada")])))
 
 
+class Dia(Base):
+    def dia(self, tarjetas, desde=None):
+        from app import facturas
+        with mock.patch.object(clases, "generar_clases"), mock.patch.object(clases, "clases_entre", return_value=tarjetas), \
+                mock.patch.object(facturas, "cobro_inasistencia_desde", return_value={None: desde}), \
+                mock.patch.object(main, "_parse_fecha", return_value=__import__("datetime").date(2026, 11, 10)), \
+                mock.patch.object(clases, "offset_semana", return_value=1):
+            return texto(self.client.get("/dia/2026-11-10").text)
+
+    def test_hora_limite_de_cancelacion(self):
+        t = self.dia([clase(estado="inscripta", cancelar_hasta="18:00")])
+        self.assertIn("Podés cancelar sin cargo hasta las 18:00.", t)
+
+    def test_plazo_vencido_segun_la_regla_de_la_empresa(self):
+        from datetime import date
+        con_25 = self.dia([clase(estado="inscripta", puede_cancelar=False, cancelar_hasta="18:00")], desde=date(2026, 9, 1))
+        self.assertIn("El plazo para cancelar venció a las 18:00: si no asistís, se cobra el 25 % del precio.", con_25)
+        sin_regla = self.dia([clase(estado="inscripta", puede_cancelar=False, cancelar_hasta="18:00")])
+        self.assertIn("si no asistís, se cobra el precio completo.", sin_regla)
+        self.assertNotIn("Podés cancelar sin cargo", sin_regla)
+
+    def test_completa_y_lista_de_espera_explican_que_pasa(self):
+        self.assertIn("se le ofrece a la primera de la lista, que tiene 30 minutos para confirmarlo",
+                      self.dia([clase(estado="completa", disponibles=0)]))
+        t = self.dia([clase(estado="espera", posicion_espera=2)])
+        self.assertIn("En lista de espera · posición 2", t)
+        self.assertIn("tenés 30 minutos para confirmarlo", t)
+
+    def test_limite_de_cancelacion_otro_dia(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("America/Montevideo")
+        self.assertEqual(clases._limite_cancelacion(datetime(2026, 11, 10, 19, 0, tzinfo=tz)), "18:00")
+        self.assertEqual(clases._limite_cancelacion(datetime(2026, 11, 10, 0, 30, tzinfo=tz)), "23:30 del 9/11")
+
+
 if __name__ == "__main__":
     unittest.main()
