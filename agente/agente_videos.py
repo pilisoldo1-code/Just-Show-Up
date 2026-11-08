@@ -32,6 +32,8 @@ from urllib.parse import urlparse
 
 AQUI = Path(__file__).resolve().parent
 TAMANO_MAXIMO_PARTE = 45_000_000
+# Diferencia aceptada entre la duración que declara el MP4 y la del contenido que realmente se comprimió.
+TOLERANCIA_DURACION_SEG = 3
 SEGUNDOS_ESTABLE = 180
 SEGUNDOS_ENTRE_PASADAS = 60
 ESPERAS_REINTENTO_SEG = [60, 300, 900, 3600]
@@ -182,22 +184,81 @@ def duracion_segundos(ruta: Path) -> int:
     return round(float(r.stdout.strip()))
 
 
+def duraciones_por_flujo(ruta: Path) -> dict[str, float]:
+    """Duración de cada tipo de flujo (video, audio) según FFmpeg; sin duración conocida queda en 0."""
+    r = subprocess.run([PROGRAMAS["ffprobe"], "-v", "error", "-show_entries", "stream=codec_type,duration",
+                        "-of", "json", str(ruta)], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise ErrorAgente(f"FFmpeg no pudo leer el archivo: {r.stderr.strip()[:200]}")
+    duraciones: dict[str, float] = {}
+    for flujo in json.loads(r.stdout or "{}").get("streams", []):
+        tipo = flujo.get("codec_type")
+        if tipo in ("video", "audio"):
+            try:
+                duracion = float(flujo.get("duration") or 0)
+            except ValueError:
+                duracion = 0.0
+            duraciones[tipo] = max(duraciones.get(tipo, 0.0), duracion)
+    return duraciones
+
+
+def verificar_comprimido(origen: Path, comprimido: Path) -> None:
+    """Un MP4 cortado puede declarar los 40 minutos completos (si el índice está al principio) y FFmpeg comprime
+    sin error solo lo que hay. El .ts comprimido no tiene índice: su duración sale de las marcas de tiempo del
+    contenido. Se exige que video y audio duren lo que declara el original y que se decodifique entero sin errores."""
+    r = subprocess.run([PROGRAMAS["ffprobe"], "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                        str(origen)], capture_output=True, text=True)
+    try:
+        declarada = float(r.stdout.strip())
+    except ValueError:
+        raise ErrorAgente(f"FFmpeg no pudo leer la duración del original: {r.stderr.strip()[:200]}")
+    esperados = duraciones_por_flujo(origen).keys() | {"video"}
+    reales = duraciones_por_flujo(comprimido)
+    for tipo in ("video", "audio"):
+        if tipo not in esperados:
+            continue
+        if tipo not in reales:
+            raise ErrorAgente(f"El video comprimido no tiene {tipo}")
+        if abs(reales[tipo] - declarada) > TOLERANCIA_DURACION_SEG:
+            raise ErrorAgente(f"Grabación incompleta: el {tipo} dura {reales[tipo]:.0f} s y el archivo declara "
+                              f"{declarada:.0f} s")
+    r = subprocess.run([PROGRAMAS["ffmpeg"], "-v", "error", "-i", str(comprimido), "-map", "0", "-f", "null", "-"],
+                       capture_output=True, text=True)
+    if r.returncode != 0 or r.stderr.strip():
+        raise ErrorAgente(f"El video comprimido tiene errores: {r.stderr.strip()[:300]}")
+
+
+def limpiar_intermedios(carpeta: Path) -> None:
+    """Borra solo lo que deja `comprimir`, para que un intento fallido no quede a medias."""
+    for archivo in [carpeta / "salida.ts", carpeta / "salida.m3u8", carpeta / "manifiesto.json.tmp",
+                    *carpeta.glob("parte-*.ts")]:
+        archivo.unlink(missing_ok=True)
+
+
 def comprimir(origen: Path, carpeta: Path) -> tuple[list[dict], str]:
-    """Deja parte-NN.ts en `carpeta`. Si ya estaban de un intento anterior, no vuelve a comprimir."""
+    """Deja parte-NN.ts en `carpeta`. Si ya estaban de un intento anterior, no vuelve a comprimir: el manifiesto
+    se escribe recién cuando todo está verificado."""
     manifiesto = carpeta / "manifiesto.json"
     if manifiesto.exists():
         datos = json.loads(manifiesto.read_text())
         return datos["partes"], datos["lista_hls"]
     carpeta.mkdir(parents=True, exist_ok=True)
     lista = carpeta / "salida.m3u8"
-    r = subprocess.run([PROGRAMAS["ffmpeg"], "-y", "-v", "error", "-i", str(origen), *COMPRESION, str(lista)],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        raise ErrorAgente(f"Falló la compresión: {r.stderr.strip()[:300]}")
-    partes, lista_hls = dividir_lista(lista.read_text(), "salida.ts")
-    cortar_archivo(carpeta / "salida.ts", partes, carpeta)
-    (carpeta / "salida.ts").unlink()
-    manifiesto.write_text(json.dumps({"partes": partes, "lista_hls": lista_hls}))
+    try:
+        r = subprocess.run([PROGRAMAS["ffmpeg"], "-y", "-v", "error", "-i", str(origen), *COMPRESION, str(lista)],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            raise ErrorAgente(f"Falló la compresión: {r.stderr.strip()[:300]}")
+        verificar_comprimido(origen, carpeta / "salida.ts")
+        partes, lista_hls = dividir_lista(lista.read_text(), "salida.ts")
+        cortar_archivo(carpeta / "salida.ts", partes, carpeta)
+        (carpeta / "salida.ts").unlink()
+        provisorio = carpeta / "manifiesto.json.tmp"
+        provisorio.write_text(json.dumps({"partes": partes, "lista_hls": lista_hls}))
+        provisorio.replace(manifiesto)
+    except Exception:
+        limpiar_intermedios(carpeta)
+        raise
     return partes, lista_hls
 
 

@@ -419,6 +419,81 @@ class Proteccion(Base):
         self.assertEqual(ag.HUELLAS_PRODUCCION, entorno.HUELLAS_PRODUCCION)
 
 
+class VerificarComprimido(Base):
+    """Un MP4 cortado puede declarar 40 minutos: lo que vale es la duración del contenido comprimido."""
+
+    def ffmpeg_falso(self, declarada=2400.0, origen=None, salida=None, errores=""):
+        origen = {"video": 2400.0, "audio": 2400.0} if origen is None else origen
+        salida = {"video": 2400.0, "audio": 2399.8} if salida is None else salida
+        self.llamadas = []
+
+        def flujos(d):
+            return json.dumps({"streams": [{"codec_type": t, "duration": str(v)} for t, v in d.items()]})
+
+        def run(args, **_):
+            self.llamadas.append(args)
+            r = mock.Mock(returncode=0, stdout="", stderr="")
+            if args[0] == "ffprobe" and "format=duration" in args:
+                r.stdout = f"{declarada}\n"
+            elif args[0] == "ffprobe":
+                r.stdout = flujos(salida if args[-1].endswith(".ts") else origen)
+            elif "null" in args:
+                r.stderr = errores
+            else:  # compresión: deja el .ts y su lista como FFmpeg
+                lista = Path(args[-1])
+                (lista.parent / "salida.ts").write_bytes(b"x" * 300)
+                lista.write_text("#EXTM3U\n#EXTINF:6.0,\n#EXT-X-BYTERANGE:300@0\nsalida.ts\n#EXT-X-ENDLIST\n")
+            return r
+        return mock.patch.object(ag.subprocess, "run", side_effect=run)
+
+    def comprimir(self, carpeta="salida", **kwargs):
+        carpeta = self.d / carpeta
+        with self.ffmpeg_falso(**kwargs):
+            return ag.comprimir(self.video, carpeta), carpeta
+
+    def test_grabacion_completa_se_acepta(self):
+        (partes, _), carpeta = self.comprimir()
+        self.assertEqual([p["nombre"] for p in partes], ["parte-00.ts"])
+        self.assertTrue((carpeta / "manifiesto.json").exists())
+        self.assertFalse((carpeta / "manifiesto.json.tmp").exists())
+        self.assertTrue(any("null" in a for a in self.llamadas))  # se decodificó entero
+
+    def test_declara_40_minutos_pero_tiene_20_se_rechaza_y_no_deja_nada(self):
+        with self.assertRaisesRegex(ag.ErrorAgente, "Grabación incompleta: el video dura 1200 s"):
+            self.comprimir(salida={"video": 1199.5, "audio": 1199.2})
+        carpeta = self.d / "salida"
+        self.assertEqual(sorted(p.name for p in carpeta.iterdir()), [])  # ni partes, ni lista, ni manifiesto
+
+    def test_audio_incompleto_o_faltante_se_rechaza(self):
+        with self.assertRaisesRegex(ag.ErrorAgente, "el audio dura 1800 s"):
+            self.comprimir(salida={"video": 2400.0, "audio": 1800.0})
+        with self.assertRaisesRegex(ag.ErrorAgente, "no tiene audio"):
+            self.comprimir(salida={"video": 2400.0})
+
+    def test_original_sin_audio_no_exige_audio(self):
+        (partes, _), _ = self.comprimir(origen={"video": 2400.0}, salida={"video": 2400.0})
+        self.assertEqual(len(partes), 1)
+
+    def test_tolerancia_sin_falsos_rechazos(self):
+        self.comprimir("justo", salida={"video": 2400.0 - ag.TOLERANCIA_DURACION_SEG, "audio": 2399.5})
+        with self.assertRaises(ag.ErrorAgente):
+            self.comprimir("pasado", salida={"video": 2400.0 - ag.TOLERANCIA_DURACION_SEG - 0.5, "audio": 2399.5})
+
+    def test_errores_al_decodificar_se_rechaza(self):
+        with self.assertRaisesRegex(ag.ErrorAgente, "tiene errores"):
+            self.comprimir(errores="[h264 @ 0x1] error while decoding MB 3 7")
+        self.assertFalse((self.d / "salida" / "manifiesto.json").exists())
+
+    def test_rechazo_en_procesar_no_consulta_registrar_ni_sube(self):
+        servidor = mock.Mock()
+        servidor.post.side_effect = lambda ruta, datos=None: {"resultado": "autorizada"} if ruta == "consultar" else self.fail(ruta)
+        with self.ffmpeg_falso(salida={"video": 1199.5, "audio": 1199.2}), mock.patch.object(ag, "subir_parte") as subir:
+            with self.assertRaises(ag.ErrorAgente):
+                ag.procesar(servidor, self.video, self.trabajo)
+        subir.assert_not_called()
+        self.assertEqual([c.args[0] for c in servidor.post.call_args_list], ["consultar"])
+
+
 class ProbarArchivo(Base):
     def test_no_se_conecta_a_nada(self):
         partes = [{"nombre": "parte-00.ts", "inicio": 0, "bytes": 1000}]
