@@ -14,9 +14,6 @@
         {% endif %}
         <div class="seccion-encabezado videos-encabezado">
             <h1>Videos On Demand</h1>
-            {% if usuario.es_admin %}
-            <a class="btn btn-secundario-claro" href="/videos/configuracion">Elegir qué horarios se graban</a>
-            {% endif %}
         </div>
         <p class="subtitle">Accedé a tus clases grabadas durante las 24 horas posteriores a su publicación.</p>
 
@@ -49,10 +46,22 @@
         <section class="panel grabar-clase" aria-labelledby="titulo-grabar">
             <h2 id="titulo-grabar">Grabar una nueva clase</h2>
             <p class="subtitle">Grabá una clase de yoga, pilates, estiramientos o cualquier otra actividad, sin necesidad de
-                incluirla en la planificación. Una vez que prepares la grabación, tendrás 3 horas para comenzar a grabar con
-                Zoom. El video se publicará automáticamente y estará disponible durante 24 horas.</p>
+                incluirla en la planificación. El video se publica solo y queda disponible durante 24 horas.</p>
             {% if tipos %}
-            <form method="post" action="/videos/grabaciones" class="horario-form form-plano form-grabacion">
+            <ol class="pasos-grabar">
+                <li>Completá los datos y tocá <strong>Empezar a grabar</strong>: Just Show Up registra la clase y abre Zoom.
+                    Si el navegador pregunta, elegí <strong>Abrir zoom.us</strong>.</li>
+                <li>En Zoom, tocá <strong>Unirse</strong> para entrar a tu sala personal.</li>
+                <li>Tocá <strong>Grabar</strong> (⌘⇧R en Mac, Alt+R en Windows). Si Zoom pregunta, elegí grabar en esta
+                    computadora.</li>
+                <li>Al terminar, tocá <strong>Finalizar la reunión para todos</strong> y dejá la computadora prendida unos
+                    minutos: el video se procesa y se publica solo.</li>
+            </ol>
+            <p class="nota grabar-nota">Hacelo en la computadora donde está instalado el programa de Just Show Up. Just Show Up
+                no puede ver si Zoom está grabando: la clase figura como «Pendiente de grabación» hasta que el programa
+                recibe el video. Tenés 3 horas para empezar a grabar.</p>
+            <form method="post" action="/videos/grabaciones" class="horario-form form-plano form-grabacion" id="form-grabar"
+                  onsubmit="">
                 <label>
                     Nombre de la clase
                     <input name="titulo" type="text" required minlength="3" maxlength="{{ titulo_max }}"
@@ -71,7 +80,14 @@
                     Descripción (opcional)
                     <textarea name="descripcion" maxlength="{{ descripcion_max }}" rows="3"></textarea>
                 </label>
-                <button type="submit" class="btn btn-tactil" data-cargando="Preparando…">Preparar clase</button>
+                <label>
+                    ID personal de reunión de Zoom
+                    <input id="zoom-id" type="text" inputmode="numeric" autocomplete="off" required
+                           pattern="[0-9 ]{9,14}" placeholder="Ej.: 123 456 7890" />
+                    <span class="nota">Está en Zoom, pestaña Reuniones: «ID personal de la reunión». Se guarda solo en este
+                        navegador.</span>
+                </label>
+                <button type="submit" class="btn btn-tactil">Empezar a grabar</button>
             </form>
             <p class="nota grabar-nota">Importante: para evitar confusiones, no comiences esta grabación dentro de los 15 minutos
                 anteriores o posteriores al inicio de una de tus clases programadas. Si lo hacés, el video no se publicará
@@ -96,6 +112,7 @@
                 {% if g.estado == 'publicada' and g.id_video %}
                 <a class="btn btn-chico btn-secundario-claro" href="/videos/{{ g.id_video }}">Ver video</a>
                 {% elif g.estado == 'esperando' %}
+                <a class="btn btn-chico abrir-zoom" href="#" hidden>Abrir Zoom</a>
                 <form method="post" action="/videos/grabaciones/{{ g.id }}/cancelar">
                     <button type="submit" class="btn btn-chico btn-secundario-claro" data-cargando="Cancelando…">Cancelar</button>
                 </form>
@@ -105,6 +122,53 @@
         </ul>
         {% endif %}
         {% include "_envio_unico.html" %}
+        <script>
+            // Zoom se abre con el ID personal de la profesora (guardado solo en este navegador); la grabación la inicia
+            // ella en Zoom. Recién cuando la base confirma la clase registrada se abre Zoom.
+            (function () {
+                var CLAVE = "jsu_zoom_id";
+                var leer = function () { try { return localStorage.getItem(CLAVE) || ""; } catch (e) { return ""; } };
+                var enlace = function (id) { return "zoommtg://zoom.us/join?action=join&confno=" + id; };
+                var guardado = leer();
+                document.querySelectorAll(".abrir-zoom").forEach(function (a) {
+                    if (guardado) { a.href = enlace(guardado); a.hidden = false; }
+                });
+                var form = document.getElementById("form-grabar");
+                if (!form) return;
+                var campo = document.getElementById("zoom-id");
+                campo.value = guardado;
+                form.addEventListener("submit", function (e) {
+                    e.preventDefault();
+                    var id = campo.value.replace(/\D/g, "");
+                    if (!/^\d{9,11}$/.test(id)) {
+                        campo.setCustomValidity("Escribí tu ID personal de reunión de Zoom (de 9 a 11 números).");
+                        campo.reportValidity();
+                        return;
+                    }
+                    if (form.dataset.enviando) return;
+                    form.dataset.enviando = "1";
+                    try { localStorage.setItem(CLAVE, id); } catch (err) {}
+                    var boton = form.querySelector("button[type=submit]");
+                    boton.disabled = true;
+                    boton.textContent = "Registrando…";
+                    fetch(form.action, { method: "POST", body: new FormData(form) }).then(function (r) {
+                        var destino = new URL(r.url);
+                        if (destino.searchParams.get("ok") === "1") {
+                            window.location.href = enlace(id);  // abre Zoom
+                            setTimeout(function () { window.location.href = destino.pathname + destino.search; }, 1500);
+                        } else {
+                            window.location.href = destino.pathname + destino.search;
+                        }
+                    }).catch(function () {
+                        delete form.dataset.enviando;
+                        boton.disabled = false;
+                        boton.textContent = "Empezar a grabar";
+                        alert("No pudimos registrar la clase. Revisá tu conexión y probá de nuevo.");
+                    });
+                });
+                campo.addEventListener("input", function () { campo.setCustomValidity(""); });
+            })();
+        </script>
         {% endif %}
     </main>
 </body>

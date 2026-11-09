@@ -231,54 +231,29 @@ class Configuracion(unittest.TestCase):
         p.start()
         self.addCleanup(p.stop)
 
-    def test_solo_la_administradora(self):
-        for usuario in (ALUMNA, PROFESORA):
+    def test_la_configuracion_de_horarios_ya_no_se_muestra(self):
+        # se retiró de la pantalla (09/11): redirige a Videos sin leer ni cambiar nada de lo guardado
+        for usuario in (ADMIN, PROFESORA, ALUMNA):
             self.como(usuario)
-            self.assertEqual(self.client.get("/videos/configuracion", follow_redirects=False).status_code, 303)
-            self.assertEqual(self.client.post("/videos/configuracion/1", data={"activa": "true"}, follow_redirects=False).status_code, 303)
-        self.assertNotIn("video_programar", dict(self.sb.llamadas))
+            self.sb.llamadas.clear()
+            r = self.client.get("/videos/configuracion", follow_redirects=False)
+            self.assertEqual((r.status_code, r.headers["location"]), (303, "/videos"))
+            self.assertIn(self.client.post("/videos/configuracion/1", data={"activa": "true"},
+                                           follow_redirects=False).status_code, (404, 405))
+            self.assertFalse({"videos_configuracion", "video_programar"} & {n for n, _ in self.sb.llamadas})
 
-    def test_ordena_por_dia_y_muestra_el_estado(self):
-        self.como(ADMIN)
-        html = self.client.get("/videos/configuracion").text
-        self.assertLess(html.index("Yoga"), html.index("Pilates"))
-        self.assertIn("Miércoles 08:00", html)
-        self.assertIn("Se graba", html)
-        self.assertIn("Duración no admitida", html)
-
-    def test_activar_y_desactivar(self):
-        self.como(ADMIN)
-        self.client.post("/videos/configuracion/1", data={"activa": "true"}, follow_redirects=False)
-        self.assertEqual(self.sb.llamadas[-1], ("video_programar", {"p_id_horario": 1, "p_activa": True}))
-        r = self.client.post("/videos/configuracion/2", follow_redirects=False)
-        self.assertEqual(self.sb.llamadas[-1], ("video_programar", {"p_id_horario": 2, "p_activa": False}))
-        self.assertIn("ok=1", r.headers["location"])
-
-    def test_rechazo_muestra_el_motivo(self):
-        self.como(ADMIN)
-        self.sb.respuestas["video_programar"] = {"resultado": "duracion_no_valida"}
-        r = self.client.post("/videos/configuracion/3", data={"activa": "true"}, follow_redirects=False)
-        self.assertIn("ok=0", r.headers["location"])
-
-    def test_ultimas_grabaciones_muestra_estado_errores_y_reintentos(self):
-        self.como(ADMIN)
-        html = self.client.get("/videos/configuracion").text
-        for texto in ("Últimas grabaciones", "Con error, se reintenta", "3 intentos", "Vencido, falta borrar archivos",
-                      "Limpieza (2 intentos)", "Siguen en Storage"):
-            self.assertIn(texto, html)
-        self.assertNotIn("secreto1", html)
-        self.assertNotIn("supabase.co", html)
+    def test_nadie_ve_el_boton_de_horarios(self):
+        for usuario in (ADMIN, PROFESORA, ALUMNA):
+            self.como(usuario)
+            html = self.client.get("/videos").text
+            self.assertNotIn("/videos/configuracion", html)
+            self.assertNotIn("Elegir qué horarios se graban", html)
 
     def test_estados_de_las_grabaciones(self):
         base = {"nunca_publicado": False, "vencido": False}
         self.assertEqual(videos._estado_grabacion({**base, "estado": "eliminado"})[0], "Vencido, archivos borrados")
         self.assertEqual(videos._estado_grabacion({**base, "estado": "eliminado", "nunca_publicado": True})[0], "Abandonada, sin publicar")
         self.assertEqual(videos._estado_grabacion({**base, "estado": "publicado"})[0], "Publicado")
-
-    def test_solo_la_administradora_ve_el_acceso(self):
-        for usuario, ve in ((ADMIN, True), (PROFESORA, False), (ALUMNA, False)):
-            self.como(usuario)
-            self.assertEqual("/videos/configuracion" in self.client.get("/videos").text, ve)
 
 
 class Mensajes(unittest.TestCase):
@@ -650,12 +625,23 @@ class GrabacionesIndependientes(unittest.TestCase):
             r = self.client.get("/videos")
             self.assertEqual(r.status_code, 200)
             for texto in ("Grabar una nueva clase", 'action="/videos/grabaciones"', "Nombre de la clase", "Tipo de clase",
-                          '<option value="5">Yoga</option>', '<option value="6">Pilates</option>', "Preparar clase",
+                          '<option value="5">Yoga</option>', '<option value="6">Pilates</option>', "Empezar a grabar",
                           "Mis clases grabadas", "Yoga suave", "Pendiente de grabación",
                           "Tenés tiempo hasta las 10:00 para comenzar a grabar.", "/videos/grabaciones/3/cancelar",
                           'href="/videos/9">Ver video', "Accedé a tus clases grabadas durante las 24 horas posteriores",
                           "una de tus clases programadas"):
                 self.assertIn(texto, r.text)
+
+    def test_empezar_a_grabar_explica_los_pasos_y_no_promete_que_graba(self):
+        self.como(PROFESORA)
+        html = self.client.get("/videos").text
+        for texto in ("Abrir zoom.us", "Unirse", "Grabar", "Finalizar la reunión para todos", "ID personal de reunión de Zoom",
+                      "zoommtg://zoom.us/join?action=join&confno=", 'class="btn btn-chico abrir-zoom"',
+                      "no puede ver si Zoom está grabando"):
+            self.assertIn(texto, html)
+        self.assertNotIn("Grabando", html)
+        campo = html[html.index('id="zoom-id"') - 200:html.index('id="zoom-id"') + 200]
+        self.assertNotIn("name=", campo.split("<input")[-1].split(">")[0])  # el ID de Zoom no se manda al servidor
 
     def test_la_alumna_no_ve_el_formulario_ni_se_consultan_grabaciones(self):
         self.sb.llamadas.clear()
@@ -689,7 +675,7 @@ class GrabacionesIndependientes(unittest.TestCase):
 
     def test_mensajes_de_la_base(self):
         self.como(PROFESORA)
-        for resultado, texto in (("sin_computadora", "computadora autorizada"), ("ya_hay_una", "Ya ten%C3%A9s una grabaci%C3%B3n")):
+        for resultado, texto in (("sin_computadora", "computadora autorizada"), ("ya_hay_una", "Ya ten%C3%A9s una clase esperando")):
             self.sb.respuestas["grabacion_independiente_crear"] = {"resultado": resultado}
             r = self.client.post("/videos/grabaciones", data={"titulo": "Yoga suave", "id_tipo_clase": "5"}, follow_redirects=False)
             self.assertIn("ok=0", r.headers["location"])

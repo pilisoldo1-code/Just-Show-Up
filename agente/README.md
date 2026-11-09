@@ -16,8 +16,9 @@ grabación real de Zoom Básico de 72 s publicada sola). No se probó una grabac
 
 ## Antes de instalar
 
-La administradora activa en Just Show Up qué horarios se graban: Videos On Demand > "Elegir qué horarios se graban".
-Lo que no esté activado no se comprime ni se sube.
+Desde el 09/11 se graba solo con «Empezar a grabar» en Videos On Demand (grabación independiente): la profesora registra
+la clase, Just Show Up abre Zoom y ella toca «Unirse» y «Grabar». Ya no hay horarios que activar. Lo que no tenga una
+clase registrada no se comprime ni se sube.
 
 ## Instalación (una sola vez)
 
