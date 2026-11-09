@@ -341,6 +341,11 @@ ficticio de la compradora (siempre aprueba).
 
 ## 8. Videos On Demand (paso 4) — decisiones e investigación
 
+> **Actualizado 03/11 (Pilar): el pedido cambió.** Ya no es carga manual: la grabación de Zoom Basic se sube sola con un
+> programa local y, por ahora, los archivos van a Supabase Storage divididos en partes. Mux gratuito sigue en evaluación
+> y sin activar. Rama `feature/videos-on-demand`; estado y detalle en `CLAUDE.md` («Videos On
+> Demand»). Lo que sigue abajo es la decisión anterior del 27/10 y queda como referencia.
+
 - **Objetivo**: la profesora sube la grabación de una clase; **todas las usuarias con rol alumna**
   la ven **dentro de Just Show Up durante 24 h desde la publicación**; al vencer se oculta, se
   corta el acceso (no alcanza con guardar el enlace) y el archivo se elimina automáticamente, sin

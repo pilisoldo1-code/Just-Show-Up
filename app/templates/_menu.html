@@ -25,6 +25,7 @@
     ("/profesora/clases", "Asistencias", ruta.startswith("/profesora/clases")),
     ("/profesora/alumnas", "Alumnas", ruta.startswith("/profesora/alumnas")),
     ("/profesora/estadisticas", "Estadísticas", ruta.startswith("/profesora/estadisticas")),
+    ("/videos", "Videos On Demand", ruta.startswith("/videos")),
 ] %}
 {% else %}
 {% set secciones = [
@@ -32,6 +33,7 @@
     ("/mis-inscripciones", "Mis inscripciones", ruta.startswith("/mis-inscripciones")),
     ("/mi-historial", "Mi historial", ruta.startswith("/mi-historial")),
     ("/mis-facturas", "Mis facturas", ruta.startswith("/mis-facturas")),
+    ("/videos", "Videos On Demand", ruta.startswith("/videos")),
 ] %}
 {% endif %}
 <header class="menu">
@@ -57,6 +59,8 @@
             <div class="cuenta-opciones">
                 {% if usuario.empresa_nombre %}<span class="cuenta-empresa">{{ usuario.empresa_nombre }}</span>{% endif %}
                 <a href="/perfil">Mi perfil</a>
+                {# Acá y no en las secciones: una décima sección desbordaba el header de la administradora en escritorio #}
+                {% if usuario.es_admin and not usuario.es_superadmin %}<a href="/videos">Videos On Demand</a>{% endif %}
                 <form action="/logout" method="post">
                     <button type="submit">Cerrar sesión</button>
                 </form>

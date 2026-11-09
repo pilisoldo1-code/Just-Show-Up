@@ -6,15 +6,16 @@ from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import urlencode
 
-from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
-from app import auth, clases, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones
-from app.auth import (ErrorAuth, Redirigir, Usuario, requiere_admin, requiere_alumna, requiere_login, requiere_profesora,
-                      requiere_superadmin)
+from app import auth, clases, entorno, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones, videos
+from app.auth import (ErrorAuth, Redirigir, Usuario, requiere_admin, requiere_alumna, requiere_espectadora, requiere_login,
+                      requiere_profesora, requiere_superadmin)
 from app.clases import DIAS_ORDEN
 from app import demostracion, tipos_clase
 
@@ -2242,3 +2243,210 @@ def baja_admin_confirmar(request: Request, empresa_id: int, persona_id: str, mot
                                   f"/admin/empresas/{empresa_id}", True, MSG_BAJA[r["resultado"]], motivo,
                                   409 if r["resultado"] == "cambio" else 400)
     return _volver_empresas(False, MSG_BAJA.get(r.get("resultado"), auth.MSG_GENERICO), empresa_id)
+
+
+# ---------- Videos On Demand ----------
+
+@app.get("/videos")
+def videos_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_espectadora)):
+    grabaciones, tipos, sb = [], [], None
+    try:
+        sb = _sb(usuario)
+        lista = videos.disponibles(sb)
+    except Exception:
+        logging.exception("No se pudieron cargar los videos")
+        lista, aviso, ok = [], "No pudimos cargar los videos. Probá de nuevo.", 0
+    if usuario.es_docente and sb is not None:
+        try:  # un error acá no tiene que impedir ver la biblioteca
+            grabaciones, tipos = videos.mis_grabaciones(sb), videos.tipos_para_grabar(sb)
+        except Exception:
+            logging.exception("No se pudieron cargar las grabaciones independientes")
+    return _render(request, "videos.html", usuario, videos=lista, grabaciones=grabaciones, tipos=tipos, aviso=aviso,
+                   aviso_ok=bool(ok), titulo_max=videos.TITULO_MAX, descripcion_max=videos.DESCRIPCION_MAX)
+
+
+# Grabaciones independientes: contenido grabado solo para la biblioteca (sin horario, clase ni reserva).
+@app.post("/videos/grabaciones")
+def videos_grabacion_crear(titulo: str = Form(""), id_tipo_clase: str = Form(""), descripcion: str = Form(""),
+                           usuario: Usuario = Depends(requiere_profesora)):
+    try:
+        resultado, hora = videos.crear_grabacion(_sb(usuario), titulo, id_tipo_clase, descripcion)
+    except Exception:
+        logging.exception("No se pudo preparar la grabación independiente")
+        resultado, hora = None, ""
+    mensaje = videos.MSG_GRABACION.get(resultado, auth.MSG_GENERICO).format(hora=hora)
+    return RedirectResponse(url="/videos?" + urlencode({"ok": int(resultado == "ok"), "aviso": mensaje}), status_code=303)
+
+
+@app.post("/videos/grabaciones/{grabacion_id}/cancelar")
+def videos_grabacion_cancelar(grabacion_id: int, usuario: Usuario = Depends(requiere_profesora)):
+    try:
+        resultado = videos.cancelar_grabacion(_sb(usuario), grabacion_id)
+    except Exception:
+        logging.exception("No se pudo cancelar la grabación independiente")
+        resultado = None
+    clave = "cancelada" if resultado == "ok" else resultado
+    return RedirectResponse(url="/videos?" + urlencode({"ok": int(resultado == "ok"),
+                                                         "aviso": videos.MSG_GRABACION.get(clave, auth.MSG_GENERICO)}),
+                            status_code=303)
+
+
+# Antes de /videos/{video_id}: si no, «configuracion» se toma como un id.
+@app.get("/videos/configuracion")
+def videos_configuracion(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_admin)):
+    try:
+        sb = _sb(usuario)
+        horarios, grabaciones = videos.configuracion(sb), videos.ultimas_grabaciones(sb)
+    except Exception:
+        logging.exception("No se pudo cargar la configuración de videos")
+        horarios, grabaciones, aviso, ok = [], [], "No pudimos cargar la configuración. Probá de nuevo.", 0
+    return _render(request, "videos_configuracion.html", usuario, horarios=horarios, grabaciones=grabaciones,
+                   aviso=aviso, aviso_ok=bool(ok))
+
+
+@app.post("/videos/configuracion/{horario_id}")
+def videos_programar(horario_id: int, activa: bool = Form(False), usuario: Usuario = Depends(requiere_admin)):
+    try:
+        resultado = videos.programar(_sb(usuario), horario_id, activa)
+    except Exception:
+        logging.exception("No se pudo guardar la configuración de videos")
+        resultado = None
+    query = urlencode({"ok": int(resultado == "ok"), "aviso": videos.MSG_PROGRAMAR.get(resultado, auth.MSG_GENERICO)})
+    return RedirectResponse(url=f"/videos/configuracion?{query}", status_code=303)
+
+
+@app.get("/videos/{video_id}")
+def video_ver(request: Request, video_id: int, usuario: Usuario = Depends(requiere_espectadora)):
+    try:
+        video = videos.detalle(_sb(usuario), video_id)
+    except Exception:
+        logging.exception("No se pudo cargar el video")
+        video = None
+    if video is None:
+        return RedirectResponse(url="/videos?" + urlencode({"aviso": videos.MSG_NO_DISPONIBLE}), status_code=303)
+    return _render(request, "video.html", usuario, video=video)
+
+
+@app.get("/videos/{video_id}/miniatura.jpg")
+def video_miniatura(video_id: int, usuario: Usuario = Depends(requiere_espectadora)):
+    try:
+        datos = videos.miniatura(_sb(usuario), video_id)
+    except Exception:
+        logging.exception("No se pudo leer la miniatura")
+        datos = None
+    if datos is None:  # sin miniatura, de otra empresa o vencido: la tarjeta muestra el fondo con el ícono
+        return Response(status_code=404, headers={"Cache-Control": "no-store"})
+    return Response(content=datos, media_type="image/jpeg",
+                    headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+
+
+@app.post("/videos/{video_id}/iniciar")
+def video_iniciar(video_id: int, usuario: Usuario = Depends(requiere_espectadora)):
+    try:
+        estado = videos.iniciar(_sb(usuario), video_id)
+    except Exception:
+        logging.exception("No se pudo iniciar la reproducción")
+        return Response(status_code=503)
+    return Response(status_code=204 if estado == "ok" else videos.CODIGOS_REPRODUCCION.get(estado, 404))
+
+
+@app.post("/videos/{video_id}/progreso")
+def video_progreso(video_id: int, segundos: int = Form(0), usuario: Usuario = Depends(requiere_espectadora)):
+    try:
+        estado = videos.progreso(_sb(usuario), video_id, segundos)
+    except Exception:
+        logging.exception("No se pudo guardar el progreso")
+        return Response(status_code=503)
+    return Response(status_code=204 if estado == "ok" else videos.CODIGOS_REPRODUCCION.get(estado, 404))
+
+
+@app.get("/videos/{video_id}/lista.m3u8")
+def video_lista_hls(video_id: int, usuario: Usuario = Depends(requiere_espectadora)):
+    try:
+        estado, lista = videos.lista_para_reproducir(_sb(usuario), video_id)
+    except Exception:
+        logging.exception("No se pudo preparar la reproducción")
+        return Response(status_code=503)
+    if estado != "ok":
+        return Response(status_code=videos.CODIGOS_REPRODUCCION.get(estado, 404))
+    return Response(content=lista, media_type="application/vnd.apple.mpegurl")
+
+
+class VideoConsulta(BaseModel):
+    inicio: str
+    duracion_seg: int
+
+
+class VideoRegistro(BaseModel):
+    inicio: str
+    huella: str
+    duracion_seg: int
+    tamano_bytes: int
+    partes: list[dict]
+    lista_hls: str
+    miniatura: str | None = None  # JPEG en base64, opcional: si no sirve se descarta y el registro sigue
+
+
+class VideoFallo(BaseModel):
+    mensaje: str = ""
+
+
+def _agente(request: Request) -> str:
+    """id de la profesora dueña del token. El programa, este servidor y la base tienen que estar en el mismo entorno."""
+    entorno_pedido = request.headers.get("x-video-entorno", "")
+    if not entorno.servidor_admite(entorno_pedido):
+        raise HTTPException(status_code=403, detail="Entorno no autorizado")
+    id_profesora = videos.identificar_agente(request.headers.get("authorization", ""), entorno_pedido)
+    if id_profesora is None:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    return id_profesora
+
+
+def _video_del_agente(video_id: int, id_profesora: str) -> dict:
+    video = videos.video_de_agente(video_id, id_profesora)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video no encontrado")
+    return video
+
+
+@app.post("/api/videos/agente/entorno")
+def video_agente_entorno(request: Request, _: str = Depends(_agente)):
+    return {"entorno": request.headers.get("x-video-entorno", "")}
+
+
+@app.post("/api/videos/agente/consultar")
+def video_agente_consultar(datos: VideoConsulta, id_profesora: str = Depends(_agente)):
+    return videos.consultar(id_profesora, datos.inicio, datos.duracion_seg)
+
+
+@app.post("/api/videos/agente/registrar")
+def video_agente_registrar(datos: VideoRegistro, id_profesora: str = Depends(_agente)):
+    return videos.registrar(id_profesora, datos.model_dump())
+
+
+@app.post("/api/videos/agente/{video_id}/urls-subida")
+def video_agente_urls(video_id: int, id_profesora: str = Depends(_agente)):
+    return videos.urls_subida(_video_del_agente(video_id, id_profesora))
+
+
+@app.post("/api/videos/agente/{video_id}/publicar")
+def video_agente_publicar(video_id: int, id_profesora: str = Depends(_agente)):
+    r = videos.publicar(_video_del_agente(video_id, id_profesora), id_profesora)
+    videos.limpiar_sin_fallar()
+    return r
+
+
+@app.post("/api/videos/agente/{video_id}/error")
+def video_agente_error(video_id: int, datos: VideoFallo, id_profesora: str = Depends(_agente)):
+    videos.registrar_error(video_id, id_profesora, datos.mensaje)
+    return {"resultado": "ok"}
+
+
+@app.get("/api/videos/limpieza")
+def video_limpieza(request: Request):
+    secreto = os.environ.get("CRON_SECRET")
+    if not secreto:
+        return Response(status_code=503)
+    if not videos.secreto_valido(request.headers.get("authorization", ""), secreto):
+        return Response(status_code=401)
+    return videos.limpiar()

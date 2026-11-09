@@ -25,8 +25,8 @@ Mercado Pago y Videos On Demand y las ideas a evaluar. **Orden de trabajo (actua
    `GUIA_DEFENSA_MERCADO_PAGO.md`; detalle en `CONTINUIDAD_PROYECTO.md` §7. **Theta es la plataforma de
    la defensa; la credencial de prueba está en Supabase Vault (no en Vercel).** Desde el PR #23 solo
    `alumna@prueba.invalid` puede iniciar un pago; el rediseño de la sección «Pago» (PR #24) está en theta.
-4. Videos On Demand: Zoom gratuito (~40 min, carga manual) + Mux gratuito si pasa la prueba de
-   reproducción firmada.
+4. Videos On Demand: **en desarrollo** en la rama `feature/videos-on-demand` (Pilar). Cambió la decisión del 27/10:
+   ahora es automático desde Zoom Basic, con Supabase Storage; Mux gratuito queda como plan B (ver Estado actual).
 
 Ideas pendientes **para evaluar (no aprobadas)**: notificaciones de cancelación, magic links, gráficas en
 Estadísticas, revisión integral para celulares (`CONTINUIDAD_PROYECTO.md` §11). El cobro del 25 % por inasistencia ya
@@ -506,6 +506,112 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   cambiarla** (no está en su permiso de UPDATE por columna). La profesora la carga en el alta o
   después con "Cargar/Corregir cédula" en Alumnas (función `actualizar_cedula`, verifica rol;
   vacía = quitarla).
+- **Videos On Demand (desarrollo de Pilar en `feature/videos-on-demand`, continuado por Julieta en
+  `videos-on-demand-integracion`; integrado en `main` el 09/11)**. **Las 3 migraciones se aplicaron en producción el
+  09/11** como `20261109174154 videos_on_demand`, `20261109174223 videos_miniaturas` y
+  `20261109174346 videos_grabaciones_independientes`, con respaldo previo verificado restaurándolo en el Supabase local
+  (`2026-11-09 antes de Videos On Demand`); los 45 objetos del módulo quedaron idénticos a los archivos del repo.
+  **Arquitectura en producción**: theta (Vercel de Pilar, sin acceso a sus variables) MUESTRA los videos y amber
+  (Vercel de Julieta, Hobby) RECIBE las subidas del programa local: `VIDEOS_ENTORNO` y `CRON_SECRET` están solo en
+  amber, que corre el mismo código de `main` contra la misma base. En theta las rutas del programa local responden 403
+  (sin `VIDEOS_ENTORNO`) y su cron diario responde 503 (sin `CRON_SECRET`): es lo previsto. amber no se despliega solo
+  (su GitHub App no tiene permiso): después de cada cambio del módulo, `vercel deploy --prod` desde una copia limpia de
+  `main`. **Pruebas reales hechas el 08 y 09/11 en el proyecto de prueba
+  `jsu-videos-test`** (organización Free aparte, datos ficticios, costo $0): FFmpeg 9.0.2 con un video de 40 min (3 partes,
+  114 MB), subida a Storage y publicación, reproducción en Chromium y en Safari de iPhone, accesos entre empresas,
+  vencimiento natural a las 24 h y limpieza real (archivos y miniatura borrados, registro conservado), y una grabación
+  **real de Zoom Básico de 72 s** detectada, comprimida, con miniatura y publicada sola por el agente (con el mínimo de
+  duración bajado temporalmente con `videos_prueba_datos.py margen` y restaurado después). **No verificado**: una
+  grabación real de Zoom de 34–41 min (corte de Zoom Básico a los 40 min) y Android; Julieta decidió no hacer la prueba
+  larga. Mux Free sigue en evaluación.
+  - **Selección**: la administradora activa los horarios en `/videos/configuracion` (`video_programacion`; solo
+    horarios de `duracion_clase_min`, 40). Después de cada clase es automático. Lo no activado no se comprime ni se sube.
+  - **Flujo**: `agente/agente_videos.py`, en la computadora de la profesora, detecta el `.mp4`, consulta
+    `/api/videos/agente/consultar` **antes de comprimir** y, si está autorizada, comprime a ~400 kbps (~120 MB para 40
+    min, estimado), divide en partes de hasta 45 MB y sube con URLs firmadas directo a Storage (Vercel limita los
+    pedidos a 4,5 MB). `video_registrar` y `video_publicar` vuelven a verificar. El programa no lleva claves de
+    Supabase: solo la `url` y un token propio (`scripts/video_agente.py`, que exige `--remoto` fuera de localhost).
+  - **Identificación**: `_video_evaluar` exige una sola clase de esa profesora dentro de ±15 min; si no, no publica.
+    `sin_clase` y `sin_espacio` se reintentan durante 24 h porque las clases se generan a demanda. La empresa sale de la
+    clase, nunca del programa.
+  - **Duración** (desde 20261110): una clase se publica con una grabación de por lo menos 30 min (`clase_min_seg`, o
+    `clase.duracion` − 6 min si es menor) y como máximo `clase.duracion` + 1 min; las independientes, de 1 min a 4 h.
+    Se cambia en `video_parametros`. La biblioteca muestra la duración real.
+  - **Acceso**: 24 h desde `publicado_en`. «Vencido» no es un estado: se calcula con `vence_en`, sin depender del cron.
+    Las URLs duran `min(90 min, restante − 15 s)`: el margen cubre la demora entre calcular y firmar. No se puede borrar lo
+    que un dispositivo ya descargó, ni impedir grabar la pantalla.
+  - **Reproductor**: el video se pide recién al tocar Reproducir (`video_iniciar`); abrir la página no descarga ni
+    cuenta. iPhone usa HLS nativo y el resto `hls.js`: no decidir con `canPlayType`, porque Chrome también responde
+    «maybe». Lista HLS de rangos de bytes sobre pocas partes, firmada al pedirla.
+  - **Consumo (solo una estimación)**: el archivo va directo del proveedor al navegador y **el servidor no ve la
+    transferencia**: `video_reproduccion` (una fila por persona y video) estima por tiempo reproducido, informado por el
+    navegador. Pausar, adelantar o recargar no cuenta como otro inicio. Topes en `video_parametros`: 3 GB por ciclo con
+    margen de 1,25 y 300 MB por persona y video. `dia_inicio_ciclo` tiene que coincidir con la facturación de Supabase.
+    Esto reduce el riesgo, no lo garantiza: superar la cuota puede dar 402 en toda la organización. Por eso existen
+    `VIDEOS_SUPABASE_URL` y `VIDEOS_SUPABASE_SERVICE_KEY`, para guardar los archivos en otra organización.
+  - **El bucket privado `videos-clases` no tiene políticas para usuarias a propósito**: `createSignedUrl` solo necesita
+    `select` en `storage.objects`, así que con esa política una sesión podría firmar URLs con el vencimiento que quiera.
+  - **Limpieza**: `/api/videos/limpieza` (cron diario de Vercel, y al publicar otro video) borra, verifica listando el
+    bucket y marca; el registro se conserva. Los errores quedan en `limpieza_error` y se reintentan primero los que hace
+    más que no se intentan. Las subidas se consideran abandonadas por `actualizado_en`, no por `creado_en`; las nunca
+    publicadas se pueden volver a subir.
+  - **Miniaturas (migración `20261108000000_videos_miniaturas.sql`, sin aplicar todavía)**: el programa local genera con
+    FFmpeg un JPEG de 480x270 al 10 % de la clase (unos 10 KB), después de verificar lo comprimido, y lo manda con el
+    registro; se reutiliza en los reintentos. Es opcional: si falla o no sirve, el video se publica igual y la tarjeta
+    muestra un fondo con el ícono ▶. Se guarda en `video.miniatura` (bytea, JPEG de 1 a 100 KB, lo controla la base) con
+    `video_guardar_miniatura` (solo `service_role`, solo videos «subiendo» de esa profesora) y se lee con la sesión por la
+    misma política que la grabación (empresa activa, publicada, sin vencer): `/videos/{id}/miniatura.jpg`, sin caché. Un
+    trigger la borra al pasar a «eliminado» y si se registra otro archivo para la clase. No toca Storage ni las funciones
+    del módulo. Vuelta atrás: `supabase/pendientes/vuelta_atras_videos_miniaturas.sql` (la del módulo también la quita).
+    Pruebas: `tests/base_local/test_videos_miniaturas_base.py` (33).
+  - **Grabaciones independientes (migración `20261110000000_videos_grabaciones_independientes.sql`, sin aplicar en
+    ningún Supabase todavía)**: contenido grabado solo para la biblioteca, sin horario, clase, reserva ni asistencia.
+    Tabla `grabacion_independiente` (título, `id_tipo_clase` obligatorio y activo de su empresa —catálogo de Tipos de
+    clase, sin aplicar duración, precio ni cupo; trigger `grabacion_tipo_coherente`—, descripción, `vence_espera_en` =
+    creada + 3 h, `cancelada_en`, `inicio_grabacion`); `video.id_clase` pasa a opcional y se suma `video.id_grabacion` (check: exactamente una de las
+    dos). La docente la crea en `/videos` (`grabacion_independiente_crear`: necesita un `video_agente` activo; una sola
+    esperando por profesora) y puede cancelarla mientras espera. `_video_evaluar` suma como candidatas las solicitudes
+    abiertas de esa profesora en cuyo plazo empezó la grabación (o la que ya está atada a ese mismo inicio: reintentos);
+    clase + solicitud a la vez = `clase_ambigua`. Duración entre `independiente_min_seg` y `independiente_max_seg`
+    (1 min a 4 h). `video_registrar` guarda `inicio_grabacion` y desde ahí la solicitud solo acepta esa grabación.
+    `video_publicar` exige `_grabacion_habilitada` (no cancelada, profesora activa en esa empresa). Publicación,
+    vencimiento a las 24 h, limpieza, miniatura, topes y permisos: los de siempre. **El programa local no cambia.** Ojo:
+    con `id_clase` opcional, comparar con `is distinct from` (no `<>`), si no los videos sin clase quedan afuera del
+    espacio ocupado y de la huella repetida. La vuelta atrás
+    (`supabase/pendientes/vuelta_atras_videos_grabaciones_independientes.sql`) trae el texto exacto de las 6 funciones de
+    `20261106000000` y la prueba comprueba que quedan byte a byte (se niega si ya hay videos independientes).
+    **La misma migración adapta las clases programadas a Zoom Básico**: se activa un horario de cualquier duración
+    (`programable` siempre; `duracion_clase_min` ya no se usa) y la grabación (parcial) de una clase se publica entre
+    `least(duración − margen_menos_seg, clase_min_seg)` (30 min) y duración + `margen_mas_seg`. El stash
+    «duracion-minima-30min» quedó superado por esto (no aplicarlo: además pisaría `_video_evaluar`).
+    Pruebas: `tests/base_local/test_videos_independientes_base.py` (124) y `tests.test_videos.GrabacionesIndependientes`.
+  - **Menú**: la administradora tiene Videos en el menú de cuenta y no en las secciones: una décima sección desborda el
+    header a 1120 px. Alumna y profesora lo tienen en sus secciones. No se tocó el CSS del header.
+  - **Borrar cuentas y empresas**: `video_reproduccion.id_usuario` queda vacío y `video_agente` cae en cascada.
+    `empresa_demo.py borrar` borra primero los archivos de Storage, verifica listando el bucket y, si algo falla, corta sin
+    borrar ninguna fila.
+  - **Protección contra producción** (`app/entorno.py`): el programa, el servidor (`VIDEOS_ENTORNO`) y la base
+    (`video_parametros.entorno`) tienen que coincidir. Una base recién migrada queda cerrada. Un entorno `pruebas-...` no
+    corre en Vercel ni contra producción, y el programa solo habla con la red local si no se usa `--produccion`. Producción
+    se reconoce por huellas sha256: no escribir sus identificadores en archivos nuevos. Las huellas están repetidas en
+    `agente/agente_videos.py`, que se instala solo; una prueba comprueba que coincidan.
+  - **Zoom en la Mac**: guarda en `~/Documents/Zoom/«AAAA-MM-DD HH.MM.SS Tema»/videoNNNN.mp4` (más `audioNNNN.m4a` y
+    `recording.conf`); la hora de la carpeta es la del inicio de la grabación. Una grabación con la cámara apagada pesa
+    muy poco (100 KB por minuto): el agente la procesa igual aunque quede bajo `TAMANO_MINIMO_VIDEO`.
+  - **Pruebas reales**: procedimiento en `agente/PRUEBAS_REALES.md`. `scripts/videos_prueba_migrar.py` (sin `--aplicar`
+    solo revisa; exige proyecto vacío y confirmación) y `scripts/videos_prueba_datos.py` leen solo `.env.videos-prueba`,
+    nunca el `.env`. **Sin ejecutar contra Supabase remoto.**
+  - **Errores visibles**: `/videos/configuracion` muestra «Últimas grabaciones» solo a la administradora. Los mensajes
+    pasan por `videos.limpiar_mensaje` (saca URLs firmadas, rutas y tokens). Lo que nunca salió de la computadora, como
+    `no_autorizada`, queda solo en `agente/trabajo/agente.log`.
+  - **Respaldos**: `verificar_despliegue.py` y `restaurar_datos.py` incluyen las tablas si existen, y funcionan antes de la
+    migración. `video_agente` queda afuera a propósito. `descargar_datos.py` está en la carpeta de respaldos, fuera del
+    repo: hay que sumarle `video_programacion`, `video` y `video_reproduccion` a mano.
+  - Pruebas: `python tests/base_local/test_videos_base.py` (155), `tests/base_local/test_videos_prueba_base.py` (27),
+    `tests.test_videos`, `tests.test_agente_videos` y `tests.test_entorno`.
+    Variables nuevas: `CRON_SECRET`, `VIDEOS_ENTORNO` y, si Storage va aparte, las dos `VIDEOS_SUPABASE_*`. Vuelta atrás:
+    `supabase/pendientes/vuelta_atras_videos_on_demand.sql`. **Orden de despliegue: primero la migración y después el
+    merge**: el menú ya muestra la sección y sin las funciones la pantalla da aviso de error.
 - **Cancelación de reserva (hecha)**: "Cancelar reserva" abre un diálogo propio
   (Volver / Confirmar cancelación). Se permite hasta 1 h antes del inicio
   (exactamente 1 h sí). Dentro de la última hora el diálogo muestra el mensaje
@@ -693,10 +799,9 @@ en la web, no solo cambios de esquema.
    Estado actual): PR #15 integrado en `main` el 27/10
    (merge común, `568d551`), desplegado en theta y verificado; migraciones aplicadas en Supabase. Pago con **Mercado Pago Checkout Pro solo en modo de prueba**: paso 3 del
    orden de trabajo (propuesta en `CONTINUIDAD_PROYECTO.md` §7).
-7. **Clases grabadas → "Videos On Demand"** (decidido 27/10): la profesora sube la grabación (Zoom
-   gratuito, carga manual) y todas las alumnas la ven 24 h desde la publicación; alojamiento en Mux
-   gratuito sujeto a validación. Paso 4 del orden de trabajo (`CONTINUIDAD_PROYECTO.md` §8). La
-   suscripción paga original queda fuera por ahora.
+7. **Clases grabadas → "Videos On Demand"** — **en desarrollo** (rama `feature/videos-on-demand`, ver Estado actual):
+   subida automática desde Zoom Basic y 24 h de disponibilidad por empresa. La suscripción paga original queda fuera
+   por ahora.
 8. **Notificaciones y extras** — mails vía Resend (confirmación, recordatorio
    24hs), integración con Google Calendar, automatizaciones con n8n,
    analytics con PostHog.

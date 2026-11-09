@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Videos On Demand</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    {% include "_menu.html" %}
+    <main>
+        <h1>Videos On Demand</h1>
+        <p class="subtitle">Accedé a tus clases grabadas durante las 24 horas posteriores a su publicación.</p>
+
+        {% if usuario.es_admin %}
+        <p class="videos-acciones"><a class="video-volver" href="/videos/configuracion">Elegir qué horarios se graban</a></p>
+        {% endif %}
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        {% if videos %}
+        <div class="videos-lista">
+            {% for v in videos %}
+            {# toda la tarjeta abre el video; si no hay miniatura (o no se puede ver), queda el fondo con el ícono #}
+            <a class="video-card video-card-biblioteca" href="/videos/{{ v.id }}">
+                <div class="video-portada">
+                    <img src="/videos/{{ v.id }}/miniatura.jpg" alt="" loading="lazy" width="480" height="270"
+                         onerror="this.remove()" />
+                    <span class="video-play" aria-hidden="true"></span>
+                </div>
+                <div class="video-textos">
+                    <h2>{{ v.clase }}</h2>
+                    {% if v.independiente %}<span class="badge badge-on video-etiqueta">Clase grabada</span>
+                    <span class="video-dato">{{ v.tipo }}</span>{% endif %}
+                    <span class="video-dato">{{ v.fecha_txt }} · {{ v.hora }}</span>
+                    <span class="video-dato">{{ v.profesora }} · {{ v.duracion_txt }}</span>
+                    <span class="video-restante">{{ v.restante_txt }}</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="vacio">No hay videos disponibles en este momento.</p>
+        {% endif %}
+
+        {% if usuario.es_docente %}
+        <section class="grabaciones-independientes" aria-labelledby="titulo-grabar">
+            <h2 id="titulo-grabar">Grabar una nueva clase</h2>
+            <p class="subtitle">Grabá una clase de yoga, pilates, estiramientos o cualquier otra actividad, sin necesidad de
+                incluirla en la planificación. Una vez que prepares la grabación, tendrás 3 horas para comenzar a grabar con
+                Zoom. El video se publicará automáticamente y estará disponible durante 24 horas.</p>
+            {% if tipos %}
+            <form method="post" action="/videos/grabaciones" class="horario-form form-grabacion">
+                <label>
+                    Nombre de la clase
+                    <input name="titulo" type="text" required minlength="3" maxlength="{{ titulo_max }}"
+                           placeholder="Por ejemplo: Yoga suave para empezar el día" />
+                </label>
+                <label>
+                    Tipo de clase
+                    <select name="id_tipo_clase" required>
+                        <option value="" selected disabled>Elegí un tipo de clase</option>
+                        {% for t in tipos %}
+                        <option value="{{ t.id }}">{{ t.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    Descripción (opcional)
+                    <textarea name="descripcion" maxlength="{{ descripcion_max }}" rows="2"></textarea>
+                </label>
+                <button type="submit" class="btn btn-tactil" data-cargando="Preparando…">Preparar clase</button>
+            </form>
+            <p class="nota">Importante: para evitar confusiones, no comiences esta grabación dentro de los 15 minutos anteriores
+                o posteriores al inicio de una de tus clases programadas. Si lo hacés, el video no se publicará
+                automáticamente.</p>
+            {% else %}
+            <p class="aviso aviso-error">No hay tipos de clase activos en tu empresa. Para grabar una nueva clase, primero
+                tiene que haber al menos un tipo de clase activo en Tipos de clase.</p>
+            {% endif %}
+
+            {% if grabaciones %}
+            <h3>Mis clases grabadas</h3>
+            <ul class="lista-grabaciones">
+                {% for g in grabaciones %}
+                <li class="video-card">
+                    <div>
+                        <strong>{{ g.titulo }}</strong>
+                        {% if g.tipo %}<span class="video-dato">{{ g.tipo }}</span>{% endif %}
+                        <span class="badge {{ g.badge }}">{{ g.estado_txt }}</span>
+                        {% if g.estado == 'esperando' %}<span class="video-dato">Tenés tiempo hasta las {{ g.hasta }} para comenzar a grabar.</span>{% endif %}
+                    </div>
+                    {% if g.estado == 'publicada' and g.id_video %}
+                    <a class="video-volver" href="/videos/{{ g.id_video }}">Ver video</a>
+                    {% elif g.estado == 'esperando' %}
+                    <form method="post" action="/videos/grabaciones/{{ g.id }}/cancelar">
+                        <button type="submit" class="btn btn-secundario-claro btn-tactil" data-cargando="Cancelando…">Cancelar</button>
+                    </form>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </section>
+        {% include "_envio_unico.html" %}
+        {% endif %}
+    </main>
+</body>
+</html>

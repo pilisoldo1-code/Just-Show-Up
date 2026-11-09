@@ -1,0 +1,8 @@
+{
+  "url": "http://127.0.0.1:8000",
+  "entorno": "pruebas-COPIAR_DEL_SERVIDOR",
+  "token": "PEGAR_ACA_EL_TOKEN_DE_ESTA_COMPUTADORA",
+  "carpeta_zoom": "~/Documents/Zoom",
+  "ffmpeg": "ffmpeg",
+  "ffprobe": "ffprobe"
+}

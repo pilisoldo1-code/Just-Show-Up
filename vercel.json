@@ -4,6 +4,9 @@
       "includeFiles": "app/**"
     }
   },
+  "crons": [
+    { "path": "/api/videos/limpieza", "schedule": "17 7 * * *" }
+  ],
   "git": {
     "deploymentEnabled": {
       "**": false,

@@ -160,7 +160,7 @@ h = ca.get("/mis-inscripciones").text
 ok("alumna: menú de alumna (Reservar clases primero), sin enlaces a otro panel",
    re.findall(r'<a href="([^"]+)" class="[^"]*"[^>]*>([^<]+)</a>', h.split('class="menu-links"')[1].split("</nav>")[0])
    == [("/", "Reservar clases"), ("/mis-inscripciones", "Mis inscripciones"), ("/mi-historial", "Mi historial"),
-       ("/mis-facturas", "Mis facturas")] and "Panel de" not in h)
+       ("/mis-facturas", "Mis facturas"), ("/videos", "Videos On Demand")] and "Panel de" not in h)
 
 # ---------- cuenta compartida y dos dispositivos ----------
 A1, r = entrar("Just Show Up", "profesora@prueba.invalid", CLAVE)

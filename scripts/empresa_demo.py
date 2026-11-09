@@ -124,6 +124,10 @@ class BaseSupabase:
             consulta = consulta.eq(k, v)
         consulta.execute()
 
+    def borrar_archivos_video(self, video):
+        from app import videos
+        videos.borrar_archivos(videos.almacen(), video["id_empresa"], video["id"], video["partes"])
+
     def como(self, mail, contrasena, lugar):
         """Ejecuta funciones de la base con la sesión de una persona en un lugar (para facturar como la administradora)."""
         acceso, _ = self.auth.iniciar_sesion(mail, contrasena)
@@ -501,6 +505,17 @@ def crear_superadmin_local(db) -> str | None:
     return contrasena
 
 
+def _hay_videos(db) -> bool:
+    """False solo si la migración de videos todavía no se aplicó; cualquier otro error corta."""
+    try:
+        db.leer("video_parametros", "id")
+    except Exception as e:
+        if "video_parametros" in str(e) and any(c in str(e) for c in ("PGRST205", "42P01", "does not exist")):
+            return False
+        raise
+    return True
+
+
 def borrar(db, guardar_contrasenas=True) -> dict:
     e = _empresa(db)
     if not e:
@@ -520,6 +535,21 @@ def borrar(db, guardar_contrasenas=True) -> dict:
         print("Aviso: la empresa tenía facturas confirmadas de demostración; se borran también.")
     for f in db.leer("resumen_mensual", "id", id_empresa=e2):
         db.actualizar("resumen_mensual", {"reemplaza_a": None}, id=f["id"])
+    if _hay_videos(db):
+        # primero los archivos: si algo falla se corta acá, sin haber borrado ninguna fila
+        for v in db.leer("video", "id, id_empresa, partes, archivo_eliminado_en", id_empresa=e2):
+            if v["id_empresa"] != e2:
+                raise SystemExit("Un video no pertenece a esta empresa: no se borra nada.")
+            if v["archivo_eliminado_en"] is None:
+                db.borrar_archivos_video(v)
+        for tabla in ("video_reproduccion", "video"):
+            db.borrar(tabla, id_empresa=e2)
+        try:  # grabaciones independientes: solo existe si ya se aplicó su migración
+            db.borrar("grabacion_independiente", id_empresa=e2)
+        except Exception as e:
+            if not any(c in str(e) for c in ("PGRST205", "42P01", "does not exist")):
+                raise
+        db.borrar("video_programacion", id_empresa=e2)
     for tabla in ("mp_intento", "pago_anulacion", "pago", "factura_historial", "resumen_mensual_detalle", "resumen_mensual",
                   "asistencia_historial", "asistencia", "listadeespera", "reserva", "baja_docente", "bloqueo", "clase", "horario",
                   "tipo_clase", "sesion_empresa"):
