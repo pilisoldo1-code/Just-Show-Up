@@ -2293,6 +2293,19 @@ def video_ver(request: Request, video_id: int, usuario: Usuario = Depends(requie
     return _render(request, "video.html", usuario, video=video)
 
 
+@app.get("/videos/{video_id}/miniatura.jpg")
+def video_miniatura(video_id: int, usuario: Usuario = Depends(requiere_espectadora)):
+    try:
+        datos = videos.miniatura(_sb(usuario), video_id)
+    except Exception:
+        logging.exception("No se pudo leer la miniatura")
+        datos = None
+    if datos is None:  # sin miniatura, de otra empresa o vencido: la tarjeta muestra el fondo con el ícono
+        return Response(status_code=404, headers={"Cache-Control": "no-store"})
+    return Response(content=datos, media_type="image/jpeg",
+                    headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+
+
 @app.post("/videos/{video_id}/iniciar")
 def video_iniciar(video_id: int, usuario: Usuario = Depends(requiere_espectadora)):
     try:
@@ -2337,6 +2350,7 @@ class VideoRegistro(BaseModel):
     tamano_bytes: int
     partes: list[dict]
     lista_hls: str
+    miniatura: str | None = None  # JPEG en base64, opcional: si no sirve se descarta y el registro sigue
 
 
 class VideoFallo(BaseModel):

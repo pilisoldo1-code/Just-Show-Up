@@ -545,6 +545,15 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     `empresa_demo.py borrar` borra primero los archivos de Storage, verifica listando el bucket y, si algo falla, corta sin
     borrar ninguna fila.
   - **Protección contra producción** (`app/entorno.py`): el programa, el servidor (`VIDEOS_ENTORNO`) y la base
+  - **Miniaturas (migración `20261108000000_videos_miniaturas.sql`, sin aplicar todavía)**: el programa local genera con
+    FFmpeg un JPEG de 480x270 al 10 % de la clase (unos 10 KB), después de verificar lo comprimido, y lo manda con el
+    registro; se reutiliza en los reintentos. Es opcional: si falla o no sirve, el video se publica igual y la tarjeta
+    muestra un fondo con el ícono ▶. Se guarda en `video.miniatura` (bytea, JPEG de 1 a 100 KB, lo controla la base) con
+    `video_guardar_miniatura` (solo `service_role`, solo videos «subiendo» de esa profesora) y se lee con la sesión por la
+    misma política que la grabación (empresa activa, publicada, sin vencer): `/videos/{id}/miniatura.jpg`, sin caché. Un
+    trigger la borra al pasar a «eliminado» y si se registra otro archivo para la clase. No toca Storage ni las funciones
+    del módulo. Vuelta atrás: `supabase/pendientes/vuelta_atras_videos_miniaturas.sql` (la del módulo también la quita).
+    Pruebas: `tests/base_local/test_videos_miniaturas_base.py` (33).
     (`video_parametros.entorno`) tienen que coincidir. Una base recién migrada queda cerrada. Un entorno `pruebas-...` no
     corre en Vercel ni contra producción, y el programa solo habla con la red local si no se usa `--produccion`. Producción
     se reconoce por huellas sha256: no escribir sus identificadores en archivos nuevos. Las huellas están repetidas en

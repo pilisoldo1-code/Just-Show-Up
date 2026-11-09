@@ -4443,6 +4443,62 @@ a.video-card:hover {
     font-weight: 600;
 }
 
+/* biblioteca: miniatura 16:9 de borde a borde con el ícono de reproducción encima; sin miniatura, el fondo */
+.video-card-biblioteca {
+    padding: 0;
+    overflow: hidden;
+    gap: 0;
+}
+
+.video-portada {
+    position: relative;
+    display: block;
+    aspect-ratio: 16 / 9;
+    background: linear-gradient(135deg, #1d2129, #2a2e37);
+}
+
+.video-portada img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.video-play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 56px;
+    height: 56px;
+    margin: -28px 0 0 -28px;
+    border-radius: 50%;
+    background: rgba(15, 17, 21, 0.65);
+    border: 2px solid rgba(255, 255, 255, 0.85);
+}
+
+.video-play::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 55%;
+    transform: translate(-50%, -50%);
+    border-style: solid;
+    border-width: 10px 0 10px 17px;
+    border-color: transparent transparent transparent #fff;
+}
+
+a.video-card-biblioteca:hover .video-play {
+    border-color: var(--accent);
+}
+
+.video-textos {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px 16px;
+}
+
 .video-reproductor {
     display: block;
     width: 100%;

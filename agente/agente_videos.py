@@ -13,6 +13,7 @@ Uso:
     python agente_videos.py --una-vez   # una sola pasada (para el Programador de tareas de Windows)
 """
 import argparse
+import base64
 import hashlib
 import ipaddress
 import json
@@ -34,6 +35,9 @@ AQUI = Path(__file__).resolve().parent
 TAMANO_MAXIMO_PARTE = 45_000_000
 # Diferencia aceptada entre la duración que declara el MP4 y la del contenido que realmente se comprimió.
 TOLERANCIA_DURACION_SEG = 3
+# Miniatura de la biblioteca: un fotograma JPEG de 480x270 (16:9). Es opcional: si falla, el video se publica igual.
+MINIATURA = "miniatura.jpg"
+MINIATURA_MIN_BYTES, MINIATURA_MAX_BYTES = 1000, 102_400
 SEGUNDOS_ESTABLE = 180
 SEGUNDOS_ENTRE_PASADAS = 60
 ESPERAS_REINTENTO_SEG = [60, 300, 900, 3600]
@@ -202,7 +206,7 @@ def duraciones_por_flujo(ruta: Path) -> dict[str, float]:
     return duraciones
 
 
-def verificar_comprimido(origen: Path, comprimido: Path) -> None:
+def verificar_comprimido(origen: Path, comprimido: Path) -> float:
     """Un MP4 cortado puede declarar los 40 minutos completos (si el índice está al principio) y FFmpeg comprime
     sin error solo lo que hay. El .ts comprimido no tiene índice: su duración sale de las marcas de tiempo del
     contenido. Se exige que video y audio duren lo que declara el original y que se decodifique entero sin errores."""
@@ -226,11 +230,39 @@ def verificar_comprimido(origen: Path, comprimido: Path) -> None:
                        capture_output=True, text=True)
     if r.returncode != 0 or r.stderr.strip():
         raise ErrorAgente(f"El video comprimido tiene errores: {r.stderr.strip()[:300]}")
+    return reales["video"]
+
+
+def miniatura_valida(ruta: Path) -> bool:
+    try:
+        datos = ruta.read_bytes()
+    except OSError:
+        return False
+    return MINIATURA_MIN_BYTES <= len(datos) <= MINIATURA_MAX_BYTES and datos[:3] == b"\xff\xd8\xff"
+
+
+def generar_miniatura(comprimido: Path, carpeta: Path, duracion: float) -> bool:
+    """Un fotograma al 10 % de la clase (evita el negro del principio), en 480x270 con bandas si hiciera falta.
+    Nunca corta el procesamiento: si algo falla, no hay miniatura."""
+    destino = carpeta / MINIATURA
+    try:
+        r = subprocess.run([PROGRAMAS["ffmpeg"], "-y", "-v", "error", "-ss", f"{max(1.0, duracion * 0.10):.1f}",
+                            "-i", str(comprimido), "-frames:v", "1", "-vf",
+                            "scale=480:270:force_original_aspect_ratio=decrease,pad=480:270:(ow-iw)/2:(oh-ih)/2,"
+                            "format=yuvj420p", "-q:v", "5", "-update", "1", str(destino)],
+                           capture_output=True, text=True, timeout=120)
+        if r.returncode == 0 and miniatura_valida(destino):
+            return True
+        logging.warning("No se pudo generar la miniatura: %s", r.stderr.strip()[:200])
+    except (OSError, subprocess.SubprocessError) as e:
+        logging.warning("No se pudo generar la miniatura: %s", e)
+    destino.unlink(missing_ok=True)
+    return False
 
 
 def limpiar_intermedios(carpeta: Path) -> None:
     """Borra solo lo que deja `comprimir`, para que un intento fallido no quede a medias."""
-    for archivo in [carpeta / "salida.ts", carpeta / "salida.m3u8", carpeta / "manifiesto.json.tmp",
+    for archivo in [carpeta / "salida.ts", carpeta / "salida.m3u8", carpeta / "manifiesto.json.tmp", carpeta / MINIATURA,
                     *carpeta.glob("parte-*.ts")]:
         archivo.unlink(missing_ok=True)
 
@@ -249,7 +281,8 @@ def comprimir(origen: Path, carpeta: Path) -> tuple[list[dict], str]:
                            capture_output=True, text=True)
         if r.returncode != 0:
             raise ErrorAgente(f"Falló la compresión: {r.stderr.strip()[:300]}")
-        verificar_comprimido(origen, carpeta / "salida.ts")
+        duracion = verificar_comprimido(origen, carpeta / "salida.ts")
+        generar_miniatura(carpeta / "salida.ts", carpeta, duracion)
         partes, lista_hls = dividir_lista(lista.read_text(), "salida.ts")
         cortar_archivo(carpeta / "salida.ts", partes, carpeta)
         (carpeta / "salida.ts").unlink()
@@ -319,12 +352,15 @@ def procesar(servidor: Servidor, video: Path, trabajo: Path) -> tuple[str, int |
     huella = huella_archivo(video)
     carpeta = trabajo / huella
     partes, lista_hls = comprimir(video, carpeta)
-    registro = servidor.post("registrar", {
+    datos = {
         "inicio": inicio, "huella": huella, "duracion_seg": duracion,
         "tamano_bytes": sum(p["bytes"] for p in partes),
         "partes": [{"nombre": p["nombre"], "bytes": p["bytes"]} for p in partes],
         "lista_hls": lista_hls,
-    })
+    }
+    if miniatura_valida(carpeta / MINIATURA):  # opcional: también se reutiliza en los reintentos
+        datos["miniatura"] = base64.b64encode((carpeta / MINIATURA).read_bytes()).decode()
+    registro = servidor.post("registrar", datos)
     if registro["resultado"] != "ok":
         return registro["resultado"], registro.get("id_video")
 

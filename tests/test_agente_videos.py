@@ -422,7 +422,7 @@ class Proteccion(Base):
 class VerificarComprimido(Base):
     """Un MP4 cortado puede declarar 40 minutos: lo que vale es la duración del contenido comprimido."""
 
-    def ffmpeg_falso(self, declarada=2400.0, origen=None, salida=None, errores=""):
+    def ffmpeg_falso(self, declarada=2400.0, origen=None, salida=None, errores="", miniatura=b"\xff\xd8\xff" + b"j" * 4000):
         origen = {"video": 2400.0, "audio": 2400.0} if origen is None else origen
         salida = {"video": 2400.0, "audio": 2399.8} if salida is None else salida
         self.llamadas = []
@@ -439,6 +439,11 @@ class VerificarComprimido(Base):
                 r.stdout = flujos(salida if args[-1].endswith(".ts") else origen)
             elif "null" in args:
                 r.stderr = errores
+            elif "-frames:v" in args:  # miniatura: None = FFmpeg falla
+                if miniatura is None:
+                    r.returncode, r.stderr = 1, "no se pudo extraer el fotograma"
+                else:
+                    Path(args[-1]).write_bytes(miniatura)
             else:  # compresión: deja el .ts y su lista como FFmpeg
                 lista = Path(args[-1])
                 (lista.parent / "salida.ts").write_bytes(b"x" * 300)
@@ -492,6 +497,65 @@ class VerificarComprimido(Base):
                 ag.procesar(servidor, self.video, self.trabajo)
         subir.assert_not_called()
         self.assertEqual([c.args[0] for c in servidor.post.call_args_list], ["consultar"])
+
+
+class Miniatura(VerificarComprimido):
+    def test_se_genera_al_10_por_ciento_en_480x270(self):
+        (_, _), carpeta = self.comprimir()
+        self.assertTrue(ag.miniatura_valida(carpeta / ag.MINIATURA))
+        llamada = next(a for a in self.llamadas if "-frames:v" in a)
+        self.assertEqual(llamada[llamada.index("-ss") + 1], "240.0")  # 10 % de 2400 s
+        self.assertIn("pad=480:270", " ".join(llamada))
+
+    def test_si_falla_el_video_sigue_sin_miniatura(self):
+        (partes, _), carpeta = self.comprimir(miniatura=None)
+        self.assertEqual(len(partes), 1)
+        self.assertTrue((carpeta / "manifiesto.json").exists())
+        self.assertFalse((carpeta / ag.MINIATURA).exists())
+
+    def test_imagen_invalida_se_descarta(self):
+        for mala in (b"GIF89a" + b"x" * 4000, b"\xff\xd8\xff" + b"x" * 200_000, b"\xff\xd8\xff"):
+            with self.subTest(len(mala)):
+                (_, _), carpeta = self.comprimir(f"mala-{len(mala)}", miniatura=mala)
+                self.assertFalse((carpeta / ag.MINIATURA).exists())
+
+    def test_rechazo_del_video_tambien_borra_la_miniatura(self):
+        with self.assertRaises(ag.ErrorAgente):
+            self.comprimir(salida={"video": 1199.5, "audio": 1199.2})
+        self.assertEqual(list((self.d / "salida").iterdir()), [])
+
+    def correr_procesar(self, con_miniatura):
+        servidor = mock.Mock()
+        enviados = {}
+        def post(ruta, datos=None):
+            enviados[ruta] = datos
+            return {"consultar": {"resultado": "autorizada"}, "registrar": {"resultado": "no_autorizada"}}.get(ruta, {})
+        servidor.post.side_effect = post
+        with self.ffmpeg_falso(miniatura=b"\xff\xd8\xff" + b"j" * 4000 if con_miniatura else None):
+            ag.procesar(servidor, self.video, self.trabajo)
+        return enviados["registrar"]
+
+    def test_se_envia_con_el_registro_solo_si_existe(self):
+        import base64
+        datos = self.correr_procesar(True)
+        self.assertEqual(base64.b64decode(datos["miniatura"])[:3], b"\xff\xd8\xff")
+        for carpeta in self.trabajo.iterdir():
+            if carpeta.is_dir():
+                import shutil; shutil.rmtree(carpeta)
+        self.assertNotIn("miniatura", self.correr_procesar(False))
+
+    def test_reintento_reutiliza_la_miniatura_sin_volver_a_generarla(self):
+        self.correr_procesar(True)  # el registro «no_autorizada» deja la carpeta con su manifiesto
+        self.llamadas.clear()
+        servidor = mock.Mock()
+        enviados = {}
+        servidor.post.side_effect = lambda ruta, datos=None: enviados.setdefault(ruta, datos) and {} or (
+            {"resultado": "autorizada"} if ruta == "consultar" else {"resultado": "no_autorizada"})
+        with mock.patch.object(ag.subprocess, "run", side_effect=lambda args, **_: mock.Mock(
+                returncode=0, stdout="2400.0\n", stderr="")) as run:
+            ag.procesar(servidor, self.video, self.trabajo)
+        self.assertFalse(any("-frames:v" in c.args[0] for c in run.call_args_list))  # ni comprime ni genera
+        self.assertIn("miniatura", enviados["registrar"])
 
 
 class ProbarArchivo(Base):

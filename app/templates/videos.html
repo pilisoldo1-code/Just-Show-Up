@@ -23,11 +23,19 @@
         {% if videos %}
         <div class="videos-lista">
             {% for v in videos %}
-            <a class="video-card" href="/videos/{{ v.id }}">
-                <h2>{{ v.clase }}</h2>
-                <span class="video-dato">{{ v.fecha_txt }} · {{ v.hora }}</span>
-                <span class="video-dato">{{ v.profesora }} · {{ v.duracion_txt }}</span>
-                <span class="video-restante">{{ v.restante_txt }}</span>
+            {# toda la tarjeta abre el video; si no hay miniatura (o no se puede ver), queda el fondo con el ícono #}
+            <a class="video-card video-card-biblioteca" href="/videos/{{ v.id }}">
+                <div class="video-portada">
+                    <img src="/videos/{{ v.id }}/miniatura.jpg" alt="" loading="lazy" width="480" height="270"
+                         onerror="this.remove()" />
+                    <span class="video-play" aria-hidden="true"></span>
+                </div>
+                <div class="video-textos">
+                    <h2>{{ v.clase }}</h2>
+                    <span class="video-dato">{{ v.fecha_txt }} · {{ v.hora }}</span>
+                    <span class="video-dato">{{ v.profesora }} · {{ v.duracion_txt }}</span>
+                    <span class="video-restante">{{ v.restante_txt }}</span>
+                </div>
             </a>
             {% endfor %}
         </div>

@@ -316,6 +316,113 @@ class Menu(unittest.TestCase):
         self.assertNotIn('href="/videos"', self.html(SUPERADMIN))
 
 
+JPEG = b"\xff\xd8\xff\xe0" + b"x" * 5000
+
+
+class Tabla:
+    """Lectura de la columna miniatura con la sesión: devuelve lo que dejaría pasar la política de la base."""
+    def __init__(self, filas):
+        self.filas, self.consultas = filas, []
+
+    def table(self, nombre):
+        self.consultas.append(nombre)
+        ejecutar = mock.Mock(execute=lambda: mock.Mock(data=self.filas))
+        return mock.Mock(select=lambda *_: mock.Mock(eq=lambda *_: ejecutar))
+
+
+class Miniaturas(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(main.app)
+        self.admin = Rpc({"video_agente_identificar": "p", "video_registrar": {"resultado": "ok", "id_video": 7},
+                          "video_guardar_miniatura": {"resultado": "ok"}})
+        for objeto, nombre, valor in ((auth, "cliente_admin", self.admin),):
+            p = mock.patch.object(objeto, nombre, return_value=valor); p.start(); self.addCleanup(p.stop)
+        p = mock.patch.dict(os.environ, {"VIDEOS_ENTORNO": ENTORNO, "SUPABASE_URL": "http://local"}); p.start(); self.addCleanup(p.stop)
+        self.cabecera = {"Authorization": "Bearer secreto", "X-Video-Entorno": ENTORNO}
+
+    def registrar(self, miniatura):
+        import base64
+        cuerpo = dict(Agente.CUERPO, **({"miniatura": miniatura if isinstance(miniatura, str) else base64.b64encode(miniatura).decode()}
+                                        if miniatura is not None else {}))
+        r = self.client.post("/api/videos/agente/registrar", json=cuerpo, headers=self.cabecera)
+        return r, [x for x in self.admin.llamadas if x[0] == "video_guardar_miniatura"]
+
+    def test_registro_con_miniatura_valida_la_guarda(self):
+        r, guardadas = self.registrar(JPEG)
+        self.assertEqual(r.json()["resultado"], "ok")
+        self.assertEqual(len(guardadas), 1)
+        params = guardadas[0][1]
+        self.assertEqual((params["p_id_video"], params["p_id_profesora"]), (7, "p"))  # la profesora sale del token
+        self.assertEqual(params["p_miniatura"], "\\x" + JPEG.hex())
+
+    def test_miniatura_invalida_se_descarta_y_el_video_sigue(self):
+        for mala in (b"GIF89a" + b"x" * 5000, b"\xff\xd8\xff" + b"x" * 200_000, b"\xff\xd8\xff", "no es base64!!"):
+            with self.subTest(len(mala)):
+                self.admin.llamadas.clear()
+                r, guardadas = self.registrar(mala)
+                self.assertEqual(r.json()["resultado"], "ok")
+                self.assertEqual(guardadas, [])
+
+    def test_sin_miniatura_el_registro_no_cambia(self):
+        r, guardadas = self.registrar(None)
+        self.assertEqual(r.json()["resultado"], "ok")
+        self.assertEqual(guardadas, [])
+
+    def test_si_el_registro_no_es_ok_no_se_guarda(self):
+        self.admin.respuestas["video_registrar"] = {"resultado": "no_autorizada"}
+        _, guardadas = self.registrar(JPEG)
+        self.assertEqual(guardadas, [])
+
+    def test_si_falla_guardarla_el_registro_sigue_ok(self):
+        original = self.admin.rpc
+        def rpc(nombre, params):
+            if nombre == "video_guardar_miniatura":
+                raise RuntimeError("base caída")
+            return original(nombre, params)
+        with mock.patch.object(self.admin, "rpc", side_effect=rpc):
+            r = self.client.post("/api/videos/agente/registrar", headers=self.cabecera,
+                                 json=dict(Agente.CUERPO, miniatura=__import__("base64").b64encode(JPEG).decode()))
+        self.assertEqual(r.json()["resultado"], "ok")
+
+    def ver(self, usuario, filas):
+        p = mock.patch.object(auth, "_usuario_cacheado", return_value=usuario); p.start(); self.addCleanup(p.stop)
+        sb = Tabla(filas)
+        with mock.patch.object(main, "_sb", return_value=sb):
+            return self.client.get("/videos/7/miniatura.jpg", follow_redirects=False), sb
+
+    def test_la_alumna_de_la_empresa_la_ve_sin_cache(self):
+        r, sb = self.ver(ALUMNA, [{"miniatura": "\\x" + JPEG.hex()}])
+        self.assertEqual((r.status_code, r.headers["content-type"], r.content), (200, "image/jpeg", JPEG))
+        self.assertIn("no-store", r.headers["cache-control"])  # nunca queda guardada en el navegador
+        self.assertEqual(sb.consultas, ["video"])  # con la sesión de la persona: decide la política de la base
+
+    def test_otra_empresa_vencido_o_sin_miniatura_da_404(self):
+        for filas in ([], [{"miniatura": None}], [{"miniatura": "\\x" + b"GIF89a".hex()}], [{"miniatura": "\\xzz"}]):
+            with self.subTest(filas):
+                r, _ = self.ver(ALUMNA, filas)
+                self.assertEqual(r.status_code, 404)
+
+    def test_sin_sesion_o_superadmin_no(self):
+        for usuario in (None, SUPERADMIN):
+            r, sb = self.ver(usuario, [{"miniatura": "\\x" + JPEG.hex()}])
+            self.assertEqual(r.status_code, 303)
+            self.assertEqual(sb.consultas, [])
+
+    def test_biblioteca_con_miniatura_icono_y_respaldo(self):
+        p = mock.patch.object(auth, "_usuario_cacheado", return_value=ALUMNA); p.start(); self.addCleanup(p.stop)
+        with mock.patch.object(main, "_sb", return_value=Rpc({"videos_disponibles": [FILA]})):
+            html = self.client.get("/videos").text
+        tarjeta = html[html.index('class="video-card video-card-biblioteca"'):html.index("</a>", html.index("video-card-biblioteca"))]
+        self.assertIn('href="/videos/7"', html)
+        self.assertIn('src="/videos/7/miniatura.jpg"', tarjeta)
+        self.assertIn('onerror="this.remove()"', tarjeta)  # sin miniatura queda el fondo con el ícono
+        self.assertIn('class="video-play"', tarjeta)
+        for texto in ("Gimnasia", "Lunes 16/11", "Pía Pérez", "39 min", "Disponible 1 h 30 min más"):
+            self.assertIn(texto, tarjeta)
+        css = Path("app/static/style.css").read_text()
+        self.assertIn("aspect-ratio: 16 / 9;", css)
+
+
 class Agente(unittest.TestCase):
     CUERPO = {"inicio": "2026-11-16T08:01:00-03:00", "huella": "a" * 64, "duracion_seg": 2400, "tamano_bytes": 15,
               "partes": PARTES, "lista_hls": LISTA}

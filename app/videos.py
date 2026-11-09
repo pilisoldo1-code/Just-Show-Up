@@ -1,3 +1,5 @@
+import base64
+import binascii
 import hashlib
 import hmac
 import logging
@@ -13,6 +15,8 @@ BUCKET = "videos-clases"
 TTL_URL_MAXIMO = 90 * 60  # alcanza para 40 minutos con pausas; después el reproductor pide una lista nueva
 MARGEN_URL_SEG = 15  # la URL se firma un momento después de calcular el tiempo: nunca debe pasar el vencimiento
 LIMITE_LIMPIEZA = 20
+# Miniatura de la biblioteca: la genera el programa local; opcional y con los mismos límites que la base.
+MINIATURA_MIN_BYTES, MINIATURA_MAX_BYTES = 1000, 102_400
 MSG_NO_DISPONIBLE = "Ese video ya no está disponible."
 CODIGOS_REPRODUCCION = {"no_disponible": 404, "sin_iniciar": 409, "limite_usuaria": 429, "sin_presupuesto": 429}
 MSG_PROGRAMAR = {
@@ -191,11 +195,54 @@ def consultar(id_profesora: str, inicio: str, duracion_seg: int) -> dict:
 
 
 def registrar(id_profesora: str, datos: dict) -> dict:
-    return auth.cliente_admin().rpc("video_registrar", {
+    resultado = auth.cliente_admin().rpc("video_registrar", {
         "p_id_profesora": id_profesora, "p_inicio": datos["inicio"], "p_huella": datos["huella"],
         "p_duracion_seg": datos["duracion_seg"], "p_tamano_bytes": datos["tamano_bytes"],
         "p_partes": datos["partes"], "p_lista_hls": datos["lista_hls"],
     }).execute().data
+    if datos.get("miniatura") and (resultado or {}).get("resultado") == "ok":
+        guardar_miniatura(resultado["id_video"], id_profesora, datos["miniatura"])
+    return resultado
+
+
+def jpeg_valido(datos: bytes) -> bool:
+    return MINIATURA_MIN_BYTES <= len(datos) <= MINIATURA_MAX_BYTES and datos[:3] == b"\xff\xd8\xff"
+
+
+def guardar_miniatura(id_video: int, id_profesora: str, texto_base64: str) -> bool:
+    """Opcional: si la miniatura no es válida o no se puede guardar, el video sigue su camino sin ella."""
+    if len(texto_base64) > MINIATURA_MAX_BYTES * 4 // 3 + 4:  # ni la decodifica si ya no puede entrar
+        logging.warning("Miniatura del video %s descartada: demasiado grande", id_video)
+        return False
+    try:
+        datos = base64.b64decode(texto_base64, validate=True)
+    except (binascii.Error, ValueError):
+        logging.warning("Miniatura del video %s descartada: no es base64", id_video)
+        return False
+    if not jpeg_valido(datos):
+        logging.warning("Miniatura del video %s descartada: no es un JPEG de tamaño permitido", id_video)
+        return False
+    try:
+        r = auth.cliente_admin().rpc("video_guardar_miniatura", {
+            "p_id_video": id_video, "p_id_profesora": id_profesora, "p_miniatura": "\\x" + datos.hex(),
+        }).execute().data or {}
+    except Exception:
+        logging.exception("No se pudo guardar la miniatura del video %s", id_video)
+        return False
+    return r.get("resultado") == "ok"
+
+
+def miniatura(sb: Client, id_video: int) -> bytes | None:
+    """Con la sesión de la persona: la misma política que la grabación (empresa activa, publicada y sin vencer)."""
+    filas = sb.table("video").select("miniatura").eq("id", id_video).execute().data or []
+    valor = filas[0].get("miniatura") if filas else None
+    if not valor or not str(valor).startswith("\\x"):
+        return None
+    try:
+        datos = bytes.fromhex(str(valor)[2:])
+    except ValueError:
+        return None
+    return datos if jpeg_valido(datos) else None
 
 
 def _subidas(video: dict, bucket) -> dict[str, int]:

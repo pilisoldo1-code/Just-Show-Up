@@ -8,6 +8,11 @@ begin
 end;
 $$;
 
+-- Miniaturas (20261108000000_videos_miniaturas), si se aplicaron: van antes que la tabla.
+drop trigger if exists video_miniatura_vigente on public.video;
+drop function if exists public._video_miniatura_vigente();
+drop function if exists public.video_guardar_miniatura(bigint, uuid, bytea);
+
 drop function public.video_limpieza_error(bigint, text);
 drop function public.video_marcar_eliminado(bigint);
 drop function public.videos_a_limpiar(integer);
