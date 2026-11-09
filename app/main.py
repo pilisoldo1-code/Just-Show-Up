@@ -240,8 +240,8 @@ def olvide(request: Request, mail: str = Form("")):
         return _render(request, "olvide_contrasena.html", status_code=400, mail=mail, enviado=False, aviso=problema)
     try:
         auth.pedir_recuperacion(mail, auth.url_restablecer(request))
-    except ErrorAuth as e:
-        return _render(request, "olvide_contrasena.html", status_code=429, mail=mail, enviado=False, aviso=str(e))
+    except ErrorAuth as e:  # solo problemas de conexión: no dicen nada de la cuenta
+        return _render(request, "olvide_contrasena.html", status_code=503, mail=mail, enviado=False, aviso=str(e))
     return _render(request, "olvide_contrasena.html", mail=mail, enviado=True, aviso="")
 
 
@@ -274,6 +274,79 @@ def restablecer(
         status_code=303,
     )
     auth.borrar_cookies(respuesta)
+    return respuesta
+
+
+# ---------- entrar con un enlace por correo (alumnas, profesoras y administradoras; no la superadministradora) ----------
+
+def _sin_referer(respuesta):
+    # el enlace trae su código después del «#»: que ningún pedido de esta página lo comparta
+    respuesta.headers["Referrer-Policy"] = "no-referrer"
+    return respuesta
+
+
+@app.get("/entrar-con-enlace")
+def enlace_form(request: Request):
+    usuario = auth.usuario_opcional(request)
+    if usuario is not None and not usuario.sin_empresa:
+        return RedirectResponse(url=_destino(usuario), status_code=303)
+    return _render(request, "entrar_con_enlace.html", lugar="", mail="", enviado=False, aviso="")
+
+
+@app.post("/entrar-con-enlace")
+def enlace_pedir(request: Request, lugar: str = Form(""), mail: str = Form("")):
+    lugar, mail = " ".join(lugar.split()), mail.strip().lower()
+    datos = {"lugar": lugar, "mail": mail}
+    if not lugar or not mail:
+        return _render(request, "entrar_con_enlace.html", status_code=400, enviado=False, **datos,
+                       aviso="Completá el nombre del lugar y tu mail.")
+    problema = auth.validar_mail(mail)
+    if problema:
+        return _render(request, "entrar_con_enlace.html", status_code=400, enviado=False, aviso=problema, **datos)
+    try:
+        auth.pedir_enlace_ingreso(mail, auth.url_entrar_con_enlace(request, lugar))
+    except ErrorAuth as e:  # solo problemas de conexión: no dicen nada de la cuenta
+        return _render(request, "entrar_con_enlace.html", status_code=503, enviado=False, aviso=str(e), **datos)
+    return _render(request, "entrar_con_enlace.html", enviado=True, aviso="", **datos)
+
+
+def _confirmar(request: Request, lugar: str, status_code: int = 200, aviso: str = "", invalido: bool = False,
+               token_hash: str = ""):
+    return _sin_referer(_render(request, "entrar_con_enlace_confirmar.html", status_code=status_code, lugar=lugar,
+                                aviso=aviso, invalido=invalido, token_hash=token_hash,
+                                mensaje_invalido=auth.MSG_ENLACE_INVALIDO))
+
+
+@app.get("/entrar-con-enlace/confirmar")
+def enlace_confirmar_form(request: Request, lugar: str = ""):
+    # No se canjea el enlace al abrir la página: los antivirus del correo la visitan solos y lo gastarían.
+    return _confirmar(request, " ".join(lugar.split())[:80])
+
+
+@app.post("/entrar-con-enlace/confirmar")
+def enlace_confirmar(request: Request, lugar: str = Form(""), token_hash: str = Form("")):
+    lugar = " ".join(lugar.split())[:80]
+    tokens = empresa_id = None
+    try:
+        if lugar:  # sin lugar no se gasta el enlace
+            tokens = auth.entrar_con_enlace(token_hash)
+            empresa_id = auth.entrar_a_empresa(tokens[0], lugar) if tokens else None
+    except ErrorAuth as e:
+        # problema de conexión: el enlace puede no haberse usado, se deja reintentar
+        return _confirmar(request, lugar, 503, str(e), token_hash=token_hash if not tokens else "",
+                          invalido=bool(tokens))
+    except Exception:
+        logging.exception("Error inesperado al entrar con un enlace")
+        if tokens:
+            auth.cerrar_sesion(tokens[0])
+        return _confirmar(request, lugar, 503, auth.MSG_CONEXION, invalido=True)
+    if empresa_id is None:
+        if tokens:
+            auth.cerrar_sesion(tokens[0])  # el enlace era válido pero no es de ese lugar: la sesión no queda
+        return _confirmar(request, lugar, 401, auth.MSG_ENLACE_INVALIDO, invalido=True)
+    usuario = auth.usuario_de_acceso(tokens[0])
+    respuesta = RedirectResponse(url=_destino(usuario) if usuario else "/", status_code=303)
+    auth.poner_cookies(respuesta, request, tokens[0], tokens[1])
     return respuesta
 
 

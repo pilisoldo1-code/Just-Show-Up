@@ -867,6 +867,27 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **Entrar con un enlace por correo (Magic Link, rama `magic-links`, 09/11; sin migraciones; NO desplegado)**: `/login` →
+  «Entrar con un enlace por correo» (`/entrar-con-enlace`: lugar + mail) → `sign_in_with_otp` con `should_create_user=False`
+  → el mail lleva a `/entrar-con-enlace/confirmar?lugar=…#token_hash=…` → botón «Entrar» → el servidor canjea el código
+  (`verify_otp`, `type=magiclink`) y llama a la misma `entrar_a_empresa`; si falla, cierra esa sesión y responde 401
+  (`MSG_ENLACE_INVALIDO`). Abrir la página NO gasta el enlace (los antivirus del correo la visitan solos); el código va
+  después del `#` para que no quede en los registros del servidor. La superadministradora no tiene enlace (sin membresía,
+  da 401). Pedir el enlace y «Olvidé mi contraseña» responden siempre igual (también si Supabase frena el envío por
+  haber pedido otro hace menos de 60 s: eso solo le pasa a cuentas que existen). Nunca se manda mail a dominios
+  `.invalid` (`auth.es_mail_ficticio`).
+  - **La sesión de un enlace y la de recuperación tienen el mismo `amr` (`otp`)** (verificado en el Supabase local): por
+    eso `/restablecer-contrasena` además rechaza las sesiones que ya entraron a un lugar (`empresa_de_sesion()`).
+  - **Necesita la plantilla del mail**: `supabase/templates/enlace_ingreso.html` (local, vía `config.toml`). En el
+    proyecto real hay que pegarla en Authentication > Email Templates > Magic Link ANTES del merge; con la plantilla de
+    Supabase por defecto el enlace no funciona.
+  - Pruebas: `tests.test_magic_links` (27, simuladas) y `tests/supabase_local/prueba_magic_links_reales.py` (54, con
+    Mailpit; necesita en la copia aislada `http://localhost:8000/**` en las Redirect URLs, la plantilla y
+    `max_frequency = "60s"`, que trae `supabase/config.toml`).
+  - El mailer incluido de Supabase solo entrega a miembros del equipo (2/h): para usuarias reales se decidió **Gmail
+    SMTP con una cuenta exclusiva del proyecto** (500/día, contraseña de aplicación solo en el panel de Supabase);
+    plan B: Brevo Free. Ver el informe en `CONTINUIDAD_PROYECTO.md` cuando se configure.
+
 - **Cobro del 25 % por inasistencia (rama `cobro-inasistencia`, PR #35; migración `20261105000000_cobro_inasistencia.sql`
   APLICADA en Supabase el 03/11 como `20261103170757 cobro_inasistencia`, con respaldo previo `2026-11-03 antes de cobro por
   inasistencia`; estructura igual a la esperada, datos idénticos y theta con el código anterior verificada 25/25)**: ausente explícita → 25 % de `clase.precio` (redondeo a centésimos, `_importe_base`); presente y

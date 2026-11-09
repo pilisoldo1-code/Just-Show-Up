@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Just Show Up - Entrar</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main class="auth-main">
+        <div class="auth-card">
+            <h1>Just Show Up</h1>
+
+            <div id="enlace-invalido" {% if not invalido %}hidden{% endif %}>
+                <div class="aviso aviso-error">{{ aviso if invalido else mensaje_invalido }}</div>
+                <a class="btn btn-block btn-tactil" href="/entrar-con-enlace">Pedir un enlace nuevo</a>
+            </div>
+
+            <div id="formulario" {% if invalido or not token_hash %}hidden{% endif %}>
+                <p class="subtitle">Vas a entrar a <strong>{{ lugar }}</strong>.</p>
+                {% if aviso and not invalido %}
+                <div class="aviso aviso-error">{{ aviso }}</div>
+                {% endif %}
+                <form action="/entrar-con-enlace/confirmar" method="post" class="horario-form auth-form">
+                    <input type="hidden" name="lugar" value="{{ lugar }}" />
+                    <input type="hidden" name="token_hash" id="token_hash" value="{{ token_hash or '' }}" />
+                    <button type="submit" class="btn btn-block btn-tactil" data-cargando="Entrando…">Entrar</button>
+                </form>
+            </div>
+
+            <p class="auth-link"><a href="/login">Entrar con mi contraseña</a></p>
+        </div>
+    </main>
+    {% if not invalido and not token_hash %}
+    <script>
+        // El código del enlace viene después del "#" (no llega al servidor ni queda en sus registros): se pasa al
+        // formulario y se borra de la barra de direcciones. El enlace se usa recién al tocar «Entrar».
+        (function () {
+            var codigo = new URLSearchParams(location.hash.slice(1)).get("token_hash");
+            history.replaceState(null, "", location.pathname + location.search);
+            if (codigo && {{ "true" if lugar else "false" }}) {
+                document.getElementById("token_hash").value = codigo;
+                document.getElementById("formulario").hidden = false;
+            } else {
+                document.getElementById("enlace-invalido").hidden = false;
+            }
+        })();
+    </script>
+    {% endif %}
+    {% include "_envio_unico.html" %}
+</body>
+</html>
