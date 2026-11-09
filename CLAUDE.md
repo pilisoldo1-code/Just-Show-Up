@@ -609,8 +609,8 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   - **Pruebas reales**: procedimiento en `agente/PRUEBAS_REALES.md`. `scripts/videos_prueba_migrar.py` (sin `--aplicar`
     solo revisa; exige proyecto vacío y confirmación) y `scripts/videos_prueba_datos.py` leen solo `.env.videos-prueba`,
     nunca el `.env`. **Sin ejecutar contra Supabase remoto.**
-  - **Errores visibles**: «Últimas grabaciones» estaba en `/videos/configuracion` y se fue con esa pantalla (las
-    funciones `videos.ultimas_grabaciones` y `videos_ultimas_grabaciones` siguen). Los mensajes
+  - **Errores visibles**: «Estado y errores de las grabaciones» (antes «Últimas grabaciones» en `/videos/configuracion`)
+    está al final de `/videos`, plegado y solo para la administradora (`videos.ultimas_grabaciones`, sin cambios). Los mensajes
     pasan por `videos.limpiar_mensaje` (saca URLs firmadas, rutas y tokens). Lo que nunca salió de la computadora, como
     `no_autorizada`, queda solo en `agente/trabajo/agente.log`.
   - **Respaldos**: `verificar_despliegue.py` y `restaurar_datos.py` incluyen las tablas si existen, y funcionan antes de la

@@ -30,7 +30,7 @@ Zoom (app de escritorio, grabación local)
 
 | Persona | Qué hace |
 |---|---|
-| **Administradora** | Desde el 09/11 ya no elige horarios: la pantalla «Elegir qué horarios se graban» se retiró (`/videos/configuracion` vuelve a Videos; lo guardado no se borró). Si da clases, graba como una profesora. |
+| **Administradora** | Desde el 09/11 ya no elige horarios: la pantalla «Elegir qué horarios se graban» se retiró (`/videos/configuracion` vuelve a Videos; lo guardado no se borró). Si da clases, graba como una profesora. Ve el estado y los errores de las grabaciones al final de Videos On Demand. |
 | **Profesora** | Da la clase con Zoom desde la computadora donde está instalado el programa y graba en la computadora. Nada más. |
 | **Alumna** | Entra a «Videos On Demand», elige la clase y la mira. Ve cuánto tiempo le queda. |
 | **Quien administra el sistema** | Crea el token de cada computadora (`scripts/video_agente.py`) y configura el entorno una sola vez. |

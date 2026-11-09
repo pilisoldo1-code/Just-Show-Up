@@ -2322,7 +2322,7 @@ def baja_admin_confirmar(request: Request, empresa_id: int, persona_id: str, mot
 
 @app.get("/videos")
 def videos_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_espectadora)):
-    grabaciones, tipos, sb = [], [], None
+    grabaciones, tipos, ultimas, sb = [], [], [], None
     try:
         sb = _sb(usuario)
         lista = videos.disponibles(sb)
@@ -2334,8 +2334,13 @@ def videos_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuari
             grabaciones, tipos = videos.mis_grabaciones(sb), videos.tipos_para_grabar(sb)
         except Exception:
             logging.exception("No se pudieron cargar las grabaciones independientes")
-    return _render(request, "videos.html", usuario, videos=lista, grabaciones=grabaciones, tipos=tipos, aviso=aviso,
-                   aviso_ok=bool(ok), titulo_max=videos.TITULO_MAX, descripcion_max=videos.DESCRIPCION_MAX)
+    if usuario.es_admin and sb is not None:
+        try:  # estado y errores de las últimas grabaciones (antes estaba en la pantalla de horarios, retirada)
+            ultimas = videos.ultimas_grabaciones(sb)
+        except Exception:
+            logging.exception("No se pudieron cargar las últimas grabaciones")
+    return _render(request, "videos.html", usuario, videos=lista, grabaciones=grabaciones, tipos=tipos, ultimas=ultimas,
+                   aviso=aviso, aviso_ok=bool(ok), titulo_max=videos.TITULO_MAX, descripcion_max=videos.DESCRIPCION_MAX)
 
 
 # Grabaciones independientes: contenido grabado solo para la biblioteca (sin horario, clase ni reserva).

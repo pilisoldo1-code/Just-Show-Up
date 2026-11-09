@@ -121,6 +121,30 @@
             {% endfor %}
         </ul>
         {% endif %}
+        {% if usuario.es_admin %}
+        <details class="seccion-inactivos ultimas-grabaciones">
+            <summary>Estado y errores de las grabaciones ({{ ultimas | length }})</summary>
+            {% if ultimas %}
+            <div class="videos-config">
+                {% for g in ultimas %}
+                <div class="video-card">
+                    <div>
+                        <strong>{{ g.clase }}</strong>
+                        {% if g.independiente %}<span class="badge badge-on video-etiqueta">Clase grabada</span>{% endif %}
+                        <span class="video-dato">{{ g.fecha_txt }} · {{ g.hora }} · {{ g.intentos }} {{ 'intento' if g.intentos == 1 else 'intentos' }}</span>
+                        {% if g.error %}<p class="video-error">Subida: {{ g.error }}</p>{% endif %}
+                        {% if g.error_limpieza %}<p class="video-error">Limpieza ({{ g.limpieza_intentos }} {{ 'intento' if g.limpieza_intentos == 1 else 'intentos' }}): {{ g.error_limpieza }}</p>{% endif %}
+                    </div>
+                    <span class="badge {{ g.badge }}">{{ g.estado_txt }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="vacio vacio-izq">Todavía no hay grabaciones. Las que no tienen una clase registrada no aparecen acá:
+                nunca salen de la computadora.</p>
+            {% endif %}
+        </details>
+        {% endif %}
         {% include "_envio_unico.html" %}
         <script>
             // Zoom se abre con el ID personal de la profesora (guardado solo en este navegador); la grabación la inicia

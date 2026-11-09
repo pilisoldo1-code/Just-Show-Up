@@ -249,6 +249,24 @@ class Configuracion(unittest.TestCase):
             self.assertNotIn("/videos/configuracion", html)
             self.assertNotIn("Elegir qué horarios se graban", html)
 
+    def test_estado_y_errores_de_las_grabaciones_en_videos(self):
+        self.como(ADMIN)
+        html = self.client.get("/videos").text
+        for texto in ("Estado y errores de las grabaciones", "Con error, se reintenta", "3 intentos",
+                      "Vencido, falta borrar archivos", "Limpieza (2 intentos)", "Siguen en Storage"):
+            self.assertIn(texto, html)
+        self.assertNotIn("secreto1", html)
+        self.assertNotIn("supabase.co", html)
+        self.assertNotIn("Elegir qué horarios se graban", html)
+
+    def test_solo_la_administradora_ve_el_estado_de_las_grabaciones(self):
+        for usuario, ve in ((ADMIN, True), (PROFESORA, False), (ALUMNA, False)):
+            self.como(usuario)
+            self.sb.llamadas.clear()
+            html = self.client.get("/videos").text
+            self.assertEqual("Estado y errores de las grabaciones" in html, ve)
+            self.assertEqual("videos_ultimas_grabaciones" in {n for n, _ in self.sb.llamadas}, ve)
+
     def test_estados_de_las_grabaciones(self):
         base = {"nunca_publicado": False, "vencido": False}
         self.assertEqual(videos._estado_grabacion({**base, "estado": "eliminado"})[0], "Vencido, archivos borrados")

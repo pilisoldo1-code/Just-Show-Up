@@ -4727,3 +4727,7 @@ a.video-card-biblioteca:hover .video-play {
 .pasos-grabar + .grabar-nota {
     margin: 0 0 18px;
 }
+.ultimas-grabaciones .video-card strong,
+.ultimas-grabaciones .video-card .video-dato {
+    display: block;
+}
