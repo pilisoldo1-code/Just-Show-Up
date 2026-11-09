@@ -196,18 +196,20 @@ ok("con la factura confirmada no se corrige su asistencia", "ok=0" in r.headers[
 
 # lo que ve la alumna (el mes ya está publicado)
 mf = texto(AL.get("/mis-facturas").text)
-ok("Mis facturas: «Inasistencia (25 %)», precio tachado y la nota al pie",
-   mf.count("Inasistencia (25 %)") >= 3 and '$800,00</s><span class="precio-base">$200,00</span>' in mf
-   and "clase reservada que no se canceló a tiempo y a la que no asististe" in mf)
-ok("…sin motivos ni datos internos", all(x not in mf for x in ("Promo", "Planilla", "Sin registrar", "Inasistencia · 25 %")))
+ok("Mis facturas: «Inasistencia · 25 %» y «$800,00 → $200,00» junto a cada clase, sin nota larga al pie",
+   mf.count("Inasistencia · 25 %") >= 3 and '$800,00</s><span class="precio-base">$200,00</span>' in mf
+   and "clase reservada que no se canceló a tiempo y a la que no asististe" not in mf)
+ok("…sin motivos ni datos internos", all(x not in mf for x in ("Promo", "Planilla", "Sin registrar")))
 pdf = texto_pdf(AL.get(f"/mis-facturas/{F['id']}/pdf").content)
 ok("PDF: marca, explicación y fila de inasistencias", "Pilates mat *" in pdf and "Inasist. 25 %" in pdf
    and "Inasistencias \\(3\\) al 25 %" in pdf and "* Inasistencia \\(25 %\\)" in pdf)
-ok("Mi historial: precio de la clase y el 25 % estimado en sus 3 ausencias",
-   texto(AL.get("/mi-historial").text).count("Inasistencia: se factura el 25 %") == 3
-   and "Importe estimado: el definitivo figura en Mis facturas." in AL.get("/mi-historial").text)
+hist = texto(AL.get("/mi-historial").text)
+ok("Mi historial: «se cobra el 25 % del precio» en sus 3 ausencias ($200,00, $212,50 y $200,00), sin «Importe estimado» y la nota una vez",
+   hist.count("Inasistencia: se cobra el 25 % del precio ($200,00)") == 2
+   and hist.count("Inasistencia: se cobra el 25 % del precio ($212,50)") == 1 and "Importe estimado" not in hist
+   and hist.count("figuran en Mis facturas") == 1)
 ok("Eva (presente) no ve nada de inasistencias", "Inasistencia" not in EV.get("/mis-facturas").text
-   and "se factura el 25" not in EV.get("/mi-historial").text)
+   and "se cobra el 25" not in EV.get("/mi-historial").text)
 api_eva = auth.cliente_con_token(EV.cookies.get("sb_acceso"))
 ok("Eva no lee las líneas de Ana por la API", api_eva.table("resumen_mensual_detalle").select("id")
    .eq("id_resumen_mensual", F["id"]).execute().data == [])

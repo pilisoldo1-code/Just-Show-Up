@@ -48,10 +48,15 @@
                 </label>
             </div>
             {% if not tipo %}
-            <label>
-                Imagen (opcional · JPG, PNG o WebP, hasta 2 MB)
-                <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" />
-            </label>
+            <div class="campo-imagen">
+                <span class="campo-imagen-titulo">Imagen (opcional · JPG, PNG o WebP, hasta 2 MB)</span>
+                <img class="tipo-imagen selector-archivo-previa" alt="Vista previa de la imagen elegida" hidden />
+                <div class="selector-archivo">
+                    <input type="file" id="imagen-nueva" name="imagen" accept="image/jpeg,image/png,image/webp" class="selector-archivo-input" />
+                    <label for="imagen-nueva" class="btn btn-secundario selector-archivo-boton">Elegir imagen</label>
+                    <span class="selector-archivo-nombre" aria-live="polite">Ninguna imagen elegida</span>
+                </div>
+            </div>
             {% else %}
             <p class="nota">Si cambiás duración, precio o cupo, antes de guardar vas a ver cómo afecta a las clases ya generadas.</p>
             {% endif %}
@@ -59,18 +64,26 @@
         </form>
 
         {% if tipo %}
-        <section class="panel">
+        <section class="panel panel-imagen">
             <h2>Imagen</h2>
             <div class="tipo-imagen-editar">
-                {% if tipo.imagen_url %}
-                <img class="tipo-imagen" src="{{ tipo.imagen_url }}" alt="{{ tipo.nombre }}" />
-                {% else %}
-                <div class="tipo-imagen tipo-imagen-vacia" aria-hidden="true">{{ tipo.nombre[:1] | upper }}</div>
-                {% endif %}
-                <div>
+                <div class="campo-imagen">
+                    {% if tipo.imagen_url %}
+                    <img class="tipo-imagen" src="{{ tipo.imagen_url }}" alt="{{ tipo.nombre }}" />
+                    {% else %}
+                    <div class="tipo-imagen tipo-imagen-vacia" aria-hidden="true">{{ tipo.nombre[:1] | upper }}</div>
+                    {% endif %}
+                    <img class="tipo-imagen selector-archivo-previa" alt="Vista previa de la imagen elegida" hidden />
+                    <p class="nota">{{ 'Imagen actual.' if tipo.imagen_url else 'Todavía no tiene imagen.' }}</p>
+                </div>
+                <div class="imagen-acciones">
                     <form action="/profesora/tipos-clase/{{ tipo.id }}/imagen" method="post" enctype="multipart/form-data" class="form-imagen">
-                        <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" required />
-                        <button type="submit" class="btn btn-chico">{{ 'Cambiar imagen' if tipo.imagen_url else 'Subir imagen' }}</button>
+                        <div class="selector-archivo">
+                            <input type="file" id="imagen-cambiar" name="imagen" accept="image/jpeg,image/png,image/webp" class="selector-archivo-input" required />
+                            <label for="imagen-cambiar" class="btn btn-secundario selector-archivo-boton">Elegir imagen</label>
+                            <span class="selector-archivo-nombre" aria-live="polite">Ninguna imagen elegida</span>
+                        </div>
+                        <button type="submit" class="btn">{{ 'Cambiar imagen' if tipo.imagen_url else 'Subir imagen' }}</button>
                     </form>
                     <p class="nota">JPG, PNG o WebP, hasta 2 MB.</p>
                     {% if tipo.imagen_url %}
@@ -83,5 +96,33 @@
         </section>
         {% endif %}
     </main>
+    <script>
+        // Muestra el nombre del archivo elegido y una vista previa local (no sube nada hasta enviar el formulario).
+        document.querySelectorAll(".selector-archivo-input").forEach(function (input) {
+            var nombre = input.parentNode.querySelector(".selector-archivo-nombre");
+            var bloque = input.closest(".campo-imagen") || input.closest(".tipo-imagen-editar");
+            var previa = bloque && bloque.querySelector(".selector-archivo-previa");
+            var actual = previa && previa.previousElementSibling;
+            var nota = previa && previa.nextElementSibling;
+            var notaOriginal = nota && nota.textContent;
+            input.addEventListener("change", function () {
+                var archivo = input.files && input.files[0];
+                nombre.textContent = archivo ? archivo.name : "Ninguna imagen elegida";
+                nombre.classList.toggle("elegido", !!archivo);
+                if (!previa) return;
+                if (nota && nota.classList.contains("nota")) nota.textContent = archivo ? "Vista previa: todavía no se guardó." : notaOriginal;
+                if (previa.src) URL.revokeObjectURL(previa.src);
+                if (archivo) {
+                    previa.src = URL.createObjectURL(archivo);
+                    previa.hidden = false;
+                    if (actual && actual.classList.contains("tipo-imagen")) actual.hidden = true;
+                } else {
+                    previa.removeAttribute("src");
+                    previa.hidden = true;
+                    if (actual) actual.hidden = false;
+                }
+            });
+        });
+    </script>
 </body>
 </html>

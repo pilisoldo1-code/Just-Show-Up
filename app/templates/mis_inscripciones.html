@@ -8,6 +8,27 @@
 </head>
 <body>
     {% include "_menu.html" %}
+    {# misma tarjeta que el detalle del día: fecha, hora, tipo, profesora, duración, precio, estado y acción #}
+    {% macro tarjeta(c, clase_card, badge, badge_clase, accion=None, accion_principal=False, nota=None) %}
+    <article class="card card-inscripcion {{ clase_card }}">
+        <div class="card-top"><span class="card-dia">{{ c.dia }} {{ c.fecha_txt }}</span></div>
+        <div class="card-hora">{{ c.hora }}</div>
+        {% if c.tipo %}<div class="card-tipo"><span>{{ c.tipo }}</span></div>{% endif %}
+        <ul class="card-datos">
+            {% if c.profesora %}<li>Profesora: {{ c.profesora }}</li>{% endif %}
+            <li>Duración: {{ c.duracion }} min</li>
+            <li>Precio: {{ c.precio|pesos }}</li>
+        </ul>
+        <div class="card-accion">
+            <span class="badge {{ badge_clase }}">{{ badge }}</span>
+            {% if nota %}<p class="nota nota-estado">{{ nota }}</p>{% endif %}
+            {% if accion %}
+            <a class="btn btn-block{{ '' if accion_principal else ' btn-secundario-claro' }}" href="/dia/{{ c.fecha }}">{{ accion }}</a>
+            {% endif %}
+            {% if caller is defined %}{{ caller() }}{% endif %}
+        </div>
+    </article>
+    {% endmacro %}
     <main>
         <h1>Mis inscripciones</h1>
 
@@ -17,58 +38,71 @@
 
         {% if ofertas %}
         <h2 class="seccion">¡Se liberó un lugar para vos!</h2>
-        <ul class="lista-clases">
+        <div class="cards">
             {% for c in ofertas %}
-            <li class="lc-oferta">
-                <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
-                <div class="lc-detalle">Confirmalo antes de las {{ c.oferta_vence }}</div>
-                <a class="lc-accion" href="/dia/{{ c.fecha }}">Confirmar o liberar ›</a>
-            </li>
+            {# mismas acciones que en el día: confirmar directo o liberar el lugar con confirmación #}
+            {% call tarjeta(c, "card-oferta", "¡Lugar disponible!", "badge-espera",
+                            nota="Confirmalo antes de las " ~ c.oferta_vence ~ "; si no, pasa a la siguiente de la lista.") %}
+            <form action="/clases/{{ c.id }}/confirmar-oferta" method="post">
+                <input type="hidden" name="fecha" value="{{ c.fecha }}" />
+                <button type="submit" class="btn btn-block" data-cargando="Confirmando…">Confirmar lugar</button>
+            </form>
+            <button type="button" class="btn btn-block btn-peligro"
+                    onclick="document.getElementById('rechazar-{{ c.id }}').showModal()">No me interesa</button>
+            <dialog id="rechazar-{{ c.id }}" class="modal">
+                <form action="/clases/{{ c.id }}/rechazar-oferta" method="post">
+                    <input type="hidden" name="fecha" value="{{ c.fecha }}" />
+                    <h2>Liberar el lugar</h2>
+                    <p class="modal-clase">{{ c.dia }} {{ c.fecha_txt }} · {{ c.hora }}</p>
+                    <p class="modal-texto">El lugar se le ofrece a la siguiente de la lista y vos salís de la lista de espera.</p>
+                    <div class="modal-botones">
+                        <button type="button" class="btn btn-secundario"
+                                onclick="this.closest('dialog').close()">Volver</button>
+                        <button type="submit" class="btn btn-peligro-solido" data-cargando="Liberando…">Liberar lugar</button>
+                    </div>
+                </form>
+            </dialog>
+            {% endcall %}
             {% endfor %}
-        </ul>
+        </div>
         {% endif %}
 
         {% if canceladas_profesora %}
         <h2 class="seccion">Clases canceladas</h2>
         <p class="nota">Estas clases no se van a dictar y no se cobran.</p>
-        <ul class="lista-clases">
+        <div class="cards">
             {% for c in canceladas_profesora %}
-            <li>
-                <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
-                <div class="lc-detalle">{{ c.duracion }} min</div>
-                <span class="badge badge-off">Cancelada</span>
-            </li>
+            {{ tarjeta(c, "card-cancelada", "Cancelada", "badge-off") }}
             {% endfor %}
-        </ul>
+        </div>
         {% endif %}
 
         <h2 class="seccion">Próximas clases</h2>
         {% if proximas %}
-        <ul class="lista-clases">
+        <div class="cards">
             {% for c in proximas %}
-            <li>
-                <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
-                <div class="lc-detalle">{{ c.duracion }} min · ${{ '%g'|format(c.precio) }}</div>
-                <a class="lc-accion" href="/dia/{{ c.fecha }}">Ver o cancelar ›</a>
-            </li>
+            {% if c.puede_cancelar %}
+            {{ tarjeta(c, "card-inscripta", "Reservada", "badge-on", "Ver o cancelar",
+                       nota="Podés cancelar sin cargo hasta las " ~ c.cancelar_hasta ~ ".") }}
+            {% else %}
+            {{ tarjeta(c, "card-inscripta", "Reservada", "badge-on", "Ver detalle",
+                       nota="El plazo para cancelar venció a las " ~ c.cancelar_hasta ~ ".") }}
+            {% endif %}
             {% endfor %}
-        </ul>
+        </div>
         {% else %}
         <p class="vacio vacio-izq">No tenés clases reservadas. <a href="/">Reservá una clase</a>.</p>
         {% endif %}
 
         {% if en_espera %}
         <h2 class="seccion">En lista de espera</h2>
-        <ul class="lista-clases">
+        <div class="cards">
             {% for c in en_espera %}
-            <li>
-                <div class="lc-fecha"><strong>{{ c.dia }} {{ c.fecha_txt }}</strong> · {{ c.hora }}</div>
-                <div class="lc-detalle">Posición {{ c.posicion }} en la lista</div>
-                <a class="lc-accion" href="/dia/{{ c.fecha }}">Ver o salir ›</a>
-            </li>
+            {{ tarjeta(c, "card-espera", "En lista de espera · Posición " ~ c.posicion, "badge-espera", "Ver o salir de la lista") }}
             {% endfor %}
-        </ul>
+        </div>
         {% endif %}
     </main>
+    {% include "_envio_unico.html" %}
 </body>
 </html>

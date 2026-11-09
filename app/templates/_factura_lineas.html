@@ -7,10 +7,10 @@
     <tbody>
         {% for l in f.lineas %}
         <tr>
-            <td class="ft-fecha">{{ l.fecha_txt }}<br /><span class="nota-chica">{{ l.hora }}</span></td>
-            <td class="ft-clase">{{ l.tipo }}{% if l.profesora %}<br /><span class="nota-chica">{{ l.profesora }}</span>{% endif %}
-                {% if l.inasistencia %}<br /><span class="etiqueta-inasistencia">{{ 'Inasistencia · ' ~ l.porcentaje ~ ' %' if interno else 'Inasistencia (' ~ l.porcentaje ~ ' %)' }}</span>
-                {% elif interno %}<br /><span class="nota-chica">{{ l.asistencia_txt }}</span>{% endif %}</td>
+            <td class="ft-fecha"><span class="ft-dia">{{ l.fecha_txt }}</span><span class="nota-chica ft-hora">{{ l.hora }}</span></td>
+            <td class="ft-clase"><span class="ft-tipo">{{ l.tipo }}</span>{% if l.profesora %}<span class="nota-chica ft-prof">{{ l.profesora }}</span>{% endif %}
+                {% if l.inasistencia %}<span class="etiqueta-inasistencia ft-asis">Inasistencia · {{ l.porcentaje }} %</span>
+                {% elif interno %}<span class="nota-chica ft-asis">{{ l.asistencia_txt }}</span>{% endif %}</td>
             <td class="num ft-precio{{ '' if l.inasistencia else ' ft-sin-dato' }}" data-label="Precio">{% if l.inasistencia %}<s class="precio-tachado" aria-label="precio original {{ l.precio_original|pesos }}">{{ l.precio_original|pesos }}</s><span class="precio-base">{{ l.importe_base|pesos }}</span>{% else %}{{ l.precio_original|pesos }}{% endif %}</td>
             <td class="num ft-ajuste{{ '' if l.ajuste_tipo != 'ninguno' else ' ft-sin-dato' }}" data-label="Ajuste">{% if l.ajuste_tipo != 'ninguno' %}{{ l.ajuste_txt }}{% if l.ajuste_tipo == 'importe' %} −{{ (-l.ajuste)|pesos }}{% endif %}{% if interno and l.motivo %}<br /><span class="nota-chica">«{{ l.motivo }}»</span>{% endif %}{% else %}—{% endif %}</td>
             <td class="num ft-importe">{{ l.importe_final|pesos }}</td>
@@ -75,6 +75,3 @@
     </tfoot>
 </table>
 </div>
-{% if f.inasistencias and not interno %}
-<p class="nota nota-inasistencia">Inasistencia ({{ porcentaje_inasistencia }} %): clase reservada que no se canceló a tiempo y a la que no asististe. Se cobra el {{ porcentaje_inasistencia }} % de su precio.</p>
-{% endif %}

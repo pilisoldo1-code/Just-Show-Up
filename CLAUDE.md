@@ -817,9 +817,10 @@ Para cada módulo, en este orden:
 - **Cobro del 25 % por inasistencia (rama `cobro-inasistencia`, PR #35; migración `20261105000000_cobro_inasistencia.sql`
   APLICADA en Supabase el 03/11 como `20261103170757 cobro_inasistencia`, con respaldo previo `2026-11-03 antes de cobro por
   inasistencia`; estructura igual a la esperada, datos idénticos y theta con el código anterior verificada 25/25)**: ausente explícita → 25 % de `clase.precio` (redondeo a centésimos, `_importe_base`); presente y
-  sin registrar → 100 %. Rige por empresa desde `empresa.cobro_inasistencia_desde` (Just Show Up: 1/11/2026; empresas
-  nuevas sin fecha = no se aplica); solo la superadministradora la configura (`configurar_cobro_inasistencia`, nunca antes
-  del 1° del mes en curso ni si ya rige desde un mes anterior). Cada línea guarda `porcentaje` y `asistencia`; los
+  sin registrar → 100 %. Rige por empresa desde `empresa.cobro_inasistencia_desde` (**desde el 04/11/2026: Just Show Up
+  01/09/2026 y Pilates Centro 01/10/2026, retroactivo por decisión de Julieta**, ver «Correcciones de datos del 04/11»;
+  empresas nuevas sin fecha = no se aplica); solo la superadministradora la configura (`configurar_cobro_inasistencia`,
+  nunca antes del 1° del mes en curso ni si ya rige desde un mes anterior: por eso hoy la pantalla no deja moverla). Cada línea guarda `porcentaje` y `asistencia`; los
   borradores se recalculan al sincronizar y cada cambio de asistencia de una línea queda en `factura_historial`
   (`cambio_asistencia`, aunque el importe no cambie). Los ajustes por clase tienen tope en el importe base. Las capturas
   locales usan la fecha 1/9/2026 puesta por SQL solo en el Supabase local. Montos en facturación con el filtro `pesos`
@@ -935,23 +936,69 @@ Para cada módulo, en este orden:
   `scripts/empresa_demo.py crear --produccion`, con respaldo previo `2026-11-03 antes de Pilates Centro` y
   `scripts/verificar_despliegue.py` TODO OK antes y después. Escenario fijo (docstring del script): Lucía Bentancor
   (administradora, lunes y miércoles), Carolina Méndez (profesora común, martes y jueves), 5 alumnas `@demo.invalid`
-  (Inés: ausente en octubre al 100 % y en noviembre al 25 %; Julia: cancelación a tiempo; Sabrina: sin registrar;
+  (Inés: ausente en octubre y en noviembre, las dos al 25 %; Julia: cancelación a tiempo; Sabrina: presente;
   Noelia: lista de espera) y `alumna@prueba.invalid` compartida con Just Show Up. Facturas de octubre PIL-2026-10-0001…
-  0005 (la de Rocío pagada). Mercado Pago apagado en PIL. Contraseñas de Lucía, Carolina, Rocío e Inés en
-  `.env.cuentas-prueba`. **No usar `borrar` + `crear` sin autorización** (borra lo hecho en Pilates y renumera sus
-  facturas). Para mantener la demostración hasta el 17/11 se usa **`empresa_demo.py actualizar --produccion`** (sin
-  `--aplicar` solo muestra el plan): solo agrega asistencias pendientes de clases dictadas (presente; Inés ausente si no
-  tiene una este mes; la última de Sabrina queda sin registrar), reservas del patrón en las próximas clases y la clase
-  completa con lista de espera; conserva los ensayos y no toca facturas confirmadas, pagos ni Just Show Up. Las
-  asistencias que completa quedan en el historial a nombre de la cuenta técnica `escenario.sistema@demo.invalid`
-  («Carga automática (script de demostración)», sin empresa ni rol), nunca de Lucía. Prueba:
-  `tests/base_local/test_empresa_actualizar_base.py "<respaldo>"` (30).
+  0005 (la de Rocío pagada; la de Inés, 0004, anulada y reemitida como **PIL-2026-10-0006** el 04/11). Mercado Pago
+  apagado en PIL. Contraseñas de Lucía, Carolina, Rocío e Inés en `.env.cuentas-prueba`. **No usar `borrar` + `crear`
+  sin autorización** (borra lo hecho en Pilates y renumera sus facturas). Para mantener la demostración hasta el 17/11 se
+  usa **`empresa_demo.py actualizar --produccion`**: agrega reservas del patrón en las próximas clases y la clase completa
+  con lista de espera, y **nunca asigna asistencias por su cuenta**. Para regularizar pendientes: `--propuesta archivo.csv`
+  (CSV con las pendientes de las 5 alumnas del escenario y la columna `estado` VACÍA) → Julieta completa presente/ausente
+  en las filas que aprueba → `--asignaciones archivo.csv` (vista previa con el sha256) → `--aplicar --huella <sha256>`.
+  Las filas vacías quedan pendientes; una asignación que no sea una pendiente del escenario (otra cuenta, ya registrada,
+  mes facturado) frena todo. Quedan en el historial a nombre de la cuenta técnica `escenario.sistema@demo.invalid`
+  («Carga automática (script de demostración)», sin empresa ni rol) con el motivo «Asignación explícita de datos ficticios
+  de demostración, aprobada por Julieta (no verificada…)», nunca de Lucía. Prueba:
+  `tests/base_local/test_empresa_actualizar_base.py "<respaldo antes de multiempresa>"` (36).
+- **Datos de demostración cargados en Just Show Up (04/11, con autorización de Julieta; respaldos previos
+  `2026-11-04 antes de completar asistencias de octubre` y `2026-11-04 antes de datos personales ficticios`)**:
+  - **Cuenta técnica** `escenario.sistema@demo.invalid` («Carga automática (script de demostración)»): sin empresa, sin
+    rol, sin contraseña conocida y **bloqueada hasta 2126** (`banned_until`; Supabase responde `user_banned`). Existe
+    solo para figurar como autora en los historiales de cargas hechas por script (la auditoría exige un perfil en
+    `por`). No se puede borrar mientras el historial la mencione.
+  - **63 asistencias de octubre** (51 presentes, 12 ausentes, reparto equilibrado ~20 % por alumna) en las 8 facturas
+    borrador, con 63 entradas en `asistencia_historial` (origen `correccion`) y 63 `cambio_asistencia` en
+    `factura_historial`, todas de la cuenta técnica. Importes sin cambios (en octubre la ausencia se cobra al 100 %).
+    Las 11 que quedaban en facturas confirmadas se corrigieron después (ver «Correcciones de datos del 04/11»).
+  - **Cédulas FICTICIAS** 9.000.001-8 … 9.000.013-7 (`90000018`…`90000137`) en la membresía de Just Show Up de las 13
+    cuentas `.invalid` (12 alumnas y la administradora de prueba), y teléfonos `099000101`…`099000104` con carnés
+    2027 en las 4 cuentas `@prueba.invalid` exclusivas de JSU. **Son solo para la demostración académica: la serie
+    9.000.0xx NO es un rango oficial reservado para pruebas** (pasan el dígito verificador y un número así podría
+    asignarse a una persona real), **no deben usarse para validar identidades reales ni emitir documentos fiscales**
+    y se borran junto con las cuentas `.invalid` antes de usar el sistema de verdad. Lo que las identifica sin
+    ambigüedad como ficticias es estar en cuentas `.invalid` (dominio reservado por norma para ejemplos). Las cuentas
+    reales del equipo (`julieta@gmail.com`, `pilisoldo1@gmail.com`) no tienen cédula cargada; el carné de la alumna
+    compartida con Pilates no se tocó.
+- **Correcciones de datos del 04/11 en producción (con autorización expresa de Julieta en cada etapa, ensayo local previo
+  sobre una copia restaurada del respaldo y verificación fila por fila; respaldos `2026-11-04 antes de corregir
+  asistencias históricas`, `… antes del 25 % retroactivo` y `… paso 0 antes de aplicar correcciones`)**. Son EXCEPCIONES
+  hechas una sola vez sobre datos ficticios; ninguna protección de la base quedó desactivada (funciones, triggers,
+  políticas y permisos con la misma firma antes y después):
+  - **11 asistencias históricas en facturas confirmadas** (JSU-2026-09-0001 de la demostración de Mercado Pago y las 10 de
+    Agustina en JSU-2026-10-0001): 9 presentes y 2 ausentes (Agustina 21/10 y 27/10), por transacción directa (la base
+    no deja corregir meses con factura confirmada), con `asistencia_historial` y `factura_historial` a nombre de la
+    cuenta técnica y el motivo «Corrección excepcional de datos ficticios…». Solo cambió `asistencia` de esas 11 líneas.
+  - **Regla definitiva: el 25 % por inasistencia es retroactivo**: vigencia Just Show Up 01/09/2026 y Pilates Centro
+    01/10/2026 (cambio directo en `empresa`: la función de la app no acepta fechas pasadas). Las 24 ausencias anteriores
+    al 01/11 (23 JSU, 1 PIL) quedaron al 25 %: −$13.800 en JSU y −$675 en PIL (−$14.475). Borradores de septiembre y
+    octubre recalculados como la sincronización de la app (`cambio_asistencia` 100 % → 25 %, cuenta técnica).
+  - **Anuladas y reemitidas como corrección** (con la sesión de la administradora de cada empresa, como en la app):
+    JSU-2026-10-0001 ($16.000) → **JSU-2026-10-0002** ($13.600) y PIL-2026-10-0004 ($8.400) → **PIL-2026-10-0006**
+    ($7.725), las dos vencen el 14/11/2026 (corrección con cambio de importe: 10 días desde la confirmación). La
+    demostración JSU-2026-09-0001, sus intentos de Mercado Pago y el pago de Rocío (PIL-2026-10-0002) no cambiaron.
+  - **Regularización de datos ficticios, NO verificados**: Marta Gómez (`alumna@prueba.invalid`) 04/11 JSU ausente (25 %,
+    $200 en noviembre) y Sabrina Viera 02/11 PIL presente (100 %), con el motivo «Regularización de datos ficticios de
+    demostración: asistencia asignada, no verificada».
+  - Resultado verificado: ninguna reserva activa de clase terminada sin asistencia en las dos empresas, ninguna línea
+    vigente fuera de la regla ni con asistencia distinta de Asistencias, todos los totales cuadran. Las clases que
+    terminen después generan pendientes nuevos normales: se marcan en la app o con `actualizar --asignaciones`.
 - **`scripts/empresa_demo.py`**: por defecto se niega a correr fuera de localhost; contra producción exige `--produccion`
   (y autorización). `crear` no hace nada si PIL ya existe; `borrar` elimina solo lo de PIL (incluidos historial,
   desactivaciones y sesiones) y las cuentas que pertenecen solo a PIL y son `.invalid` (si encuentra otra, no borra
   nada); la alumna compartida y Just Show Up no se tocan. En local las contraseñas van a `.env.cuentas-local`.
-  Pruebas: `tests/base_local/test_empresa_demo_base.py "<respaldo>" [AAAA-MM-DD]`, `tests/supabase_local/prueba_empresa2_reales.py`,
-  `tests.test_empresa_demo`.
+  `crear` pone la vigencia del 25 % en el 1° del mes anterior (todo el escenario, como producción) y no deja ninguna clase
+  dictada sin registrar. Pruebas: `tests/base_local/test_empresa_demo_base.py "<respaldo antes de multiempresa>" [AAAA-MM-DD]`
+  (33), `tests/supabase_local/prueba_empresa2_reales.py`, `tests.test_empresa_demo` (8).
 - **Con dos empresas, `_empresa_unica()` devuelve NULL**: toda fila nueva necesita `id_empresa`. `scripts/factura_demo_mp.py`
   y `scripts/datos_demo.py` no lo indican y fallarían en producción: ajustarlos antes de volver a usarlos.
 - **Un inicio de sesión rechazado responde 401** (no redirige) con el mensaje genérico y sin cookies: las pruebas que
@@ -1027,9 +1074,9 @@ Para cada módulo, en este orden:
   alumna (o está activa); con valor = la canceló la profesora con ese bloqueo.
 - **CSS: `.btn-secundario` está definido antes que `.btn`** en `style.css`, así
   que en elementos con las dos clases gana el fondo verde de `.btn` (pasa en
-  "Semana anterior/siguiente" y en el "Volver" de los diálogos). Pendiente de
-  corregir; en Planificación se corrigió solo para esa pantalla
-  (`.acciones-confirmar`) para no cambiar el diseño del resto sin pedirlo.
+  "Semana anterior/siguiente" y en el "Volver" de los diálogos). En los diálogos se
+  corrigió el 04/11 (`.modal-botones .btn.btn-secundario`); en Planificación ya estaba
+  (`.acciones-confirmar`). Fuera de los diálogos sigue igual.
 - **No aplicar `20261021000000_resumen_mensual_pagos.sql` (rama de Josefina, PR #13)**:
   la reemplaza `20261021150000_resumen_mensual_pagos.sql` (facturación completa con sus
   protecciones). Aplicar las dos crearía conflicto.
@@ -1219,6 +1266,33 @@ Para cada módulo, en este orden:
   rango abreviado (`_formato_rango_corto`, «26 oct – 1 nov»). Encabezados con botón al lado del título (Horarios,
   Tipos de clase, Alumnas, Profesoras, Empresas): `.seccion-encabezado`, título a la izquierda y botón a la derecha
   en la misma fila también en celular (hasta 400 px se achican título y botón).
+- **Celular, módulo de administración (rama `mobile-administracion`, 03/11)**: el menú ☰ (hasta 1099 px, no 900)
+  se **superpone** al contenido (`position: absolute` debajo del encabezado; no lo empuja). Fechas y horas a la izquierda
+  con `::-webkit-date-and-time-value` (Safari de iPhone las centra; Chrome no lo reproduce). `.dias-nav` la comparten
+  Asistencias, Planificación y Estadísticas: para cambiar solo una pantalla usar una clase propia (`.dias-grilla`).
+  Selector de imagen propio (`.selector-archivo`: input oculto + label con aspecto de botón + nombre del archivo y vista
+  previa local); ojo: `.tipo-imagen` pone `display: block` y anula el atributo `hidden`. Facturación del mes usa
+  `.lista-facturas` / `.factura-item` y la confirmación masiva va al final. La pantalla ya no ofrece el cambio de rol
+  alumna ↔ profesora (la ruta `/roles` del servidor sigue).
+  Tipos de clase y Horarios fijos pliegan lo inactivo al final («Inactivos (n)», siempre visible; con 0, un mensaje). El tipo
+  «Gimnasia (demostración)» (id 81) y su horario lunes 10:00 (id 204) **no se muestran** (`app/demostracion.py`: por id
+  real + nombre + inactivo); se conservan en la base porque sostienen la factura de demostración de Mercado Pago. En
+  otra base (Supabase local) los ids se indican con `DEMO_TIPOS_OCULTOS` / `DEMO_HORARIOS_OCULTOS` al levantar la app.
+  Alumna (primera ronda, 04/11): en celular los días ya terminados de Reservar clases son una franja baja
+  (`.card-finalizada`, solo `todas_pasadas`; los cancelados por la profesora no cambian), precios con `|pesos` en el día y
+  Mis inscripciones, «Descargar PDF» de 44 px y `body` con 20 px arriba hasta 600 px (afecta a todos los perfiles).
+  Alumna (segunda ronda, 05/11): la tarjeta semanal de Reservar clases es toda un enlace al día, alineada a la izquierda:
+  «Martes 10/11», «N horarios», solo las etiquetas «Reservada HH» y «En lista de espera HH» (una oferta cuenta como lista
+  de espera) y «Ver horarios ›» abajo a la derecha. Lugares libres, ofertas y cancelaciones se ven en el día y en Mis
+  inscripciones. Lista de espera: «Posición N» con mayúscula. En Mis facturas la inasistencia va junto a la clase
+  («Inasistencia · 25 %» y «$900,00 → $225,00»), sin la nota larga al pie (el PDF la conserva).
+- **Formularios de la alumna**: `{% include "_envio_unico.html" %}` al final de la página evita el doble envío en todo
+  `form[method=post]` sin `onsubmit` propio (el botón pasa a `data-cargando`, p. ej. «Reservando…», y se reactiva al
+  volver con «atrás»). `{% include "_ojo_contrasena.html" %}` agrega el ojo dentro de cada campo de contraseña. Botones
+  táctiles de 44 px: `.btn-tactil` (y todo `.card-accion .btn`). Páginas que muestran teléfonos llevan
+  `<meta name="format-detection" content="telephone=no">` (Safari los convierte en enlaces).
+- **Plazo de cancelación en pantalla**: vencido el plazo no se muestra «Cancelar reserva» (ni en el día ni en Mis
+  inscripciones): se explica qué se cobra según `empresa.cobro_inasistencia_desde` (25 % o precio completo).
 - Comentarios en el código: mínimos, solo si aclaran un "por qué" no obvio.
 - Commits en español, mensaje corto (y cuerpo si hace falta explicar el motivo).
 - Trabajo en rama por módulo + PR a `main` (ver "Trabajo en equipo" arriba).

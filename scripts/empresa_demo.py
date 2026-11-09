@@ -4,14 +4,15 @@ personas, horarios y reglas; las fechas se calculan desde el día en que se ejec
 Personas (todas ficticias, @demo.invalid salvo la alumna compartida):
 - Lucía Bentancor, administradora (da Pilates mat los lunes y reformer los miércoles).
 - Carolina Méndez, profesora común (mat los martes y reformer los jueves): no ve Facturación.
-- Rocío Acosta (cumplidora), Inés Duarte (dos inasistencias: una el mes anterior, al 100 %, y otra este mes, al
+- Rocío Acosta (cumplidora), Inés Duarte (dos inasistencias, una el mes anterior y otra este mes: las dos se cobran al
   25 %), Julia Ferreira (canceló a tiempo una clase: no se cobra), Noelia Gómez (en lista de espera de una clase
-  completa de la próxima semana), Sabrina Viera (su última clase de este mes quedó «sin registrar»).
+  completa de la próxima semana), Sabrina Viera (asiste a todas sus clases).
 - alumna@prueba.invalid: la misma cuenta que ya es alumna de Just Show Up (alumna compartida).
 
 Crea tipos de clase, horarios, clases de las 4 semanas anteriores, esta y la próxima, reservas, asistencias, la lista
-de espera y las facturas del mes anterior (confirmadas con numeración PIL; la de Rocío, pagada). El cobro del 25 %
-rige desde el 1° del mes en curso (nunca hacia atrás). Mercado Pago queda apagado en esta empresa.
+de espera y las facturas del mes anterior (confirmadas con numeración PIL; la de Rocío, pagada). El cobro del 25 % por
+inasistencia rige desde el 1° del mes ANTERIOR (todo el escenario), igual que en producción desde el 04/11/2026. Ninguna
+clase dictada queda «sin registrar». Mercado Pago queda apagado en esta empresa.
 
 `crear` no hace nada si la empresa ya existe (no duplica). `borrar` elimina SOLO lo de esta empresa y las cuentas que
 pertenecen únicamente a ella (siempre ficticias): la alumna compartida y Just Show Up no se tocan.
@@ -22,13 +23,16 @@ que solo se usa con la autorización de Julieta. Las contraseñas se generan al 
 
 Pruebas: tests/base_local/test_empresa_demo_base.py y tests/supabase_local/prueba_empresa2_reales.py
 
-`actualizar` pone al día una Pilates Centro ya creada sin borrar nada (asistencias pendientes de clases dictadas, reservas
-de las próximas clases, clase completa con lista de espera); conserva lo hecho en los ensayos y no toca facturas
-confirmadas, pagos ni Just Show Up. Sin `--aplicar` solo muestra el plan.
+`actualizar` pone al día una Pilates Centro ya creada sin borrar nada (reservas de las próximas clases, clase completa con
+lista de espera); conserva lo hecho en los ensayos y no toca facturas confirmadas, pagos ni Just Show Up. NUNCA asigna
+asistencias por su cuenta: `--propuesta` escribe un CSV con las asistencias pendientes (columna `estado` vacía), Julieta
+completa presente/ausente en las filas que aprueba y `--asignaciones` las aplica (las filas vacías quedan pendientes). Sin
+`--aplicar` solo muestra el plan; con asignaciones, `--aplicar` exige `--huella` con el sha256 que mostró la vista previa.
 
 Uso:
     python scripts/empresa_demo.py crear [--con-superadmin] [--produccion]
-    python scripts/empresa_demo.py actualizar [--aplicar] [--produccion]
+    python scripts/empresa_demo.py actualizar --propuesta <archivo.csv> [--produccion]
+    python scripts/empresa_demo.py actualizar [--asignaciones <archivo.csv>] [--aplicar [--huella <sha256>]] [--produccion]
     python scripts/empresa_demo.py borrar [--produccion]
 """
 
@@ -159,13 +163,14 @@ def fechas(hoy: date) -> dict:
     del_mes = [c for c in pasadas if c["fecha"] >= inicio_mes]
     de = lambda mail, lista: [c for c in lista if mail in c["reservas"]]
     reglas = {
-        "ines_ausente_100": min((c["fecha"], c["horario"]) for c in de(INES, del_mes_ant)) if de(INES, del_mes_ant) else None,
-        "ines_ausente_25": max((c["fecha"], c["horario"]) for c in de(INES, del_mes)) if de(INES, del_mes) else None,
-        "sabrina_sin_registrar": max((c["fecha"], c["horario"]) for c in de(SABRINA, del_mes)) if de(SABRINA, del_mes) else None,
+        "ines_ausente_mes_anterior": min((c["fecha"], c["horario"]) for c in de(INES, del_mes_ant)) if de(INES, del_mes_ant) else None,
+        "ines_ausente_mes": max((c["fecha"], c["horario"]) for c in de(INES, del_mes)) if de(INES, del_mes) else None,
         "julia_cancelada": max((c["fecha"], c["horario"]) for c in de(JULIA, del_mes_ant) if HORARIOS[c["horario"]][0] == "miercoles")
         if [c for c in de(JULIA, del_mes_ant) if HORARIOS[c["horario"]][0] == "miercoles"] else None,
     }
-    return {"clases": clases, "reglas": reglas, "mes_anterior": (inicio_mes - timedelta(days=1)), "inicio_mes": inicio_mes}
+    mes_anterior = inicio_mes - timedelta(days=1)
+    return {"clases": clases, "reglas": reglas, "mes_anterior": mes_anterior, "inicio_mes": inicio_mes,
+            "vigencia_25": mes_anterior.replace(day=1)}
 
 
 def crear(db, hoy: date, guardar_contrasenas=True) -> dict:
@@ -223,9 +228,9 @@ def crear(db, hoy: date, guardar_contrasenas=True) -> dict:
                 resumen["canceladas"] += 1
                 continue
             confirmadas += 1
-            if not c["pasada"] or (mail == SABRINA and clave == reglas["sabrina_sin_registrar"]):
+            if not c["pasada"]:
                 continue
-            ausente = mail == INES and clave in (reglas["ines_ausente_100"], reglas["ines_ausente_25"])
+            ausente = mail == INES and clave in (reglas["ines_ausente_mes_anterior"], reglas["ines_ausente_mes"])
             db.insertar("asistencia", [{"id_reserva": r["id"], "id_empresa": e2, "estado": "ausente" if ausente else "presente"}])
             resumen["asistencias"] += 1
         db.actualizar("clase", {"cantidad_inscriptas": confirmadas}, id=clase["id"])
@@ -234,8 +239,8 @@ def crear(db, hoy: date, guardar_contrasenas=True) -> dict:
                                            "estado": "en_espera", "id_empresa": e2}])
             resumen["espera"] += 1
 
-    # el 25 % rige desde el 1° de este mes (nunca hacia atrás: el mes anterior se factura con la regla anterior)
-    db.actualizar("empresa", {"cobro_inasistencia_desde": plan["inicio_mes"].isoformat()}, id=e2)
+    # el 25 % por inasistencia rige para todo el escenario (desde el 1° del mes anterior), como en producción
+    db.actualizar("empresa", {"cobro_inasistencia_desde": plan["vigencia_25"].isoformat()}, id=e2)
 
     # facturas del mes anterior: borradores, confirmación (numeración PIL) y el pago de Rocío, como la administradora
     mes_ant = plan["mes_anterior"]
@@ -255,18 +260,59 @@ def crear(db, hoy: date, guardar_contrasenas=True) -> dict:
     return {"empresa": e2, **resumen, "cuentas": len(CUENTAS), "contrasenas": contrasenas, "reglas": reglas, "ids": ids}
 
 
-MOTIVO_ACTUALIZAR = "Preparación automática del escenario de demostración (la registró un script, no una persona)"
+MOTIVO_ASIGNADA = ("Asignación explícita de datos ficticios de demostración, aprobada por Julieta (no verificada; "
+                   "la registró un script, no una persona)")
+ESTADOS = ("presente", "ausente")
+COLUMNAS = ["id_reserva", "fecha", "hora", "clase", "alumna", "precio", "cobro_si_presente", "cobro_si_ausente", "estado"]
 # Autora técnica de esas asistencias en el historial: así nunca aparecen como hechas por Lucía. No pertenece a ninguna
 # empresa ni tiene rol (su contraseña se descarta: no puede iniciar sesión en ningún lugar).
 SISTEMA = ("escenario.sistema@demo.invalid", "Carga automática", "(script de demostración)")
 
 
-def actualizar(db, ahora: datetime, aplicar: bool = False) -> dict:
+def leer_asignaciones(ruta) -> tuple[dict, str]:
+    """Lee el CSV de asignaciones (el de `--propuesta` con la columna estado completada): {id_reserva: estado} y el
+    sha256 del archivo. Las filas con estado vacío no se asignan (quedan pendientes). Cualquier error detiene todo."""
+    import csv
+    import hashlib
+    datos = Path(ruta).read_bytes()
+    asignaciones, errores = {}, []
+    for n, fila in enumerate(csv.DictReader(datos.decode("utf-8").splitlines(), delimiter=";"), start=2):
+        estado = (fila.get("estado") or "").strip().lower()
+        if not estado:
+            continue
+        try:
+            rid = int((fila.get("id_reserva") or "").strip())
+        except ValueError:
+            errores.append(f"fila {n}: id_reserva inválido"); continue
+        if estado not in ESTADOS:
+            errores.append(f"fila {n}: estado «{estado}» (solo presente o ausente)")
+        elif rid in asignaciones:
+            errores.append(f"fila {n}: la reserva {rid} está repetida")
+        else:
+            asignaciones[rid] = estado
+    if errores:
+        raise SystemExit("El archivo de asignaciones tiene errores; no se aplicó nada:\n  " + "\n  ".join(errores))
+    return asignaciones, hashlib.sha256(datos).hexdigest()
+
+
+def escribir_propuesta(pendientes: list, ruta) -> int:
+    """CSV para revisar: una fila por asistencia pendiente, con la columna estado VACÍA (no se sugiere nada)."""
+    import csv
+    with open(ruta, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=COLUMNAS, delimiter=";")
+        w.writeheader()
+        for p in pendientes:
+            w.writerow({**{k: p[k] for k in COLUMNAS if k != "estado"}, "estado": ""})
+    return len(pendientes)
+
+
+def actualizar(db, ahora: datetime, aplicar: bool = False, asignaciones: dict | None = None) -> dict:
     """Pone al día el escenario de una Pilates Centro YA creada, sin borrar nada (para mantener la demostración hasta
     la defensa). Solo agrega; nunca cambia una asistencia, reserva, factura ni pago existentes:
-    - asistencias «sin registrar» de clases ya dictadas, en meses sin factura confirmada de esa alumna: las completa con
-      registro en el historial a nombre de la cuenta técnica SISTEMA («Carga automática»), nunca de una persona. Si Inés no tiene una inasistencia en el mes en
-      curso, la última pendiente de ella va como ausente (25 %); la última pendiente de Sabrina queda sin registrar.
+    - asistencias pendientes de clases ya dictadas de las alumnas del escenario (no la compartida ni otras cuentas), en
+      meses sin factura confirmada: se LISTAN; solo se registran las que vengan en `asignaciones` ({id_reserva: estado},
+      aprobadas por Julieta), a nombre de la cuenta técnica SISTEMA. Las que no se asignan quedan pendientes. Si una
+      asignación no corresponde a una pendiente del escenario, no se aplica nada.
     - reservas del patrón en las clases que todavía no empezaron hasta el fin de la próxima semana (sin pasar el cupo, sin
       repetir ni revivir cancelaciones); crea las clases que falten de los horarios del escenario.
     - el jueves de la próxima semana completo y Noelia en la lista de espera (si se puede llegar al cupo).
@@ -285,7 +331,7 @@ def actualizar(db, ahora: datetime, aplicar: bool = False) -> dict:
     faltan = [m for m in mails if m not in ids]
     if faltan:
         raise SystemExit(f"Faltan personas del escenario en {CODIGO} ({', '.join(faltan)}): no se cambió nada.")
-    del_escenario = set(ids.values()) - {ids[ADMIN[0]]}
+    del_escenario = {ids[m] for m, *_ in ALUMNAS}  # solo las alumnas creadas por el escenario (no la compartida)
 
     tipos = {t["id"]: t for t in db.leer("tipo_clase", "id, nombre, duracion, precio_presencial, cupo_max, activo", id_empresa=e2)}
     horarios = {}
@@ -293,7 +339,7 @@ def actualizar(db, ahora: datetime, aplicar: bool = False) -> dict:
         for i, (dia, hora, t, _, _) in enumerate(HORARIOS):
             if (h["dia_semana"], str(h["hora_inicio"])[:5], tipos.get(h["id_tipo_clase"], {}).get("nombre")) == (dia, hora, TIPOS[t][0]):
                 horarios[i] = h
-    clases_e2 = db.leer("clase", "id, id_horario, fecha, hora_inicio, estado, cupo_max", id_empresa=e2)
+    clases_e2 = db.leer("clase", "id, id_horario, fecha, hora_inicio, estado, cupo_max, precio", id_empresa=e2)
     por_horario_fecha = {(c["id_horario"], str(c["fecha"])[:10]): c for c in clases_e2}
     reservas = db.leer("reserva", "id, id_alumna, id_clase, estado", id_empresa=e2)
     asistencias = {a["id_reserva"]: a["estado"] for a in db.leer("asistencia", "id_reserva, estado", id_empresa=e2)}
@@ -317,20 +363,27 @@ def actualizar(db, ahora: datetime, aplicar: bool = False) -> dict:
             continue  # su factura de ese mes está confirmada: no se toca (la base tampoco lo permitiría)
         pendientes.append((inicio(c), r))
     pendientes.sort(key=lambda x: x[0])
-    del_mes = lambda mail: [r for t, r in pendientes if r["id_alumna"] == ids[mail] and t.date() >= inicio_mes]
-    ines_ausente_mes = any(asistencias.get(r["id"]) == "ausente" and r["id_alumna"] == ids[INES]
-                           and _fecha(clase_por_id[r["id_clase"]]["fecha"]) >= inicio_mes
-                           for r in reservas if r["id_clase"] in clase_por_id)
-    ines = None if ines_ausente_mes or not del_mes(INES) else del_mes(INES)[-1]
-    sabrina = del_mes(SABRINA)[-1] if del_mes(SABRINA) else None
-    if not ines_ausente_mes and ines is None:
-        plan["avisos"].append("Inés no tiene una inasistencia este mes ni una clase pendiente para marcarla: el caso del 25 % no se puede preparar sin cambiar un ensayo.")
-    if sabrina is None:
-        plan["avisos"].append("Sabrina no tiene ninguna clase de este mes sin registrar: no queda el caso de asistencia pendiente.")
-    for _, r in pendientes:
-        if sabrina and r["id"] == sabrina["id"]:
-            continue
-        plan["asistencias"].append((r, "ausente" if ines and r["id"] == ines["id"] else "presente"))
+    vigencia = db.leer("empresa", "cobro_inasistencia_desde", id=e2)[0]["cobro_inasistencia_desde"]
+    nombre_tipo = {h["id"]: tipos[h["id_tipo_clase"]]["nombre"] for h in horarios.values()}
+    mail_de = {v: k for k, v in ids.items()}
+    plan["pendientes"] = []
+    for t, r in pendientes:
+        c = clase_por_id[r["id_clase"]]
+        precio = float(c["precio"])
+        al_25 = vigencia is not None and _fecha(c["fecha"]) >= _fecha(vigencia)
+        plan["pendientes"].append({"id_reserva": r["id"], "fecha": t.date().isoformat(), "hora": t.strftime("%H:%M"),
+                                   "clase": nombre_tipo.get(c["id_horario"], ""), "alumna": mail_de[r["id_alumna"]],
+                                   "precio": f"{precio:.2f}", "cobro_si_presente": f"{precio:.2f}",
+                                   "cobro_si_ausente": f"{round(precio * (0.25 if al_25 else 1), 2):.2f}"})
+    asignaciones = asignaciones or {}
+    por_id = {r["id"]: r for _, r in pendientes}
+    ajenas = sorted(set(asignaciones) - set(por_id))
+    if ajenas:
+        raise SystemExit("Hay asignaciones que no son asistencias pendientes del escenario (ya registradas, de otra cuenta "
+                         f"o de un mes facturado): {ajenas}. No se aplicó nada.")
+    if any(e not in ESTADOS for e in asignaciones.values()):
+        raise SystemExit("Solo se aceptan los estados presente o ausente. No se aplicó nada.")
+    plan["asistencias"] = [(por_id[rid], estado) for rid, estado in sorted(asignaciones.items())]
 
     # ---------- reservas de las clases que todavía no empezaron (hasta el fin de la próxima semana) ----------
     jueves_proximo = lunes + timedelta(days=7 + DIAS.index("jueves"))
@@ -381,9 +434,13 @@ def actualizar(db, ahora: datetime, aplicar: bool = False) -> dict:
             existente = db.leer("profiles", "id", mail=SISTEMA[0])
             autor = existente[0]["id"] if existente else db.crear_cuenta(*SISTEMA, secrets.token_urlsafe(24), {"sin_empresa": True})
         for r, estado in plan["asistencias"]:
+            # se vuelve a comprobar justo antes: si alguien la registró mientras tanto, no se pisa
+            if db.leer("asistencia", "id", id_reserva=r["id"]):
+                plan["avisos"].append(f"La reserva {r['id']} ya tenía asistencia: no se cambió.")
+                continue
             db.insertar("asistencia", [{"id_reserva": r["id"], "id_empresa": e2, "estado": estado}])
             db.insertar("asistencia_historial", [{"id_empresa": e2, "id_reserva": r["id"], "estado_anterior": None, "estado_nuevo": estado,
-                                                  "origen": "correccion", "motivo": MOTIVO_ACTUALIZAR, "por": autor}])
+                                                  "origen": "correccion", "motivo": MOTIVO_ASIGNADA, "por": autor}])
         nuevas = {}
         for n in plan["clases"]:
             h = horarios[n["horario"]]
@@ -412,11 +469,13 @@ def actualizar(db, ahora: datetime, aplicar: bool = False) -> dict:
                                            "estado": "en_espera", "id_empresa": e2}])
 
     nombre = {v: k for k, v in ids.items()}
+    asignadas = {r["id"] for r, _ in plan["asistencias"]}
     return {
         "aplicado": aplicar,
         "asistencias": len(plan["asistencias"]),
         "ausentes": [(_fecha(clase_por_id[r["id_clase"]]["fecha"]), nombre[r["id_alumna"]]) for r, e in plan["asistencias"] if e == "ausente"],
-        "sin_registrar_queda": sabrina and _fecha(clase_por_id[sabrina["id_clase"]]["fecha"]),
+        "pendientes": plan["pendientes"],
+        "quedan_pendientes": [p for p in plan["pendientes"] if p["id_reserva"] not in asignadas],
         "clases_nuevas": len(plan["clases"]),
         "reservas": len(plan["reservas"]),
         "espera": [x["fecha"] for x in plan["espera"]],
@@ -514,9 +573,21 @@ def _guardar_contrasenas(contrasenas: dict, local: bool) -> None:
     archivo.chmod(0o600)
 
 
+def _opcion(args, nombre):
+    """Valor de una opción `--nombre valor` (None si no está)."""
+    if nombre not in args:
+        return None
+    i = args.index(nombre)
+    if i + 1 >= len(args) or args[i + 1].startswith("--"):
+        raise SystemExit(f"Falta el valor de {nombre}.")
+    return args[i + 1]
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if not args or args[0] not in ("crear", "borrar", "actualizar") or set(args[1:]) - {"--produccion", "--con-superadmin", "--aplicar"}:
+    con_valor = {"--propuesta", "--asignaciones", "--huella"}
+    banderas = [a for i, a in enumerate(args[1:], 1) if a.startswith("--") and not (i > 1 and args[i - 1] in con_valor)]
+    if not args or args[0] not in ("crear", "borrar", "actualizar") or set(banderas) - {"--produccion", "--con-superadmin", "--aplicar"} - con_valor:
         raise SystemExit(__doc__)
     from app import clases
     base = BaseSupabase(produccion="--produccion" in args)
@@ -535,16 +606,33 @@ if __name__ == "__main__":
                   f"{r['asistencias']} asistencias, {r['facturas']} facturas del mes anterior. "
                   f"Contraseñas en {ARCHIVOS['local' if base.local else 'produccion'].name}.")
     elif args[0] == "actualizar":
-        r = actualizar(base, clases.ahora(), aplicar="--aplicar" in args)
-        print(("APLICADO" if r["aplicado"] else "PLAN (no se escribió nada; para aplicarlo: --aplicar)") + f" — {NOMBRE}:")
-        print(f"  asistencias pendientes que se completan: {r['asistencias']} (ausentes: "
-              + ", ".join(f"{m.split('.')[0]} {f.day}/{f.month}" for f, m in r["ausentes"]) + ")")
-        print(f"  queda sin registrar: Sabrina {r['sin_registrar_queda'].day}/{r['sin_registrar_queda'].month}" if r["sin_registrar_queda"]
-              else "  queda sin registrar: ninguna")
+        propuesta, archivo, huella = _opcion(args, "--propuesta"), _opcion(args, "--asignaciones"), _opcion(args, "--huella")
+        if propuesta and ("--aplicar" in args or archivo):
+            raise SystemExit("--propuesta solo escribe el archivo para revisar: no se combina con --aplicar ni --asignaciones.")
+        asignaciones, sha = leer_asignaciones(archivo) if archivo else ({}, None)
+        aplicar = "--aplicar" in args
+        if aplicar and archivo and huella != sha:
+            raise SystemExit(f"Para aplicar las asignaciones hace falta --huella {sha} (la del archivo revisado en la vista "
+                             "previa). Si el archivo cambió, revisalo de nuevo. No se aplicó nada.")
+        r = actualizar(base, clases.ahora(), aplicar=aplicar, asignaciones=asignaciones)
+        if propuesta:
+            n = escribir_propuesta(r["pendientes"], propuesta)
+            print(f"Propuesta escrita en {propuesta}: {n} asistencias pendientes, con la columna «estado» vacía. "
+                  "Completá presente o ausente en las filas que apruebes; las vacías quedan pendientes. No se escribió nada en la base.")
+            sys.exit(0)
+        print(("APLICADO" if r["aplicado"] else "VISTA PREVIA (no se escribió nada)") + f" — {NOMBRE}:")
+        if archivo:
+            print(f"  archivo de asignaciones: {archivo} · sha256 {sha}")
+        print(f"  asistencias asignadas: {r['asistencias']} (ausentes: "
+              + (", ".join(f"{m.split('.')[0]} {f.day}/{f.month}" for f, m in r["ausentes"]) or "ninguna") + ")")
+        print(f"  quedan pendientes: {len(r['quedan_pendientes'])}"
+              + "".join(f"\n    {p['fecha']} {p['hora']} {p['clase']} · {p['alumna']} (reserva {p['id_reserva']})" for p in r["quedan_pendientes"]))
         print(f"  clases nuevas: {r['clases_nuevas']} · reservas nuevas: {r['reservas']} · lista de espera: "
               + (", ".join(f"jueves {f.day}/{f.month}" for f in r["espera"]) or "sin cambios"))
         for a in r["avisos"]:
             print("  aviso:", a)
+        if not r["aplicado"] and archivo:
+            print(f"  para aplicar: --asignaciones {archivo} --aplicar --huella {sha}")
     else:
         borrar(base)
         print(f"Empresa {NOMBRE} borrada (Just Show Up y la alumna compartida no se tocaron).")

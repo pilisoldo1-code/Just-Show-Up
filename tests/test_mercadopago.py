@@ -432,7 +432,7 @@ class Rutas(Base):
         self.como(ALUMNA)
         t = self.client.get("/mis-facturas").text
         self.assertIn('badge-rojo">Vencida — deuda pendiente', t)
-        self.assertIn("Venció el 10/11/2026: podés pagarla igual.", t)
+        self.assertIn("Fecha límite de pago: 10/11/2026 (vencida: podés pagarla igual)", t)
         self.assertIn('action="/mis-facturas/1/mercado-pago"', t)
 
     def test_pagar_redirige_a_mercado_pago(self):

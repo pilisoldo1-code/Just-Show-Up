@@ -121,6 +121,7 @@ def clases_entre(sb: Client, inicio: date, fin: date, alumna_id: str) -> list[di
                 "posicion_espera": espera["posicion"] if espera else None,
                 "oferta_vence": _hora_local(espera["oferta_vence_en"]) if espera and espera["oferta_vence_en"] else "",
                 "puede_cancelar": ahora_dt <= inicio_dt - timedelta(hours=HORAS_LIMITE_CANCELACION),
+                "cancelar_hasta": _limite_cancelacion(inicio_dt),
             }
         )
     return tarjetas
@@ -153,6 +154,10 @@ def agrupar_por_dia(clases: list[dict]) -> list[dict]:
         )
         d["horas"].append(c["hora"])
         d.setdefault("tipos", {})[c["hora"]] = c["tipo"]
+        # resumen de la tarjeta del día: cuántos horarios hay, entre qué horas y cuántos tienen lugar
+        d["cantidad"] = len(d["horas"])
+        d["desde"], d["hasta"] = min(d["horas"]), max(d["horas"])
+        d["con_lugar"] = d.get("con_lugar", 0) + (c["estado"] == "disponible")
         if c["estado"] != "pasada":
             d["todas_pasadas"] = False
         if c["estado"] not in ("pasada", "cancelada"):
@@ -192,7 +197,7 @@ def cancelar(sb: Client, clase_id: int) -> tuple[bool, str]:
 def anotar_en_espera(sb: Client, clase_id: int) -> tuple[bool, str]:
     r = sb.rpc("anotar_en_espera", {"p_id_clase": clase_id}).execute().data
     if r["resultado"] == "ok":
-        return True, f"Quedaste en la lista de espera (posición {r['posicion']})."
+        return True, f"Quedaste en la lista de espera (Posición {r['posicion']})."
     return False, {
         "hay_lugar": "Hay lugares disponibles, podés reservar la clase directamente.",
         "ya_reservada": "Ya tenés esta clase reservada.",
@@ -224,11 +229,18 @@ def salir_lista_espera(sb: Client, clase_id: int) -> tuple[bool, str]:
     return False, "No estabas en la lista de espera de esta clase."
 
 
+def _limite_cancelacion(inicio: datetime) -> str:
+    """Hora (y día, si es otro) hasta la que se puede cancelar sin cargo, en hora de Montevideo."""
+    limite = inicio - timedelta(hours=HORAS_LIMITE_CANCELACION)
+    texto = limite.strftime("%H:%M")
+    return texto if limite.date() == inicio.date() else f"{texto} del {limite.day}/{limite.month}"
+
+
 def _hora_local(iso: str, con_fecha: bool = False) -> str:
     return datetime.fromisoformat(iso).astimezone(TZ).strftime("%d/%m %H:%M" if con_fecha else "%H:%M")
 
 
-def _item_clase(c: dict, **extra) -> dict:
+def _item_clase(c: dict, profesoras: dict | None = None, **extra) -> dict:
     fecha = date.fromisoformat(c["fecha"])
     return {
         "fecha": c["fecha"],
@@ -237,6 +249,8 @@ def _item_clase(c: dict, **extra) -> dict:
         "hora": c["hora_inicio"][:5],
         "duracion": c["duracion"],
         "precio": c["precio"],
+        "tipo": (c.get("tipo_clase") or {}).get("nombre", ""),
+        "profesora": (profesoras or {}).get(c.get("id_profesora"), ""),
         "inicio": _inicio_clase(c),
         **extra,
     }
@@ -261,7 +275,8 @@ def _estado_historial(reserva: dict) -> tuple[str, str]:
 
 
 def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
-    columnas_clase = "clase(id, fecha, hora_inicio, duracion, precio)"
+    datos = "id, fecha, hora_inicio, duracion, precio, id_profesora, tipo_clase(nombre)"
+    columnas_clase = f"clase({datos})"
     reservas = (
         sb.table("reserva").select(f"id, estado, fecha_cancelacion, id_bloqueo, asistencia(estado), {columnas_clase}")
         .eq("id_alumna", alumna_id).execute().data
@@ -272,14 +287,18 @@ def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
         sb.rpc("actualizar_listas_espera", {"p_ids": [m["id_clase"] for m in mias]}).execute()
     espera = sb.rpc("mi_lista_espera", {}).execute().data
     datos_clase = {
-        c["id"]: c for c in (sb.table("clase").select("id, fecha, hora_inicio, duracion, precio")
+        c["id"]: c for c in (sb.table("clase").select(datos)
                              .in_("id", [e["id_clase"] for e in espera]).execute().data if espera else [])
     }
+    ids_profesoras = {c.get("id_profesora") for c in [r["clase"] for r in reservas] + list(datos_clase.values())}
+    profesoras = personas.nombres_profesoras(sb) if ids_profesoras - {None} else {}
     ahora_dt = ahora()
     proximas, historial, en_espera, canceladas_profesora, ofertas = [], [], [], [], []
     for r in reservas:
-        item = _item_clase(r["clase"], estado=r["estado"])
+        item = _item_clase(r["clase"], profesoras, estado=r["estado"])
         if r["estado"] == "confirmada" and item["inicio"] > ahora_dt:
+            item["puede_cancelar"] = item["inicio"] - timedelta(hours=HORAS_LIMITE_CANCELACION) >= ahora_dt
+            item["cancelar_hasta"] = _limite_cancelacion(item["inicio"])
             proximas.append(item)
         else:
             if r["estado"] == "cancelada" and r["id_bloqueo"] is not None and item["inicio"] > ahora_dt:
@@ -293,7 +312,7 @@ def mis_inscripciones(sb: Client, alumna_id: str) -> dict:
         c = datos_clase.get(e["id_clase"])
         if not c:
             continue
-        item = _item_clase(c, id=c["id"], posicion=e["posicion"],
+        item = _item_clase(c, profesoras, id=c["id"], posicion=e["posicion"],
                            oferta_vence=_hora_local(e["oferta_vence_en"]) if e["oferta_vence_en"] else "")
         if item["inicio"] <= ahora_dt:
             continue

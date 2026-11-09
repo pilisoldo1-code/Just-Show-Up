@@ -1,0 +1,28 @@
+{# Un solo envío por formulario: al tocar, el botón se desactiva y dice qué está pasando (data-cargando). #}
+<script>
+document.querySelectorAll('form[method=post]:not([onsubmit])').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+        if (form.dataset.enviando) { e.preventDefault(); return; }
+        form.dataset.enviando = '1';
+        var boton = form.querySelector('button[type=submit]');
+        if (!boton) return;
+        boton.dataset.texto = boton.textContent;
+        boton.textContent = boton.dataset.cargando || 'Procesando…';
+        boton.setAttribute('aria-busy', 'true');
+        setTimeout(function () { boton.disabled = true; });  // después de enviar, para no perder el valor del botón
+    });
+});
+// al volver con «atrás», el navegador puede mostrar la página guardada con el botón desactivado
+window.addEventListener('pageshow', function (e) {
+    if (!e.persisted) return;
+    document.querySelectorAll('form[data-enviando]').forEach(function (form) {
+        delete form.dataset.enviando;
+        var boton = form.querySelector('button[type=submit]');
+        if (boton && boton.dataset.texto) {
+            boton.textContent = boton.dataset.texto;
+            boton.disabled = false;
+            boton.removeAttribute('aria-busy');
+        }
+    });
+});
+</script>
