@@ -2,7 +2,9 @@
 
 Corre en la computadora donde la profesora da la clase con Zoom, porque Zoom gratuito guarda la grabación solo ahí.
 
-**Estado: sin probar con Zoom, FFmpeg ni Supabase Storage reales.** Solo tiene pruebas automáticas con datos simulados.
+**Estado:** probado de verdad en el proyecto de prueba `jsu-videos-test` (FFmpeg, Supabase Storage, iPhone y una
+grabación real de Zoom Básico de 72 s publicada sola). No se probó una grabación real de 34–41 min ni el modo
+`--produccion` fuera de las pruebas automáticas. Descripción completa del módulo: `../VIDEOS_ON_DEMAND.md`.
 
 ## Qué tiene que hacer la profesora
 
