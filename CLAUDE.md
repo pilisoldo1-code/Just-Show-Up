@@ -585,8 +585,12 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     `least(duración − margen_menos_seg, clase_min_seg)` (30 min) y duración + `margen_mas_seg`. El stash
     «duracion-minima-30min» quedó superado por esto (no aplicarlo: además pisaría `_video_evaluar`).
     Pruebas: `tests/base_local/test_videos_independientes_base.py` (124) y `tests.test_videos.GrabacionesIndependientes`.
-  - **Menú**: la administradora tiene Videos en el menú de cuenta y no en las secciones: una décima sección desborda el
-    header a 1120 px. Alumna y profesora lo tienen en sus secciones. No se tocó el CSS del header.
+  - **Menú**: Videos On Demand está en las secciones de los tres roles (ya no en el menú de cuenta). La administradora
+    tiene 10 secciones: la suya dice «Videos» (con «Videos On Demand» no entran en el header de 1200 px), el header lleva
+    `.menu-largo` (más de 9 secciones), que pasa al desplegable ☰ hasta 1219 px (los demás roles, hasta 1099) y oculta
+    el nombre junto a las iniciales. El script del menú usa el mismo corte. Pantalla de Videos: mismas piezas que Mi
+    perfil (`.panel` + `h2` + `.subtitle` + `horario-form form-plano`) y Tipos de clase (`.seccion-encabezado` con el
+    botón «Elegir qué horarios se graban»).
   - **Borrar cuentas y empresas**: `video_reproduccion.id_usuario` queda vacío y `video_agente` cae en cascada.
     `empresa_demo.py borrar` borra primero los archivos de Storage, verifica listando el bucket y, si algo falla, corta sin
     borrar ninguna fila.
