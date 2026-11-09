@@ -125,14 +125,16 @@ ok("la profesora no activa", rpc(profesora1, "video_programar", p_id_horario=h1,
 ok("anon no activa", rpc(anon, "video_programar", p_id_horario=h1, p_activa=True).get("error") == "42501")
 ok("otra empresa no activa", rpc(administradora2, "video_programar", p_id_horario=h1, p_activa=True)["resultado"] == "no_encontrado")
 _, h60 = clase(e1, prof1, "2026-12-07", "11:00", 60)
-ok("un horario de 60 min no se activa", rpc(administradora1, "video_programar", p_id_horario=h60, p_activa=True)["resultado"] == "duracion_no_valida")
+ok("un horario de 60 min también se activa (Zoom Básico: la grabación puede ser parcial)",
+   rpc(administradora1, "video_programar", p_id_horario=h60, p_activa=True)["resultado"] == "ok")
+rpc(administradora1, "video_programar", p_id_horario=h60, p_activa=False)
 ok("la administradora activa", programar(administradora1, h1)["resultado"] == "ok")
 programar(administradora2, h2)
 ok("autorizada después de activar", consultar(prof1) == "autorizada")
 conf = rpc(administradora1, "videos_configuracion")
 ok("la configuración lista sus horarios", {h["id"] for h in conf} >= {h1, h60} and h2 not in {h["id"] for h in conf})
-ok("marca activa y programable", next(h for h in conf if h["id"] == h1)["activa"]
-   and not next(h for h in conf if h["id"] == h60)["programable"])
+ok("marca activa y programable (cualquier duración)", next(h for h in conf if h["id"] == h1)["activa"]
+   and next(h for h in conf if h["id"] == h60)["programable"] and not next(h for h in conf if h["id"] == h60)["activa"])
 ok("la configuración no es para profesoras", rpc(profesora1, "videos_configuracion") == [])
 rpc(administradora1, "video_programar", p_id_horario=h1, p_activa=False)
 ok("desactivar corta la autorización", consultar(prof1) == "no_autorizada")
@@ -142,14 +144,14 @@ ok("una clase anterior a la activación no se autoriza", consultar(prof1) == "no
 q(su, "update public.video_programacion set activa_desde = '2026-01-01' where id_horario = %s", (h1,))
 
 # ---------- duración ----------
-ok("34:00 entra", consultar(prof1, duracion=2040) == "autorizada")
-ok("33:59 no entra", consultar(prof1, duracion=2039) == "duracion_fuera_de_rango")
+ok("30:00 entra (mínimo para una clase: 30 min o el relativo, el menor)", consultar(prof1, duracion=1800) == "autorizada")
+ok("29:59 no entra", consultar(prof1, duracion=1799) == "duracion_fuera_de_rango")
 ok("41:00 entra", consultar(prof1, duracion=2460) == "autorizada")
 ok("41:01 no entra", consultar(prof1, duracion=2461) == "duracion_fuera_de_rango")
 ok("60 segundos no se registran", registrar(prof1, duracion=60)["resultado"] == "duracion_fuera_de_rango")
-q(su, "update public.video_parametros set margen_menos_seg = 60")
-ok("el margen es configurable", consultar(prof1, duracion=2040) == "duracion_fuera_de_rango")
-q(su, "update public.video_parametros set margen_menos_seg = 360")
+q(su, "update public.video_parametros set clase_min_seg = 2400")
+ok("el mínimo es configurable", consultar(prof1, duracion=2040) == "autorizada" and consultar(prof1, duracion=2039) == "duracion_fuera_de_rango")
+q(su, "update public.video_parametros set clase_min_seg = 1800")
 ok("una sesión no lee los parámetros", como(alumna1, "select * from public.video_parametros") == {"error": "42501"})
 
 # ---------- identificación de la clase ----------

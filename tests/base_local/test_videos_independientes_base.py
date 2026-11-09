@@ -350,8 +350,7 @@ cb = q(su, "insert into public.clase (id_empresa, id_profesora, id_horario, id_t
            "values (%s, %s, %s, %s, '2026-11-16', '08:00', 40, 800, 7) returning id", (e1, prof1b, hb, t40b), uno=True)["id"]
 rpc(administradora1, "video_programar", p_id_horario=hb, p_activa=True)
 q(su, "update public.video_programacion set activa_desde = '2026-01-01' where id_horario = %s", (hb,))
-ok("clase programada de 40 min: misma regla de siempre (34 min no... 33:59 rechaza)",
-   consultar(prof1b, "2026-11-16T08:02:00-03:00", 2039)["resultado"] == "duracion_fuera_de_rango")
+ok("clase programada de 40 min: 29:59 no se publica", consultar(prof1b, "2026-11-16T08:02:00-03:00", 1799)["resultado"] == "duracion_fuera_de_rango")
 r = registrar(prof1b, "2026-11-16T08:02:00-03:00", duracion=2340)
 vb = r.get("id_video")
 ok("y se registra como video de su clase, sin grabación independiente",
@@ -360,6 +359,45 @@ ok("y se publica como siempre", rpc(srvc, "video_publicar", p_id_video=vb, p_id_
 ok("con el nombre de su tipo de clase y sin la marca de especial",
    biblioteca(alumna1)[vb]["clase"] == "PRUEBA-40b" and biblioteca(alumna1)[vb]["independiente"] is False
    and biblioteca(alumna1)[vb]["tipo"] == "PRUEBA-40b")
+
+# ---------- duraciones con Zoom Básico: clases de 60 y 50 min (parciales) e independientes cortas ----------
+prof60, prof50 = cuenta("prof60@prueba.invalid", e1, "profesora"), cuenta("prof50@prueba.invalid", e2, "profesora")
+for prof in (prof60, prof50):
+    agente(prof)
+c60 = None
+for prof, empresa, dur, admin, fecha, hora in ((prof60, e1, 60, administradora1, "2026-11-17", "08:00"),
+                                              (prof50, e2, 50, administradora2, "2026-11-17", "19:00")):
+    tt = q(su, "insert into public.tipo_clase (id_empresa, nombre, duracion, precio_presencial, cupo_max) "
+               "values (%s, %s, %s, 800, 7) returning id", (empresa, f"PRUEBA-{dur}", dur), uno=True)["id"]
+    hh = q(su, "insert into public.horario (id_empresa, id_profesora, id_tipo_clase, dia_semana, hora_inicio, duracion, cupo_max, "
+               "precio, activo) values (%s, %s, %s, 'martes', %s, %s, 7, 800, true) returning id", (empresa, prof, tt, hora, dur), uno=True)["id"]
+    cc = q(su, "insert into public.clase (id_empresa, id_profesora, id_horario, id_tipo_clase, fecha, hora_inicio, duracion, precio, "
+               "cupo_max) values (%s, %s, %s, %s, %s, %s, %s, 800, 7) returning id", (empresa, prof, hh, tt, fecha, hora, dur), uno=True)["id"]
+    c60 = c60 or cc
+    ok(f"un horario de {dur} min se puede activar", rpc(admin, "video_programar", p_id_horario=hh, p_activa=True)["resultado"] == "ok")
+    q(su, "update public.video_programacion set activa_desde = '2026-01-01' where id_horario = %s", (hh,))
+    inicio = f"{fecha}T{hora}:30-03:00"
+    for seg, esperado, txt in ((1799, "duracion_fuera_de_rango", "29:59"), (1800, "autorizada", "30:00"),
+                               (2400, "autorizada", "40:00 (corte de Zoom Básico)"), (dur * 60, "autorizada", f"{dur}:00 (completa)"),
+                               (dur * 60 + 60, "autorizada", f"{dur + 1}:00"), (dur * 60 + 61, "duracion_fuera_de_rango", f"{dur + 1}:01"),
+                               (5, "duracion_fuera_de_rango", "5 s (vacía)")):
+        r = consultar(prof, inicio, seg)
+        ok(f"clase de {dur} min, grabación de {txt}: {esperado}", r["resultado"] == esperado
+           and (esperado != "autorizada" or (r.get("id_clase") == cc and r.get("id_empresa") == empresa)), r)
+r = registrar(prof60, "2026-11-17T08:00:30-03:00", duracion=2400)
+ok("una grabación parcial de 40 min de la clase de 60 se registra con su duración REAL y se publica",
+   r.get("resultado") == "ok" and q(su, "select duracion_seg, id_clase from public.video where id = %s", (r["id_video"],), uno=True)
+   == {"duracion_seg": 2400, "id_clase": c60}
+   and rpc(srvc, "video_publicar", p_id_video=r["id_video"], p_id_profesora=prof60).get("resultado") == "ok")
+ok("vence a las 24 h desde la publicación, como todas",
+   q(su, "select vence_en - publicado_en = interval '24 hours' a from public.video where id = %s", (r["id_video"],), uno=True)["a"])
+TIPO60 = tipo(e1, "Gimnasia corta")
+rr = rpc(ClienteFalso(uri, prof60), "grabacion_independiente_crear", p_titulo="Estiramientos rápidos", p_id_tipo_clase=TIPO60)
+ini = ahora_mas(3)
+for minutos in (10, 15, 20):
+    ok(f"grabación independiente de {minutos} min: autorizada (no se exige 30 ni 40)",
+       consultar(prof60, ini, minutos * 60) == {"resultado": "autorizada", "id_grabacion": rr["id"], "id_empresa": e1})
+ok("independiente de 59 s (accidental): no", consultar(prof60, ini, 59)["resultado"] == "duracion_fuera_de_rango")
 
 # ---------- vuelta atrás ----------
 with su.cursor() as cur:

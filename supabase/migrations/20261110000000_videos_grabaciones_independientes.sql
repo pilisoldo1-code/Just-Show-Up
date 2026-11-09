@@ -14,13 +14,18 @@
 -- - Publicación, vencimiento a las 24 h desde la publicación, limpieza, reproducción, topes de consumo y permisos son
 --   los mismos de siempre (misma tabla `video`, misma política). La empresa sale de la solicitud, nunca del programa.
 -- - No toca reservas, asistencias, facturación, pagos, horarios, clases ni planificación.
+-- Además, para que las CLASES PROGRAMADAS funcionen con Zoom Básico (corta a los 40 min) aunque la clase presencial dure
+-- 50 o 60: se puede activar la grabación de un horario de cualquier duración y una grabación PARCIAL de la clase se
+-- publica si dura por lo menos clase_min_seg (30 min) o el mínimo relativo de siempre (duración − margen_menos_seg),
+-- el que sea menor, y como máximo la duración de la clase + margen_mas_seg. duracion_clase_min deja de usarse.
 -- Vuelta atrás: supabase/pendientes/vuelta_atras_videos_grabaciones_independientes.sql
 
 alter table public.video_parametros
     add column independiente_ventana_seg integer not null default 10800 check (independiente_ventana_seg between 600 and 86400),
     add column independiente_tolerancia_seg integer not null default 120 check (independiente_tolerancia_seg between 0 and 900),
     add column independiente_min_seg integer not null default 60 check (independiente_min_seg >= 1),
-    add column independiente_max_seg integer not null default 14400 check (independiente_max_seg >= independiente_min_seg);
+    add column independiente_max_seg integer not null default 14400 check (independiente_max_seg >= independiente_min_seg),
+    add column clase_min_seg integer not null default 1800 check (clase_min_seg >= 60);
 
 create table public.grabacion_independiente (
     id bigint generated always as identity primary key,
@@ -95,6 +100,67 @@ begin
         raise exception 'El video no coincide con la empresa y la profesora de su grabación.' using errcode = '23503';
     end if;
     return new;
+end;
+$$;
+
+create or replace function public.videos_configuracion()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+    v_empresa bigint := public.empresa_activa();
+    v_duracion integer := (select duracion_clase_min from public.video_parametros);
+begin
+    if v_empresa is null or not public.es_admin() then
+        return '[]'::jsonb;
+    end if;
+    return coalesce((
+        select jsonb_agg(jsonb_build_object(
+                   'id', h.id,
+                   'dia_semana', h.dia_semana,
+                   'hora_inicio', h.hora_inicio,
+                   'clase', coalesce(t.nombre, 'Clase'),
+                   'profesora', btrim(coalesce(p.nombre, '') || ' ' || coalesce(p.apellido, '')),
+                   'duracion', h.duracion,
+                   'programable', true,
+                   'activa', coalesce(g.activa, false)
+               ))
+        from public.horario h
+        left join public.tipo_clase t on t.id = h.id_tipo_clase
+        left join public.profiles p on p.id = h.id_profesora
+        left join public.video_programacion g on g.id_horario = h.id
+        where h.id_empresa = v_empresa and h.activo
+    ), '[]'::jsonb);
+end;
+$$;
+
+create or replace function public.video_programar(p_id_horario bigint, p_activa boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_empresa bigint := public.empresa_activa();
+    v_duracion integer;
+begin
+    if v_empresa is null or not public.es_admin() then
+        return jsonb_build_object('resultado', 'no_autorizada');
+    end if;
+    select h.duracion into v_duracion from public.horario h where h.id = p_id_horario and h.id_empresa = v_empresa;
+    if not found then
+        return jsonb_build_object('resultado', 'no_encontrado');
+    end if;
+    insert into public.video_programacion (id_empresa, id_horario, activa, actualizado_por)
+    values (v_empresa, p_id_horario, p_activa, (select auth.uid()))
+    on conflict (id_horario) do update
+        set activa = excluded.activa, actualizado_por = excluded.actualizado_por, actualizado_en = now(),
+            activa_desde = case when public.video_programacion.activa or not excluded.activa
+                                then public.video_programacion.activa_desde else now() end;
+    return jsonb_build_object('resultado', 'ok');
 end;
 $$;
 
@@ -248,7 +314,7 @@ begin
     if not public._video_programada(c.id) then
         return jsonb_build_object('resultado', 'no_autorizada');
     end if;
-    if coalesce(p_duracion_seg, 0) < c.duracion * 60 - g.margen_menos_seg
+    if coalesce(p_duracion_seg, 0) < least(c.duracion * 60 - g.margen_menos_seg, g.clase_min_seg)
        or p_duracion_seg > c.duracion * 60 + g.margen_mas_seg then
         return jsonb_build_object('resultado', 'duracion_fuera_de_rango');
     end if;

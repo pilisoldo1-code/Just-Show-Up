@@ -525,8 +525,9 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   - **Identificación**: `_video_evaluar` exige una sola clase de esa profesora dentro de ±15 min; si no, no publica.
     `sin_clase` y `sin_espacio` se reintentan durante 24 h porque las clases se generan a demanda. La empresa sale de la
     clase, nunca del programa.
-  - **Duración**: entre `clase.duracion` − 6 min y + 1 min (34 a 41 para 40). **Margen técnico provisorio**, pendiente
-    de validar con grabaciones reales; se cambia en `video_parametros`. La biblioteca muestra la duración real.
+  - **Duración** (desde 20261110): una clase se publica con una grabación de por lo menos 30 min (`clase_min_seg`, o
+    `clase.duracion` − 6 min si es menor) y como máximo `clase.duracion` + 1 min; las independientes, de 1 min a 4 h.
+    Se cambia en `video_parametros`. La biblioteca muestra la duración real.
   - **Acceso**: 24 h desde `publicado_en`. «Vencido» no es un estado: se calcula con `vence_en`, sin depender del cron.
     Las URLs duran `min(90 min, restante − 15 s)`: el margen cubre la demora entre calcular y firmar. No se puede borrar lo
     que un dispositivo ya descargó, ni impedir grabar la pantalla.
@@ -570,7 +571,11 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     espacio ocupado y de la huella repetida. La vuelta atrás
     (`supabase/pendientes/vuelta_atras_videos_grabaciones_independientes.sql`) trae el texto exacto de las 6 funciones de
     `20261106000000` y la prueba comprueba que quedan byte a byte (se niega si ya hay videos independientes).
-    Pruebas: `tests/base_local/test_videos_independientes_base.py` (102) y `tests.test_videos.GrabacionesIndependientes`.
+    **La misma migración adapta las clases programadas a Zoom Básico**: se activa un horario de cualquier duración
+    (`programable` siempre; `duracion_clase_min` ya no se usa) y la grabación (parcial) de una clase se publica entre
+    `least(duración − margen_menos_seg, clase_min_seg)` (30 min) y duración + `margen_mas_seg`. El stash
+    «duracion-minima-30min» quedó superado por esto (no aplicarlo: además pisaría `_video_evaluar`).
+    Pruebas: `tests/base_local/test_videos_independientes_base.py` (124) y `tests.test_videos.GrabacionesIndependientes`.
   - **Menú**: la administradora tiene Videos en el menú de cuenta y no en las secciones: una décima sección desborda el
     header a 1120 px. Alumna y profesora lo tienen en sus secciones. No se tocó el CSS del header.
   - **Borrar cuentas y empresas**: `video_reproduccion.id_usuario` queda vacío y `video_agente` cae en cascada.

@@ -3,13 +3,14 @@
 Corre en la computadora donde la profesora da la clase con Zoom, porque Zoom gratuito guarda la grabación solo ahí.
 
 **Estado:** probado de verdad en el proyecto de prueba `jsu-videos-test` (FFmpeg, Supabase Storage, iPhone y una
-grabación real de Zoom Básico de 72 s publicada sola). No se probó una grabación real de 34–41 min ni el modo
+grabación real de Zoom Básico de 72 s publicada sola). No se probó una grabación real larga de Zoom ni el modo
 `--produccion` fuera de las pruebas automáticas. Descripción completa del módulo: `../VIDEOS_ON_DEMAND.md`.
 
 ## Qué tiene que hacer la profesora
 
 1. Iniciar la reunión desde la **app de escritorio** de Zoom. Desde el celular no se graba en la computadora.
-2. Empezar a la hora de la clase y terminar antes de los 40 minutos, que es cuando Zoom corta.
+2. Empezar a grabar dentro de los 15 minutos del inicio de la clase y grabar por lo menos 30 minutos (Zoom Básico
+   corta a los 40: en clases de 50 o 60 minutos se publica la parte grabada).
 3. No detener y volver a grabar: una reunión con más de un video no se publica.
 4. Dejar la computadora prendida y con internet hasta que termine de subir.
 

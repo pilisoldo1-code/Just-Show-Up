@@ -1,4 +1,4 @@
--- Vuelta atrás de 20261110000000_videos_grabaciones_independientes.sql: deja las 6 funciones exactamente como en
+-- Vuelta atrás de 20261110000000_videos_grabaciones_independientes.sql: deja las 8 funciones exactamente como en
 -- 20261106000000_videos_on_demand.sql, vuelve video.id_clase obligatorio y quita la tabla de grabaciones independientes.
 -- Se niega si ya hay videos de grabaciones independientes: primero hay que limpiarlos y borrarlos a propósito.
 do $$
@@ -25,6 +25,70 @@ begin
         raise exception 'El video no coincide con la empresa y la profesora de su clase.' using errcode = '23503';
     end if;
     return new;
+end;
+$$;
+
+create or replace function public.videos_configuracion()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+    v_empresa bigint := public.empresa_activa();
+    v_duracion integer := (select duracion_clase_min from public.video_parametros);
+begin
+    if v_empresa is null or not public.es_admin() then
+        return '[]'::jsonb;
+    end if;
+    return coalesce((
+        select jsonb_agg(jsonb_build_object(
+                   'id', h.id,
+                   'dia_semana', h.dia_semana,
+                   'hora_inicio', h.hora_inicio,
+                   'clase', coalesce(t.nombre, 'Clase'),
+                   'profesora', btrim(coalesce(p.nombre, '') || ' ' || coalesce(p.apellido, '')),
+                   'duracion', h.duracion,
+                   'programable', h.duracion = v_duracion,
+                   'activa', coalesce(g.activa, false)
+               ))
+        from public.horario h
+        left join public.tipo_clase t on t.id = h.id_tipo_clase
+        left join public.profiles p on p.id = h.id_profesora
+        left join public.video_programacion g on g.id_horario = h.id
+        where h.id_empresa = v_empresa and h.activo
+    ), '[]'::jsonb);
+end;
+$$;
+
+create or replace function public.video_programar(p_id_horario bigint, p_activa boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    v_empresa bigint := public.empresa_activa();
+    v_duracion integer;
+begin
+    if v_empresa is null or not public.es_admin() then
+        return jsonb_build_object('resultado', 'no_autorizada');
+    end if;
+    select h.duracion into v_duracion from public.horario h where h.id = p_id_horario and h.id_empresa = v_empresa;
+    if not found then
+        return jsonb_build_object('resultado', 'no_encontrado');
+    end if;
+    if p_activa and v_duracion <> (select duracion_clase_min from public.video_parametros) then
+        return jsonb_build_object('resultado', 'duracion_no_valida');
+    end if;
+    insert into public.video_programacion (id_empresa, id_horario, activa, actualizado_por)
+    values (v_empresa, p_id_horario, p_activa, (select auth.uid()))
+    on conflict (id_horario) do update
+        set activa = excluded.activa, actualizado_por = excluded.actualizado_por, actualizado_en = now(),
+            activa_desde = case when public.video_programacion.activa or not excluded.activa
+                                then public.video_programacion.activa_desde else now() end;
+    return jsonb_build_object('resultado', 'ok');
 end;
 $$;
 
@@ -234,7 +298,7 @@ create trigger video_coherente before insert or update of id_empresa, id_clase, 
     for each row execute function public._video_coherente();
 drop table public.grabacion_independiente;
 alter table public.video_parametros drop column independiente_ventana_seg, drop column independiente_tolerancia_seg,
-    drop column independiente_min_seg, drop column independiente_max_seg;
+    drop column independiente_min_seg, drop column independiente_max_seg, drop column clase_min_seg;
 do $$
 begin
     if to_regclass('supabase_migrations.schema_migrations') is not null then

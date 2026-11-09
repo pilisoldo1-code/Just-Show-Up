@@ -44,7 +44,10 @@ hasta **15 minutos antes o después**. Si hay cero o más de una, no publica. La
 ### Reglas de publicación
 
 - Solo horarios activados por la administradora, desde la fecha de activación.
-- Duración entre la de la clase −6 min y +1 min (34 a 41 min para una clase de 40). Se ajusta en `video_parametros`.
+- Se puede activar un horario de **cualquier duración** (50, 60 min…): con Zoom Básico la grabación suele ser **parcial**.
+- Duración del video: **por lo menos 30 minutos** (`clase_min_seg`; o el mínimo relativo de siempre, duración − 6 min, si
+  es menor) y **como máximo la duración de la clase + 1 min**. Ejemplos: clase de 60 → de 30:00 a 61:00; clase de 50 → de
+  30:00 a 51:00; clase de 40 → de 30:00 a 41:00. La biblioteca muestra la duración real. Se ajusta en `video_parametros`.
 - Una grabación por clase. Si la reunión dejó más de un video (se detuvo y se volvió a grabar), no se publica.
 - Grabaciones de más de 72 horas no se procesan.
 - Si la clase todavía no existe en la base (`sin_clase`) o no hay espacio (`sin_espacio`), reintenta cada 30 min
@@ -120,7 +123,8 @@ del que la base guarda solo la huella.
 1. Abrir la reunión desde la **app de escritorio** de Zoom (no desde el celular), a la hora de la clase.
 2. Grabar **en esta computadora** (botón Grabar, o la grabación automática si su cuenta la permite).
 3. No detener y volver a grabar.
-4. Terminar la reunión antes de los 40 minutos (Zoom Básico la corta a los 40) y dejar la computadora prendida unos
+4. Grabar por lo menos 30 minutos (Zoom Básico corta a los 40: en clases de 50 o 60 se publica la parte grabada) y
+   dejar la computadora prendida unos
    minutos.
 
 ## Seguridad
@@ -155,7 +159,7 @@ Antes de activar cualquier cosa que pueda facturar, consultar: la condición del
 
 - Automáticas: `python -m unittest discover tests` (incluye `test_videos`, `test_agente_videos`, `test_entorno`) y,
   en Postgres local, `tests/base_local/test_videos_base.py` (155), `test_videos_miniaturas_base.py` (33),
-  `test_videos_prueba_base.py` (27) y `test_videos_independientes_base.py` (102: grabaciones independientes).
+  `test_videos_prueba_base.py` (27) y `test_videos_independientes_base.py` (124: grabaciones independientes y duraciones de ambas modalidades).
 - **Reales, en el proyecto de prueba `jsu-videos-test`** (organización Free aparte, datos ficticios, 08 y 09/11/2026):
   FFmpeg con un video de 40 min, subida y publicación, reproducción en Chromium y Safari de iPhone, accesos entre
   empresas, vencimiento natural a las 24 h, limpieza real y una **grabación real de Zoom Básico** (72 s) detectada,
@@ -169,7 +173,7 @@ Antes de activar cualquier cosa que pueda facturar, consultar: la condición del
 | Postgres local (`tests/base_local`, 23 archivos) | 21 sin fallas; 2 con fallas **que también ocurren en main** |
 | Supabase local real con las 28 migraciones (PostgREST) | asistencias 24/24, bajas 35/35, cobro por inasistencia 43/43, dos empresas 75/75, altas 95/96 (falla de main), recorrido de pantallas 35/35 con el código del módulo **y** con el de main |
 | Menú y permisos por rol contra `jsu-videos-test` | 10/10 |
-| **Con grabaciones independientes y tipo de clase** (29 migraciones) | unitarias 568/568; base local 21 sin fallas (incluye independientes 102/102) + las 2 de main; Supabase local igual que arriba (altas 95/96 por la falla de main, recorrido 35/35 con el código del módulo y con el de main) |
+| **Con grabaciones independientes y tipo de clase** (29 migraciones) | unitarias 568/568; base local 21 sin fallas (incluye independientes 124/124) + las 2 de main; Supabase local igual que arriba (altas 95/96 por la falla de main, recorrido 35/35 con el código del módulo y con el de main) |
 
 **Fallas preexistentes de main (no las causa Videos On Demand; dan lo mismo en una copia limpia de `main`):**
 
@@ -185,9 +189,10 @@ expectativa (ahora exige también ese enlace, en quinto lugar), igual que ya lo 
 
 ## Limitaciones conocidas
 
-- **No verificado con una grabación real de 34–41 min**: el corte de Zoom Básico a los 40 min y el rango de duración
-  se probaron solo con un video generado y con la grabación corta. Si la profesora empieza a grabar más de 6 minutos
-  tarde, la grabación queda corta y no se publica (se ve en «Últimas grabaciones»).
+- **No verificado con una grabación real larga de Zoom**: el corte de Zoom Básico a los 40 min se probó solo con un
+  video generado y con la grabación corta. Una clase se publica si la grabación dura por lo menos 30 minutos y empezó
+  dentro de los 15 minutos del inicio de la clase; si no, no se publica (se ve en «Últimas grabaciones»).
+- Las grabaciones de clases de 50 o 60 minutos son **parciales** (Zoom Básico corta a los 40).
 - **Android** no probado (sí iPhone y computadora).
 - **Modo producción del programa** probado solo con pruebas automáticas; la primera ejecución real será en el sitio.
 - La limpieza corre una vez por día: los archivos vencidos quedan en Storage hasta esa pasada (no se ven: el acceso
