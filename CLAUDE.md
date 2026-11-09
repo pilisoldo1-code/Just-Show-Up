@@ -506,8 +506,17 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   cambiarla** (no está en su permiso de UPDATE por columna). La profesora la carga en el alta o
   después con "Cargar/Corregir cédula" en Alumnas (función `actualizar_cedula`, verifica rol;
   vacía = quitarla).
-- **Videos On Demand (rama `feature/videos-on-demand`, Pilar; migración `20261106000000_videos_on_demand.sql` SIN
-  APLICAR en producción y sin integrar en `main`)**. **Pruebas reales hechas el 08 y 09/11 en el proyecto de prueba
+- **Videos On Demand (desarrollo de Pilar en `feature/videos-on-demand`, continuado por Julieta en
+  `videos-on-demand-integracion`; integrado en `main` el 09/11)**. **Las 3 migraciones se aplicaron en producción el
+  09/11** como `20261109174154 videos_on_demand`, `20261109174223 videos_miniaturas` y
+  `20261109174346 videos_grabaciones_independientes`, con respaldo previo verificado restaurándolo en el Supabase local
+  (`2026-11-09 antes de Videos On Demand`); los 45 objetos del módulo quedaron idénticos a los archivos del repo.
+  **Arquitectura en producción**: theta (Vercel de Pilar, sin acceso a sus variables) MUESTRA los videos y amber
+  (Vercel de Julieta, Hobby) RECIBE las subidas del programa local: `VIDEOS_ENTORNO` y `CRON_SECRET` están solo en
+  amber, que corre el mismo código de `main` contra la misma base. En theta las rutas del programa local responden 403
+  (sin `VIDEOS_ENTORNO`) y su cron diario responde 503 (sin `CRON_SECRET`): es lo previsto. amber no se despliega solo
+  (su GitHub App no tiene permiso): después de cada cambio del módulo, `vercel deploy --prod` desde una copia limpia de
+  `main`. **Pruebas reales hechas el 08 y 09/11 en el proyecto de prueba
   `jsu-videos-test`** (organización Free aparte, datos ficticios, costo $0): FFmpeg 9.0.2 con un video de 40 min (3 partes,
   114 MB), subida a Storage y publicación, reproducción en Chromium y en Safari de iPhone, accesos entre empresas,
   vencimiento natural a las 24 h y limpieza real (archivos y miniatura borrados, registro conservado), y una grabación
