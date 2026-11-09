@@ -148,11 +148,14 @@ def main() -> None:
     if not entorno.es_local(dsn) and input(f"Escribí de nuevo el proyecto de PRUEBA ({args.proyecto}): ").strip() != args.proyecto:
         raise SystemExit("No coincide: no se hizo nada.")
     import psycopg2
-    with psycopg2.connect(dsn, sslmode="disable" if entorno.es_local(dsn) else "require") as conn:
-        try:
-            hechas = aplicar(conn, archivos)
-        except entorno.DestinoNoPermitido as e:
-            raise SystemExit(str(e))
+    # Sin «with»: en psycopg2 2.9 el bloque abre una transacción y `aplicar` no puede cambiar autocommit.
+    conn = psycopg2.connect(dsn, sslmode="disable" if entorno.es_local(dsn) else "require")
+    try:
+        hechas = aplicar(conn, archivos)
+    except entorno.DestinoNoPermitido as e:
+        raise SystemExit(str(e))
+    finally:
+        conn.close()
     print(f"Aplicadas: {len(hechas)}")
 
 
