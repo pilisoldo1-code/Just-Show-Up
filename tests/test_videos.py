@@ -299,13 +299,18 @@ class Menu(unittest.TestCase):
         request = SimpleNamespace(url=SimpleNamespace(path="/videos"))
         return main.templates.get_template("_menu.html").render(request=request, usuario=usuario)
 
-    def test_regresion_c4_la_administradora_conserva_nueve_secciones(self):
+    def test_la_administradora_lo_tiene_en_sus_secciones_y_no_en_la_cuenta(self):
         html = self.html(ADMIN)
         secciones = html[html.index('id="menu-principal"'):html.index("</nav>")]
-        self.assertEqual(secciones.count("<a "), 9)
-        self.assertNotIn('"/videos"', secciones)
+        self.assertEqual(secciones.count("<a "), 10)
+        self.assertIn('href="/videos"', secciones)
+        self.assertIn('<header class="menu menu-largo">', html)  # 10 secciones: desplegable hasta 1219 px
         cuenta = html[html.index('class="cuenta-opciones"'):]
-        self.assertIn('href="/videos"', cuenta)
+        self.assertNotIn('href="/videos"', cuenta[:cuenta.index("</details>")])
+
+    def test_alumna_y_profesora_no_usan_el_menu_largo(self):
+        for usuario in (ALUMNA, PROFESORA):
+            self.assertIn('<header class="menu">', self.html(usuario))
 
     def test_alumna_y_profesora_lo_tienen_en_sus_secciones(self):
         for usuario in (ALUMNA, PROFESORA):

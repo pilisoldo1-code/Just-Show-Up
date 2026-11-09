@@ -4554,16 +4554,27 @@ a.video-card-biblioteca:hover .video-play {
     overflow-wrap: anywhere;
 }
 
-/* ---------- Videos On Demand: grabaciones independientes ---------- */
+/* ---------- Videos On Demand: pantalla de la biblioteca (mismas piezas que Mi perfil y Tipos de clase) ---------- */
 .video-etiqueta {
     align-self: flex-start;
     font-size: 0.75rem;
 }
 
-.grabaciones-independientes {
-    margin-top: 2.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid #2a2e37;
+.videos-lista {
+    margin-bottom: 32px;
+}
+
+.videos-vacio {
+    margin: 0 0 24px;
+}
+
+.grabar-clase {
+    margin-top: 8px;
+}
+
+.grabar-clase .subtitle {
+    max-width: 720px;
+    margin-bottom: 20px;
 }
 
 .form-grabacion {
@@ -4578,29 +4589,121 @@ a.video-card-biblioteca:hover .video-play {
     align-self: flex-start;
 }
 
-.lista-grabaciones .badge {
-    align-self: flex-start;
+.grabar-nota {
+    max-width: 720px;
+    margin: 16px 0 0;
 }
 
 .lista-grabaciones {
     list-style: none;
+    margin: 0;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 12px;
 }
 
 .lista-grabaciones .video-card {
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    gap: 1rem;
+    gap: 12px 16px;
     flex-wrap: wrap;
 }
 
 .lista-grabaciones .video-card > div {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 6px;
     min-width: 0;
+}
+
+.lista-grabaciones .badge {
+    align-self: flex-start;
+}
+
+.lista-grabaciones form {
+    margin: 0;
+}
+
+/* el botón del encabezado tiene un texto largo: en celular pasa abajo del título en vez de achicarse */
+@media (max-width: 600px) {
+    .seccion-encabezado.videos-encabezado {
+        flex-wrap: wrap;
+    }
+
+    .seccion-encabezado.videos-encabezado .btn {
+        white-space: normal;
+    }
+}
+
+/* ---------- Videos On Demand: menú de la administradora (10 secciones) ---------- */
+/* Con 10 secciones el menú en una línea necesita unos 1190 px: entre 1100 y 1219 px pasa al desplegable, igual que
+   el de todos los roles por debajo de 1100 (mismas reglas, solo para .menu-largo). */
+@media (min-width: 1100px) and (max-width: 1219px) {
+    .menu.menu-largo {
+        gap: 12px;
+        position: relative;
+        z-index: 40;
+    }
+
+    .menu-largo .menu-boton {
+        display: inline-flex;
+    }
+
+    .menu-largo .menu-cuenta {
+        margin-left: auto;
+    }
+
+    .menu.menu-largo.abierto + .menu-fondo {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 35;
+        background: rgba(0, 0, 0, 0.4);
+    }
+
+    .menu-largo .menu-links {
+        display: none;
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        right: 0;
+        z-index: 40;
+        max-height: calc(100vh - 140px);
+        max-height: calc(100dvh - 140px);
+        overflow-y: auto;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 2px;
+        padding: 6px;
+        background: var(--card);
+        border: 1px solid #2a2e37;
+        border-radius: 12px;
+        box-shadow: 0 16px 32px rgba(0, 0, 0, 0.55);
+    }
+
+    .menu.menu-largo.abierto .menu-links {
+        display: flex;
+    }
+
+    .menu-largo .menu-links a {
+        padding: 12px 14px;
+        border-radius: 8px;
+    }
+
+    .menu-largo .menu-links a:hover {
+        background: #1d212b;
+    }
+
+    .menu-largo .menu-links a.activo {
+        border-bottom: none;
+        padding-bottom: 12px;
+        background: rgba(110, 231, 183, 0.12);
+    }
+}
+
+/* Las 10 secciones solo entran sin el nombre al lado del círculo con las iniciales (como por debajo de 1320 px). */
+.menu-largo .cuenta-nombre {
+    display: none;
 }

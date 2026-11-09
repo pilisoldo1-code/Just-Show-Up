@@ -7,6 +7,7 @@
 {% set secciones = [] %}
 {% elif usuario.es_admin %}
 {# Orden fijo en computadora y celular: primero la operación de las clases, después las personas, la facturación y las estadísticas #}
+{# «Videos» y no «Videos On Demand»: con el nombre completo las 10 secciones no entran en el encabezado (1200 px) #}
 {% set secciones = [
     ("/administracion", "Inicio", ruta.startswith("/administracion")),
     ("/profesora/horarios", "Horarios", ruta.startswith("/profesora/horarios")),
@@ -17,6 +18,7 @@
     ("/profesora/profesoras", "Profesoras", ruta.startswith("/profesora/profesoras")),
     ("/profesora/resumenes", "Facturación", ruta.startswith("/profesora/resumenes")),
     ("/profesora/estadisticas", "Estadísticas", ruta.startswith("/profesora/estadisticas")),
+    ("/videos", "Videos", ruta.startswith("/videos")),
 ] %}
 {% elif usuario.es_profesora %}
 {% set secciones = [
@@ -36,7 +38,7 @@
     ("/videos", "Videos On Demand", ruta.startswith("/videos")),
 ] %}
 {% endif %}
-<header class="menu">
+<header class="menu{{ ' menu-largo' if secciones | length > 9 else '' }}">
     <button type="button" class="menu-boton" aria-expanded="false" aria-controls="menu-principal" aria-label="Abrir menú">
         <span class="menu-icono-abrir" aria-hidden="true">☰</span>
         <span class="menu-icono-cerrar" aria-hidden="true">✕</span>
@@ -59,8 +61,6 @@
             <div class="cuenta-opciones">
                 {% if usuario.empresa_nombre %}<span class="cuenta-empresa">{{ usuario.empresa_nombre }}</span>{% endif %}
                 <a href="/perfil">Mi perfil</a>
-                {# Acá y no en las secciones: una décima sección desbordaba el header de la administradora en escritorio #}
-                {% if usuario.es_admin and not usuario.es_superadmin %}<a href="/videos">Videos On Demand</a>{% endif %}
                 <form action="/logout" method="post">
                     <button type="submit">Cerrar sesión</button>
                 </form>
@@ -109,7 +109,7 @@
             }
         });
         // Si se agranda la ventana con el menú abierto, vuelve al estado normal.
-        var escritorio = window.matchMedia("(min-width: 1100px)");
+        var escritorio = window.matchMedia(menu.classList.contains("menu-largo") ? "(min-width: 1220px)" : "(min-width: 1100px)");
         var alCambiar = function (e) { if (e.matches) abrirMenu(false); };
         if (escritorio.addEventListener) escritorio.addEventListener("change", alCambiar);
     })();
