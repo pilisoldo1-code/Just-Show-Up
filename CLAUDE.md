@@ -507,8 +507,14 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   después con "Cargar/Corregir cédula" en Alumnas (función `actualizar_cedula`, verifica rol;
   vacía = quitarla).
 - **Videos On Demand (rama `feature/videos-on-demand`, Pilar; migración `20261106000000_videos_on_demand.sql` SIN
-  APLICAR y sin integrar en `main`)**: **sin probar todavía con Zoom, FFmpeg, Supabase Storage real, iPhone ni Android**;
-  todo lo de abajo tiene solo pruebas locales con datos simulados. Mux Free sigue en evaluación.
+  APLICAR en producción y sin integrar en `main`)**. **Pruebas reales hechas el 08 y 09/11 en el proyecto de prueba
+  `jsu-videos-test`** (organización Free aparte, datos ficticios, costo $0): FFmpeg 9.0.2 con un video de 40 min (3 partes,
+  114 MB), subida a Storage y publicación, reproducción en Chromium y en Safari de iPhone, accesos entre empresas,
+  vencimiento natural a las 24 h y limpieza real (archivos y miniatura borrados, registro conservado), y una grabación
+  **real de Zoom Básico de 72 s** detectada, comprimida, con miniatura y publicada sola por el agente (con el mínimo de
+  duración bajado temporalmente con `videos_prueba_datos.py margen` y restaurado después). **No verificado**: una
+  grabación real de Zoom de 34–41 min (corte de Zoom Básico a los 40 min) y Android; Julieta decidió no hacer la prueba
+  larga. Mux Free sigue en evaluación.
   - **Selección**: la administradora activa los horarios en `/videos/configuracion` (`video_programacion`; solo
     horarios de `duracion_clase_min`, 40). Después de cada clase es automático. Lo no activado no se comprime ni se sube.
   - **Flujo**: `agente/agente_videos.py`, en la computadora de la profesora, detecta el `.mp4`, consulta
@@ -539,12 +545,6 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     bucket y marca; el registro se conserva. Los errores quedan en `limpieza_error` y se reintentan primero los que hace
     más que no se intentan. Las subidas se consideran abandonadas por `actualizado_en`, no por `creado_en`; las nunca
     publicadas se pueden volver a subir.
-  - **Menú**: la administradora tiene Videos en el menú de cuenta y no en las secciones: una décima sección desborda el
-    header a 1120 px. Alumna y profesora lo tienen en sus secciones. No se tocó el CSS del header.
-  - **Borrar cuentas y empresas**: `video_reproduccion.id_usuario` queda vacío y `video_agente` cae en cascada.
-    `empresa_demo.py borrar` borra primero los archivos de Storage, verifica listando el bucket y, si algo falla, corta sin
-    borrar ninguna fila.
-  - **Protección contra producción** (`app/entorno.py`): el programa, el servidor (`VIDEOS_ENTORNO`) y la base
   - **Miniaturas (migración `20261108000000_videos_miniaturas.sql`, sin aplicar todavía)**: el programa local genera con
     FFmpeg un JPEG de 480x270 al 10 % de la clase (unos 10 KB), después de verificar lo comprimido, y lo manda con el
     registro; se reutiliza en los reintentos. Es opcional: si falla o no sirve, el video se publica igual y la tarjeta
@@ -554,10 +554,19 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     trigger la borra al pasar a «eliminado» y si se registra otro archivo para la clase. No toca Storage ni las funciones
     del módulo. Vuelta atrás: `supabase/pendientes/vuelta_atras_videos_miniaturas.sql` (la del módulo también la quita).
     Pruebas: `tests/base_local/test_videos_miniaturas_base.py` (33).
+  - **Menú**: la administradora tiene Videos en el menú de cuenta y no en las secciones: una décima sección desborda el
+    header a 1120 px. Alumna y profesora lo tienen en sus secciones. No se tocó el CSS del header.
+  - **Borrar cuentas y empresas**: `video_reproduccion.id_usuario` queda vacío y `video_agente` cae en cascada.
+    `empresa_demo.py borrar` borra primero los archivos de Storage, verifica listando el bucket y, si algo falla, corta sin
+    borrar ninguna fila.
+  - **Protección contra producción** (`app/entorno.py`): el programa, el servidor (`VIDEOS_ENTORNO`) y la base
     (`video_parametros.entorno`) tienen que coincidir. Una base recién migrada queda cerrada. Un entorno `pruebas-...` no
     corre en Vercel ni contra producción, y el programa solo habla con la red local si no se usa `--produccion`. Producción
     se reconoce por huellas sha256: no escribir sus identificadores en archivos nuevos. Las huellas están repetidas en
     `agente/agente_videos.py`, que se instala solo; una prueba comprueba que coincidan.
+  - **Zoom en la Mac**: guarda en `~/Documents/Zoom/«AAAA-MM-DD HH.MM.SS Tema»/videoNNNN.mp4` (más `audioNNNN.m4a` y
+    `recording.conf`); la hora de la carpeta es la del inicio de la grabación. Una grabación con la cámara apagada pesa
+    muy poco (100 KB por minuto): el agente la procesa igual aunque quede bajo `TAMANO_MINIMO_VIDEO`.
   - **Pruebas reales**: procedimiento en `agente/PRUEBAS_REALES.md`. `scripts/videos_prueba_migrar.py` (sin `--aplicar`
     solo revisa; exige proyecto vacío y confirmación) y `scripts/videos_prueba_datos.py` leen solo `.env.videos-prueba`,
     nunca el `.env`. **Sin ejecutar contra Supabase remoto.**
