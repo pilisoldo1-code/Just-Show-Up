@@ -97,6 +97,12 @@ else:
     actual.update(videos)
     MADRES = MADRES + [("video", "id_clase", "clase"), ("video_programacion", "id_horario", "horario"),
                        ("video_reproduccion", "id_video", "video")]
+    grabaciones = opcional("grabacion_independiente")  # grabaciones independientes: solo si ya se aplicó su migración
+    if grabaciones is not None:
+        ok(f"grabacion_independiente: {len(grabaciones)} filas, todas de una empresa existente",
+           all(f["id_empresa"] in ids_empresa for f in grabaciones))
+        actual["grabacion_independiente"] = grabaciones
+        MADRES = MADRES + [("video", "id_grabacion", "grabacion_independiente")]
 
 por_id = {t: {f["id"]: f for f in actual[t]} for t in {m for _, _, m in MADRES}}
 for hija, col, madre in MADRES:

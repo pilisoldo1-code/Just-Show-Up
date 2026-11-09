@@ -542,8 +542,14 @@ def borrar(db, guardar_contrasenas=True) -> dict:
                 raise SystemExit("Un video no pertenece a esta empresa: no se borra nada.")
             if v["archivo_eliminado_en"] is None:
                 db.borrar_archivos_video(v)
-        for tabla in ("video_reproduccion", "video", "video_programacion"):
+        for tabla in ("video_reproduccion", "video"):
             db.borrar(tabla, id_empresa=e2)
+        try:  # grabaciones independientes: solo existe si ya se aplicó su migración
+            db.borrar("grabacion_independiente", id_empresa=e2)
+        except Exception as e:
+            if not any(c in str(e) for c in ("PGRST205", "42P01", "does not exist")):
+                raise
+        db.borrar("video_programacion", id_empresa=e2)
     for tabla in ("mp_intento", "pago_anulacion", "pago", "factura_historial", "resumen_mensual_detalle", "resumen_mensual",
                   "asistencia_historial", "asistencia", "listadeespera", "reserva", "baja_docente", "bloqueo", "clase", "horario",
                   "tipo_clase", "sesion_empresa"):

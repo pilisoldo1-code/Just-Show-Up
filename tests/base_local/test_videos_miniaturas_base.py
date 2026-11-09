@@ -185,7 +185,8 @@ with su.cursor() as cur:
 ok("la vuelta atrás quita la columna", q(su, "select count(*) n from information_schema.columns where table_name = 'video' and column_name = 'miniatura'", uno=True)["n"] == 0)
 ok("y solo sus funciones", antes - funciones() == {"video_guardar_miniatura", "_video_miniatura_vigente"})
 ok("las grabaciones siguen", q(su, "select count(*) n from public.video", uno=True)["n"] == 2)
-ok("y se puede volver a aplicar", (lambda: [su.cursor().execute(open(sorted(localdb.migraciones())[-1]).read()), True][1])())
+MIGRACION_MINIATURAS = next(a for a in localdb.migraciones() if a.endswith("20261108000000_videos_miniaturas.sql"))
+ok("y se puede volver a aplicar", (lambda: [su.cursor().execute(open(MIGRACION_MINIATURAS).read()), True][1])())
 
 print(f"\n{total_casos - fallas}/{total_casos} casos correctos")
 localdb.borrar(srv, directorio)

@@ -5,11 +5,12 @@ import hmac
 import logging
 import os
 import re
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from supabase import Client, create_client
 
-from app import auth, clases, entorno
+from app import auth, clases, entorno, tipos_clase
 
 BUCKET = "videos-clases"
 TTL_URL_MAXIMO = 90 * 60  # alcanza para 40 minutos con pausas; después el reproductor pide una lista nueva
@@ -45,8 +46,8 @@ def texto_restante(segundos: int) -> str:
     horas, resto = divmod(max(segundos, 0), 3600)
     minutos = resto // 60
     if horas:
-        return f"Disponible {horas} h {minutos} min más"
-    return f"Disponible {max(minutos, 1)} min más"
+        return f"Disponible por {horas} h {minutos} min más"
+    return f"Disponible por {max(minutos, 1)} min más"
 
 
 def texto_duracion(segundos: int) -> str:
@@ -60,6 +61,8 @@ def _tarjeta(v: dict) -> dict:
     return {
         "id": v["id"],
         "clase": v["clase"],
+        "tipo": v.get("tipo") or "",
+        "independiente": bool(v.get("independiente")),
         "fecha_txt": f"{clases.nombre_dia(f)} {f.day}/{f.month}",
         "hora": v["hora_inicio"][:5],
         "profesora": v["profesora"],
@@ -145,6 +148,7 @@ def ultimas_grabaciones(sb: Client) -> list[dict]:
         estado_txt, badge = _estado_grabacion(g)
         salida.append({
             "clase": g["clase"],
+            "independiente": bool(g.get("independiente")),
             "fecha_txt": f"{clases.nombre_dia(f)} {f.day}/{f.month}",
             "hora": g["hora_inicio"][:5],
             "estado_txt": estado_txt,
@@ -165,6 +169,83 @@ def configuracion(sb: Client) -> list[dict]:
 def programar(sb: Client, id_horario: int, activa: bool) -> str:
     r = sb.rpc("video_programar", {"p_id_horario": id_horario, "p_activa": activa}).execute().data or {}
     return r.get("resultado", "no_encontrado")
+
+
+# ---------- grabaciones independientes (docentes) ----------
+
+TITULO_MIN, TITULO_MAX, DESCRIPCION_MAX = 3, 80, 300
+MSG_GRABACION = {
+    "ok": "Listo. Tenés tiempo hasta las {hora} para comenzar a grabar con Zoom.",
+    "cancelada": "Se canceló la grabación.",
+    "datos_invalidos": f"El título tiene que tener entre {TITULO_MIN} y {TITULO_MAX} caracteres "
+                       f"y la descripción hasta {DESCRIPCION_MAX}.",
+    "tipo_invalido": "Elegí un tipo de clase activo de la lista.",
+    "sin_tipos": "No hay tipos de clase activos. Primero hay que crear o activar uno en Tipos de clase.",
+    "sin_computadora": "Todavía no hay una computadora autorizada para subir tus grabaciones. Pedíselo a la administración.",
+    "ya_hay_una": "Ya tenés una grabación esperando. Grabala o cancelala antes de preparar otra.",
+    "no_autorizada": "Solo las docentes pueden preparar grabaciones.",
+    "no_encontrada": "No encontramos esa grabación.",
+    "no_se_puede": "Esa grabación ya no se puede cancelar.",
+}
+ESTADOS_INDEPENDIENTE = {
+    "esperando": ("Pendiente de grabación", "badge-espera"),
+    "procesando": ("Procesando", "badge-espera"),
+    "publicada": ("Publicada", "badge-on"),
+    "con_error": ("Con error, se reintenta", "badge-ausente"),
+    "vencida": ("Vencida (24 h)", "badge-off"),
+    "sin_grabacion": ("Plazo de grabación vencido", "badge-off"),
+    "abandonada": ("Abandonada, sin publicar", "badge-off"),
+    "cancelada": ("Cancelada", "badge-off"),
+}
+
+
+def _hora_local(valor: str | None) -> str:
+    if not valor:
+        return ""
+    return datetime.fromisoformat(valor).astimezone(ZoneInfo("America/Montevideo")).strftime("%H:%M")
+
+
+def tipos_para_grabar(sb: Client) -> list[dict]:
+    """Los tipos ACTIVOS de la empresa activa (el catálogo de Tipos de clase; la base lo filtra por empresa)."""
+    return [{"id": t["id"], "nombre": t["nombre"]} for t in tipos_clase.activos(sb)]
+
+
+def crear_grabacion(sb: Client, titulo: str, id_tipo_clase: str, descripcion: str) -> tuple[str, str]:
+    """Devuelve (resultado, hora límite para empezar a grabar). La base vuelve a validar todo."""
+    titulo, descripcion = " ".join((titulo or "").split()), (descripcion or "").strip()
+    if not TITULO_MIN <= len(titulo) <= TITULO_MAX or len(descripcion) > DESCRIPCION_MAX:
+        return "datos_invalidos", ""
+    tipos = tipos_para_grabar(sb)
+    if not tipos:
+        return "sin_tipos", ""
+    if not (id_tipo_clase or "").isdigit() or int(id_tipo_clase) not in {t["id"] for t in tipos}:
+        return "tipo_invalido", ""
+    r = sb.rpc("grabacion_independiente_crear", {"p_titulo": titulo, "p_id_tipo_clase": int(id_tipo_clase),
+                                                  "p_descripcion": descripcion or None}).execute().data or {}
+    return r.get("resultado", "no_autorizada"), _hora_local(r.get("vence_espera_en"))
+
+
+def cancelar_grabacion(sb: Client, id_grabacion: int) -> str:
+    r = sb.rpc("grabacion_independiente_cancelar", {"p_id": id_grabacion}).execute().data or {}
+    return r.get("resultado", "no_encontrada")
+
+
+def mis_grabaciones(sb: Client) -> list[dict]:
+    salida = []
+    for g in sb.rpc("mis_grabaciones_independientes", {}).execute().data or []:
+        estado_txt, badge = ESTADOS_INDEPENDIENTE.get(g["estado"], (g["estado"], "badge-off"))
+        salida.append({
+            "id": g["id"],
+            "titulo": g["titulo"],
+            "tipo": g.get("tipo") or "",
+            "descripcion": g.get("descripcion") or "",
+            "estado": g["estado"],
+            "estado_txt": estado_txt,
+            "badge": badge,
+            "hasta": _hora_local(g["vence_espera_en"]),
+            "id_video": g.get("id_video"),
+        })
+    return salida
 
 
 # ---------- programa local ----------

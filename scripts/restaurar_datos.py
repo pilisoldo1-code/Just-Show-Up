@@ -30,7 +30,7 @@ ORDEN = ["membresia", "tipo_clase", "horario", "clase", "bloqueo", "reserva", "l
          "resumen_mensual_detalle", "factura_historial", "pago", "pago_anulacion", "mp_configuracion", "mp_intento", "mp_evento"]
 # Videos On Demand: solo si el respaldo las trae (los anteriores a la migración no). video_agente queda afuera a propósito:
 # guarda huellas de tokens, que se vuelven a crear. Las filas no recuperan los archivos de Storage.
-VIDEOS = ["video_programacion", "video", "video_reproduccion"]
+VIDEOS = ["video_programacion", "grabacion_independiente", "video", "video_reproduccion"]
 CLAVE = {"pago_anulacion": "id_pago"}
 
 

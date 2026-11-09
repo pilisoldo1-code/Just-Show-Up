@@ -4553,3 +4553,54 @@ a.video-card-biblioteca:hover .video-play {
     font-size: 0.85rem;
     overflow-wrap: anywhere;
 }
+
+/* ---------- Videos On Demand: grabaciones independientes ---------- */
+.video-etiqueta {
+    align-self: flex-start;
+    font-size: 0.75rem;
+}
+
+.grabaciones-independientes {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #2a2e37;
+}
+
+.form-grabacion {
+    max-width: 560px;
+}
+
+.form-grabacion textarea {
+    resize: vertical;
+}
+
+.form-grabacion .btn {
+    align-self: flex-start;
+}
+
+.lista-grabaciones .badge {
+    align-self: flex-start;
+}
+
+.lista-grabaciones {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.lista-grabaciones .video-card {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.lista-grabaciones .video-card > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}

@@ -51,6 +51,7 @@
             <div class="video-card">
                 <div>
                     <h2>{{ g.clase }}</h2>
+                    {% if g.independiente %}<span class="badge badge-on video-etiqueta">Clase grabada</span>{% endif %}
                     <span class="video-dato">{{ g.fecha_txt }} · {{ g.hora }} · {{ g.intentos }} {{ 'intento' if g.intentos == 1 else 'intentos' }}</span>
                     {% if g.error %}<p class="video-error">Subida: {{ g.error }}</p>{% endif %}
                     {% if g.error_limpieza %}<p class="video-error">Limpieza ({{ g.limpieza_intentos }} {{ 'intento' if g.limpieza_intentos == 1 else 'intentos' }}): {{ g.error_limpieza }}</p>{% endif %}

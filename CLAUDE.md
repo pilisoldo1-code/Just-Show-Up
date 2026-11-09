@@ -554,6 +554,23 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     trigger la borra al pasar a «eliminado» y si se registra otro archivo para la clase. No toca Storage ni las funciones
     del módulo. Vuelta atrás: `supabase/pendientes/vuelta_atras_videos_miniaturas.sql` (la del módulo también la quita).
     Pruebas: `tests/base_local/test_videos_miniaturas_base.py` (33).
+  - **Grabaciones independientes (migración `20261110000000_videos_grabaciones_independientes.sql`, sin aplicar en
+    ningún Supabase todavía)**: contenido grabado solo para la biblioteca, sin horario, clase, reserva ni asistencia.
+    Tabla `grabacion_independiente` (título, `id_tipo_clase` obligatorio y activo de su empresa —catálogo de Tipos de
+    clase, sin aplicar duración, precio ni cupo; trigger `grabacion_tipo_coherente`—, descripción, `vence_espera_en` =
+    creada + 3 h, `cancelada_en`, `inicio_grabacion`); `video.id_clase` pasa a opcional y se suma `video.id_grabacion` (check: exactamente una de las
+    dos). La docente la crea en `/videos` (`grabacion_independiente_crear`: necesita un `video_agente` activo; una sola
+    esperando por profesora) y puede cancelarla mientras espera. `_video_evaluar` suma como candidatas las solicitudes
+    abiertas de esa profesora en cuyo plazo empezó la grabación (o la que ya está atada a ese mismo inicio: reintentos);
+    clase + solicitud a la vez = `clase_ambigua`. Duración entre `independiente_min_seg` y `independiente_max_seg`
+    (1 min a 4 h). `video_registrar` guarda `inicio_grabacion` y desde ahí la solicitud solo acepta esa grabación.
+    `video_publicar` exige `_grabacion_habilitada` (no cancelada, profesora activa en esa empresa). Publicación,
+    vencimiento a las 24 h, limpieza, miniatura, topes y permisos: los de siempre. **El programa local no cambia.** Ojo:
+    con `id_clase` opcional, comparar con `is distinct from` (no `<>`), si no los videos sin clase quedan afuera del
+    espacio ocupado y de la huella repetida. La vuelta atrás
+    (`supabase/pendientes/vuelta_atras_videos_grabaciones_independientes.sql`) trae el texto exacto de las 6 funciones de
+    `20261106000000` y la prueba comprueba que quedan byte a byte (se niega si ya hay videos independientes).
+    Pruebas: `tests/base_local/test_videos_independientes_base.py` (102) y `tests.test_videos.GrabacionesIndependientes`.
   - **Menú**: la administradora tiene Videos en el menú de cuenta y no en las secciones: una décima sección desborda el
     header a 1120 px. Alumna y profesora lo tienen en sus secciones. No se tocó el CSS del header.
   - **Borrar cuentas y empresas**: `video_reproduccion.id_usuario` queda vacío y `video_agente` cae en cascada.

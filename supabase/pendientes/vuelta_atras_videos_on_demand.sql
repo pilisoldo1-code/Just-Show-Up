@@ -8,6 +8,13 @@ begin
 end;
 $$;
 
+-- Grabaciones independientes (20261110000000_videos_grabaciones_independientes), si se aplicaron.
+drop function if exists public.grabacion_independiente_crear(text, bigint, text);
+drop function if exists public._grabacion_tipo_coherente() cascade;
+drop function if exists public.grabacion_independiente_cancelar(bigint);
+drop function if exists public.mis_grabaciones_independientes();
+drop function if exists public._grabacion_habilitada(bigint);
+
 -- Miniaturas (20261108000000_videos_miniaturas), si se aplicaron: van antes que la tabla.
 drop trigger if exists video_miniatura_vigente on public.video;
 drop function if exists public._video_miniatura_vigente();
@@ -37,6 +44,7 @@ drop function public.videos_configuracion();
 drop table public.video_reproduccion;
 drop table public.video_agente;
 drop table public.video;
+drop table if exists public.grabacion_independiente;
 drop table public.video_programacion;
 drop table public.video_parametros;
 drop function public._video_coherente();

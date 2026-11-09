@@ -2249,12 +2249,46 @@ def baja_admin_confirmar(request: Request, empresa_id: int, persona_id: str, mot
 
 @app.get("/videos")
 def videos_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_espectadora)):
+    grabaciones, tipos, sb = [], [], None
     try:
-        lista = videos.disponibles(_sb(usuario))
+        sb = _sb(usuario)
+        lista = videos.disponibles(sb)
     except Exception:
         logging.exception("No se pudieron cargar los videos")
         lista, aviso, ok = [], "No pudimos cargar los videos. Probá de nuevo.", 0
-    return _render(request, "videos.html", usuario, videos=lista, aviso=aviso, aviso_ok=bool(ok))
+    if usuario.es_docente and sb is not None:
+        try:  # un error acá no tiene que impedir ver la biblioteca
+            grabaciones, tipos = videos.mis_grabaciones(sb), videos.tipos_para_grabar(sb)
+        except Exception:
+            logging.exception("No se pudieron cargar las grabaciones independientes")
+    return _render(request, "videos.html", usuario, videos=lista, grabaciones=grabaciones, tipos=tipos, aviso=aviso,
+                   aviso_ok=bool(ok), titulo_max=videos.TITULO_MAX, descripcion_max=videos.DESCRIPCION_MAX)
+
+
+# Grabaciones independientes: contenido grabado solo para la biblioteca (sin horario, clase ni reserva).
+@app.post("/videos/grabaciones")
+def videos_grabacion_crear(titulo: str = Form(""), id_tipo_clase: str = Form(""), descripcion: str = Form(""),
+                           usuario: Usuario = Depends(requiere_profesora)):
+    try:
+        resultado, hora = videos.crear_grabacion(_sb(usuario), titulo, id_tipo_clase, descripcion)
+    except Exception:
+        logging.exception("No se pudo preparar la grabación independiente")
+        resultado, hora = None, ""
+    mensaje = videos.MSG_GRABACION.get(resultado, auth.MSG_GENERICO).format(hora=hora)
+    return RedirectResponse(url="/videos?" + urlencode({"ok": int(resultado == "ok"), "aviso": mensaje}), status_code=303)
+
+
+@app.post("/videos/grabaciones/{grabacion_id}/cancelar")
+def videos_grabacion_cancelar(grabacion_id: int, usuario: Usuario = Depends(requiere_profesora)):
+    try:
+        resultado = videos.cancelar_grabacion(_sb(usuario), grabacion_id)
+    except Exception:
+        logging.exception("No se pudo cancelar la grabación independiente")
+        resultado = None
+    clave = "cancelada" if resultado == "ok" else resultado
+    return RedirectResponse(url="/videos?" + urlencode({"ok": int(resultado == "ok"),
+                                                         "aviso": videos.MSG_GRABACION.get(clave, auth.MSG_GENERICO)}),
+                            status_code=303)
 
 
 # Antes de /videos/{video_id}: si no, «configuracion» se toma como un id.

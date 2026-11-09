@@ -1,7 +1,9 @@
 # Videos On Demand
 
-Las alumnas pueden ver durante **24 horas** la grabación de una clase que se dio por Zoom. La profesora no sube nada a
-mano: un programa en su computadora detecta la grabación, la comprime, la sube y la publica sola.
+Las alumnas pueden ver durante **24 horas** la grabación de una clase que se dio por Zoom, o un contenido que la
+profesora grabó especialmente para la biblioteca (**grabación independiente**: yoga, estiramientos, entrenamiento…, sin
+horario, clase presencial ni reserva). La profesora no sube nada a mano: un programa en su computadora detecta la
+grabación, la comprime, la sube y la publica sola.
 
 Todo funciona con **costo $0**: Zoom Básico (gratis), FFmpeg (gratis), Supabase Free, Vercel Hobby y un programa en
 Python que corre en la computadora de la profesora. No hay servicios pagos ni tareas en servidores aparte.
@@ -48,12 +50,47 @@ hasta **15 minutos antes o después**. Si hay cero o más de una, no publica. La
 - Si la clase todavía no existe en la base (`sin_clase`) o no hay espacio (`sin_espacio`), reintenta cada 30 min
   durante 24 horas.
 
+### Grabaciones independientes
+
+Contenido grabado solo para la biblioteca. No crea horarios, clases, reservas, asistencias ni facturas, y no toca la
+planificación.
+
+1. La docente (profesora o administradora con clases) entra a **Videos On Demand** → «Grabar una nueva clase», escribe
+   el **nombre de la clase** (3 a 80 caracteres), elige el **tipo de clase** (obligatorio: uno ACTIVO del catálogo de
+   Tipos de clase de su empresa) y, si quiere, una descripción (hasta 300), y toca **Preparar clase**. Necesita tener
+   una computadora autorizada (token del programa local); si no, la pantalla lo avisa. Si la empresa no tiene tipos
+   activos, la pantalla lo explica y no deja crearla.
+2. Desde ese momento tiene **3 horas para EMPEZAR a grabar** con Zoom en esa computadora. El plazo no limita la duración.
+3. El programa local es el mismo y no cambia nada: informa la hora de inicio y la duración real. El servidor la asocia
+   a la solicitud **solo si es la única candidata de esa profesora**:
+   - empezó dentro del plazo (con 2 minutos de tolerancia por diferencias de reloj);
+   - si a esa hora (±15 min) la profesora también tiene una **clase**, es ambiguo y **no se publica** (no se adivina);
+   - una sola solicitud esperando por profesora; una vez asociada, la solicitud solo acepta esa grabación (y sus
+     reintentos), nunca otra; la siguiente grabación va a una solicitud nueva.
+4. Se comprime, se genera la miniatura, se sube al bucket privado y se **publica sola**. La empresa sale de la
+   solicitud (la empresa activa de la profesora al crearla), nunca del programa.
+5. **Vence a las 24 horas desde que se publica**, igual que las clases, y la limpieza de siempre borra los archivos y
+   conserva el registro.
+
+- Duración: entre 1 minuto y 4 horas (`independiente_min_seg` / `independiente_max_seg`, límites técnicos). No se
+  compara con ninguna clase.
+- Tipo de clase: se guarda su id (`grabacion_independiente.id_tipo_clase`) y se muestra en la biblioteca y en el
+  detalle del video. La duración, el precio y el cupo del tipo **no** se aplican. El servidor y la base comprueban que
+  sea de la empresa y esté activo al crearla, y un trigger impide asociarla a un tipo de otra empresa.
+- Se puede **cancelar** mientras espera. Si la profesora deja de estar activa en la empresa, no se asocia ni se publica.
+- En la biblioteca aparece con su nombre, su tipo de clase y la etiqueta «Clase grabada»; la docente ve el estado de
+  las suyas en «Mis clases grabadas» (pendiente de grabación, procesando, publicada, vencida, plazo de grabación
+  vencido, cancelada) y la administradora las ve en «Últimas grabaciones».
+- Mismos permisos que las clases: solo alumnas activas y docentes de esa empresa, solo mientras está vigente.
+
 ## Requisitos
 
 ### Servidor (Just Show Up)
 
-- Migraciones `20261106000000_videos_on_demand.sql` y `20261108000000_videos_miniaturas.sql` (solo crean objetos
-  nuevos: 5 tablas, funciones, 2 políticas y el bucket privado `videos-clases`; no modifican tablas existentes).
+- Migraciones `20261106000000_videos_on_demand.sql`, `20261108000000_videos_miniaturas.sql` y
+  `20261110000000_videos_grabaciones_independientes.sql` (solo crean o modifican objetos del módulo: 6 tablas,
+  funciones, 3 políticas y el bucket privado `videos-clases`; no modifican tablas de reservas, asistencias,
+  facturación, pagos ni planificación).
 - Variables de entorno en Vercel:
   - `CRON_SECRET`: lo manda Vercel a la limpieza diaria (`vercel.json`, `17 7 * * *`, una vez por día: entra en Hobby).
   - `VIDEOS_ENTORNO`: tiene que coincidir con `video_parametros.entorno` y con el `entorno` del programa local.
@@ -117,8 +154,8 @@ Antes de activar cualquier cosa que pueda facturar, consultar: la condición del
 ## Pruebas
 
 - Automáticas: `python -m unittest discover tests` (incluye `test_videos`, `test_agente_videos`, `test_entorno`) y,
-  en Postgres local, `tests/base_local/test_videos_base.py` (155), `test_videos_miniaturas_base.py` (33) y
-  `test_videos_prueba_base.py` (27).
+  en Postgres local, `tests/base_local/test_videos_base.py` (155), `test_videos_miniaturas_base.py` (33),
+  `test_videos_prueba_base.py` (27) y `test_videos_independientes_base.py` (102: grabaciones independientes).
 - **Reales, en el proyecto de prueba `jsu-videos-test`** (organización Free aparte, datos ficticios, 08 y 09/11/2026):
   FFmpeg con un video de 40 min, subida y publicación, reproducción en Chromium y Safari de iPhone, accesos entre
   empresas, vencimiento natural a las 24 h, limpieza real y una **grabación real de Zoom Básico** (72 s) detectada,
@@ -132,6 +169,7 @@ Antes de activar cualquier cosa que pueda facturar, consultar: la condición del
 | Postgres local (`tests/base_local`, 23 archivos) | 21 sin fallas; 2 con fallas **que también ocurren en main** |
 | Supabase local real con las 28 migraciones (PostgREST) | asistencias 24/24, bajas 35/35, cobro por inasistencia 43/43, dos empresas 75/75, altas 95/96 (falla de main), recorrido de pantallas 35/35 con el código del módulo **y** con el de main |
 | Menú y permisos por rol contra `jsu-videos-test` | 10/10 |
+| **Con grabaciones independientes y tipo de clase** (29 migraciones) | unitarias 568/568; base local 21 sin fallas (incluye independientes 102/102) + las 2 de main; Supabase local igual que arriba (altas 95/96 por la falla de main, recorrido 35/35 con el código del módulo y con el de main) |
 
 **Fallas preexistentes de main (no las causa Videos On Demand; dan lo mismo en una copia limpia de `main`):**
 
@@ -160,5 +198,7 @@ expectativa (ahora exige también ese enlace, en quinto lugar), igual que ya lo 
 ## Vuelta atrás
 
 `supabase/pendientes/vuelta_atras_videos_on_demand.sql` (se niega si quedan videos con archivos; quita también las
-miniaturas) y `supabase/pendientes/vuelta_atras_videos_miniaturas.sql`. El bucket `videos-clases` se borra desde el
+miniaturas y las grabaciones independientes), `supabase/pendientes/vuelta_atras_videos_miniaturas.sql` y
+`supabase/pendientes/vuelta_atras_videos_grabaciones_independientes.sql` (deja las 6 funciones que cambia byte a byte
+como estaban; se niega si ya hay videos de grabaciones independientes). El bucket `videos-clases` se borra desde el
 panel de Supabase.

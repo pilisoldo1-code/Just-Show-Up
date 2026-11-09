@@ -10,7 +10,7 @@
     {% include "_menu.html" %}
     <main>
         <h1>{{ video.clase }}</h1>
-        <p class="subtitle">{{ video.fecha_txt }} · {{ video.hora }} · {{ video.profesora }} · {{ video.duracion_txt }}</p>
+        <p class="subtitle">{% if video.independiente %}{{ video.tipo }} · {% endif %}{{ video.fecha_txt }} · {{ video.hora }} · {{ video.profesora }} · {{ video.duracion_txt }}</p>
 
         <div class="video-contenedor">
             <video id="reproductor" class="video-reproductor" playsinline preload="none"

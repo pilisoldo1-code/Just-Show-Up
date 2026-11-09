@@ -43,9 +43,9 @@ class Rpc:
 
 class Textos(unittest.TestCase):
     def test_restante(self):
-        self.assertEqual(videos.texto_restante(5 * 3600 + 20 * 60), "Disponible 5 h 20 min más")
-        self.assertEqual(videos.texto_restante(600), "Disponible 10 min más")
-        self.assertEqual(videos.texto_restante(10), "Disponible 1 min más")
+        self.assertEqual(videos.texto_restante(5 * 3600 + 20 * 60), "Disponible por 5 h 20 min más")
+        self.assertEqual(videos.texto_restante(600), "Disponible por 10 min más")
+        self.assertEqual(videos.texto_restante(10), "Disponible por 1 min más")
 
     def test_duracion_real_sin_redondear_a_40(self):
         self.assertEqual(videos.texto_duracion(2400), "40 min")
@@ -132,7 +132,7 @@ class Pantallas(unittest.TestCase):
             self.como(usuario)
             r = self.client.get("/videos")
             self.assertEqual(r.status_code, 200)
-            for texto in ("Gimnasia", "Lunes 16/11", "Pía Pérez", "39 min", "Disponible 1 h 30 min más"):
+            for texto in ("Gimnasia", "Lunes 16/11", "Pía Pérez", "39 min", "Disponible por 1 h 30 min más"):
                 self.assertIn(texto, r.text)
 
     def test_sin_videos_estado_vacio(self):
@@ -417,7 +417,7 @@ class Miniaturas(unittest.TestCase):
         self.assertIn('src="/videos/7/miniatura.jpg"', tarjeta)
         self.assertIn('onerror="this.remove()"', tarjeta)  # sin miniatura queda el fondo con el ícono
         self.assertIn('class="video-play"', tarjeta)
-        for texto in ("Gimnasia", "Lunes 16/11", "Pía Pérez", "39 min", "Disponible 1 h 30 min más"):
+        for texto in ("Gimnasia", "Lunes 16/11", "Pía Pérez", "39 min", "Disponible por 1 h 30 min más"):
             self.assertIn(texto, tarjeta)
         css = Path("app/static/style.css").read_text()
         self.assertIn("aspect-ratio: 16 / 9;", css)
@@ -607,3 +607,140 @@ class Configuraciones(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GrabacionesIndependientes(unittest.TestCase):
+    """Contenido grabado solo para la biblioteca: pantalla de la docente, rutas y permisos (la base, en
+    tests/base_local/test_videos_independientes_base.py)."""
+    MIAS = [{"id": 3, "titulo": "Yoga suave", "descripcion": None, "estado": "esperando", "creada_en": "2026-11-16T10:00:00+00:00",
+             "vence_espera_en": "2026-11-16T13:00:00+00:00", "vence_en": None, "id_video": None},
+            {"id": 2, "titulo": "Estiramientos", "descripcion": None, "estado": "publicada", "creada_en": "2026-11-15T10:00:00+00:00",
+             "vence_espera_en": "2026-11-15T13:00:00+00:00", "vence_en": "2026-11-16T11:00:00+00:00", "id_video": 9}]
+
+    def setUp(self):
+        self.client = TestClient(main.app)
+        especial = {**FILA, "id": 9, "clase": "Estiramientos", "independiente": True, "tipo": "Yoga"}
+        self.sb = Rpc({"videos_disponibles": [FILA, especial], "mis_grabaciones_independientes": self.MIAS,
+                       "grabacion_independiente_crear": {"resultado": "ok", "id": 4, "vence_espera_en": "2026-11-16T16:00:00+00:00"},
+                       "grabacion_independiente_cancelar": {"resultado": "ok"}})
+        p = mock.patch.object(main, "_sb", return_value=self.sb)
+        p.start()
+        self.addCleanup(p.stop)
+        self.tipos = [{"id": 5, "nombre": "Yoga", "activo": True}, {"id": 6, "nombre": "Pilates", "activo": True}]
+        p = mock.patch.object(videos.tipos_clase, "activos", side_effect=lambda sb: self.tipos)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def como(self, usuario):
+        p = mock.patch.object(auth, "_usuario_cacheado", return_value=usuario)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def llamadas(self, nombre):
+        return [params for n, params in self.sb.llamadas if n == nombre]
+
+    def test_la_docente_ve_el_formulario_y_sus_grabaciones(self):
+        for usuario in (PROFESORA, ADMIN):
+            self.como(usuario)
+            r = self.client.get("/videos")
+            self.assertEqual(r.status_code, 200)
+            for texto in ("Grabar una nueva clase", 'action="/videos/grabaciones"', "Nombre de la clase", "Tipo de clase",
+                          '<option value="5">Yoga</option>', '<option value="6">Pilates</option>', "Preparar clase",
+                          "Mis clases grabadas", "Yoga suave", "Pendiente de grabación",
+                          "Tenés tiempo hasta las 10:00 para comenzar a grabar.", "/videos/grabaciones/3/cancelar",
+                          'href="/videos/9">Ver video', "Accedé a tus clases grabadas durante las 24 horas posteriores",
+                          "una de tus clases programadas"):
+                self.assertIn(texto, r.text)
+
+    def test_la_alumna_no_ve_el_formulario_ni_se_consultan_grabaciones(self):
+        self.sb.llamadas.clear()
+        self.como(ALUMNA)
+        r = self.client.get("/videos")
+        self.assertNotIn("Grabar una nueva clase", r.text)
+        self.assertEqual(self.llamadas("mis_grabaciones_independientes"), [])
+
+    def test_la_tarjeta_marca_la_grabacion_especial(self):
+        self.como(ALUMNA)
+        r = self.client.get("/videos")
+        self.assertEqual(r.text.count("Clase grabada"), 1)
+        self.assertIn("Estiramientos", r.text)
+        self.assertIn('<span class="video-dato">Yoga</span>', r.text)
+
+    def test_crear_pasa_el_titulo_limpio_y_avisa_la_hora_local(self):
+        self.como(PROFESORA)
+        r = self.client.post("/videos/grabaciones", data={"titulo": "  Yoga   suave ", "id_tipo_clase": "6", "descripcion": " "},
+                             follow_redirects=False)
+        self.assertEqual(r.status_code, 303)
+        self.assertEqual(self.llamadas("grabacion_independiente_crear"),
+                         [{"p_titulo": "Yoga suave", "p_id_tipo_clase": 6, "p_descripcion": None}])
+        self.assertIn("ok=1", r.headers["location"])
+        self.assertIn("13%3A00", r.headers["location"])  # 16:00 UTC = 13:00 en Montevideo
+
+    def test_crear_con_titulo_corto_no_llama_a_la_base(self):
+        self.como(PROFESORA)
+        r = self.client.post("/videos/grabaciones", data={"titulo": "Yo", "id_tipo_clase": "5"}, follow_redirects=False)
+        self.assertIn("ok=0", r.headers["location"])
+        self.assertEqual(self.llamadas("grabacion_independiente_crear"), [])
+
+    def test_mensajes_de_la_base(self):
+        self.como(PROFESORA)
+        for resultado, texto in (("sin_computadora", "computadora autorizada"), ("ya_hay_una", "Ya ten%C3%A9s una grabaci%C3%B3n")):
+            self.sb.respuestas["grabacion_independiente_crear"] = {"resultado": resultado}
+            r = self.client.post("/videos/grabaciones", data={"titulo": "Yoga suave", "id_tipo_clase": "5"}, follow_redirects=False)
+            self.assertIn("ok=0", r.headers["location"])
+            self.assertIn(texto.replace(" ", "+"), r.headers["location"])
+
+    def test_tipo_obligatorio_y_de_la_lista_activa_de_su_empresa(self):
+        self.como(PROFESORA)
+        for valor in ("", "abc", "99"):  # vacío, no numérico, o que no está entre los activos de su empresa
+            r = self.client.post("/videos/grabaciones", data={"titulo": "Yoga suave", "id_tipo_clase": valor}, follow_redirects=False)
+            self.assertIn("ok=0", r.headers["location"], valor)
+            self.assertIn("tipo+de+clase+activo", r.headers["location"], valor)
+        self.assertEqual(self.llamadas("grabacion_independiente_crear"), [])
+
+    def test_sin_tipos_activos_no_hay_formulario_ni_se_puede_crear(self):
+        self.tipos = []
+        self.como(PROFESORA)
+        r = self.client.get("/videos")
+        self.assertNotIn('action="/videos/grabaciones"', r.text)
+        self.assertIn("No hay tipos de clase activos", r.text)
+        r = self.client.post("/videos/grabaciones", data={"titulo": "Yoga suave", "id_tipo_clase": "5"}, follow_redirects=False)
+        self.assertIn("ok=0", r.headers["location"])
+        self.assertIn("No+hay+tipos+de+clase+activos", r.headers["location"])
+        self.assertEqual(self.llamadas("grabacion_independiente_crear"), [])
+
+    def test_el_detalle_muestra_el_tipo_de_la_clase_grabada(self):
+        self.como(ALUMNA)
+        self.sb.respuestas["videos_disponibles"] = [{**FILA, "id": 9, "clase": "Estiramientos", "independiente": True, "tipo": "Yoga"}]
+        r = self.client.get("/videos/9")
+        self.assertIn("Yoga · Lunes 16/11", r.text)
+
+    def test_la_alumna_no_puede_crear_ni_cancelar(self):
+        self.como(ALUMNA)
+        for url, datos in (("/videos/grabaciones", {"titulo": "Yoga suave"}), ("/videos/grabaciones/3/cancelar", {})):
+            r = self.client.post(url, data=datos, follow_redirects=False)
+            self.assertEqual(r.status_code, 303)
+            self.assertNotIn("/videos?", r.headers["location"])
+        self.assertEqual(self.llamadas("grabacion_independiente_crear") + self.llamadas("grabacion_independiente_cancelar"), [])
+
+    def test_sin_sesion_va_al_login(self):
+        self.como(None)
+        r = self.client.post("/videos/grabaciones", data={"titulo": "Yoga suave"}, follow_redirects=False)
+        self.assertTrue(r.headers["location"].startswith("/login"))
+
+    def test_cancelar(self):
+        self.como(PROFESORA)
+        r = self.client.post("/videos/grabaciones/3/cancelar", follow_redirects=False)
+        self.assertEqual(self.llamadas("grabacion_independiente_cancelar"), [{"p_id": 3}])
+        self.assertIn("ok=1", r.headers["location"])
+        self.sb.respuestas["grabacion_independiente_cancelar"] = {"resultado": "no_se_puede"}
+        r = self.client.post("/videos/grabaciones/3/cancelar", follow_redirects=False)
+        self.assertIn("ok=0", r.headers["location"])
+
+    def test_ultimas_grabaciones_marca_las_especiales(self):
+        fila = {"id": 9, "clase": "Estiramientos", "independiente": True, "fecha": "2026-11-16", "hora_inicio": "10:05:00",
+                "estado": "publicado", "vencido": False, "nunca_publicado": False, "intentos": 1, "ultimo_error": None,
+                "limpieza_intentos": 0, "limpieza_error": None}
+        salida = videos.ultimas_grabaciones(Rpc({"videos_ultimas_grabaciones": [fila]}))
+        self.assertTrue(salida[0]["independiente"])
+        self.assertEqual((salida[0]["clase"], salida[0]["hora"]), ("Estiramientos", "10:05"))
