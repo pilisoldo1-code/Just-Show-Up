@@ -4707,3 +4707,9 @@ a.video-card-biblioteca:hover .video-play {
 .menu-largo .cuenta-nombre {
     display: none;
 }
+
+/* ---------- entrar con un enlace / olvidé mi contraseña ---------- */
+/* un mail largo dentro del aviso («te enviamos un correo a …») se parte en vez de salirse de la pantalla */
+.auth-card .aviso {
+    overflow-wrap: anywhere;
+}

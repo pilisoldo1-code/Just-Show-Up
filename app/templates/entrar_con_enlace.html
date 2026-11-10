@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Entrar con un enlace</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main class="auth-main">
+        <div class="auth-card">
+            <h1>Entrar con un enlace</h1>
+
+            {% if enviado %}
+            <div class="aviso aviso-ok">
+                Si los datos corresponden a una cuenta de <strong>{{ lugar }}</strong>, te enviamos un correo a
+                <strong>{{ mail }}</strong> con un enlace para entrar. Revisá también la carpeta de spam.
+            </div>
+            <p class="nota auth-nota">El enlace vence en 1 hora y sirve una sola vez. Si no te llega en unos minutos,
+                podés pedir otro. Tu contraseña no cambia.</p>
+            {% else %}
+            <p class="subtitle">Te mandamos un enlace a tu correo para entrar sin escribir la contraseña.</p>
+
+            {% if aviso %}
+            <div class="aviso aviso-error">{{ aviso }}</div>
+            {% endif %}
+
+            <form action="/entrar-con-enlace" method="post" class="horario-form auth-form">
+                <label>
+                    Nombre del lugar
+                    <input type="text" name="lugar" value="{{ lugar }}" maxlength="80" autocomplete="organization"
+                           autocapitalize="words" placeholder="Por ejemplo: Just Show Up" required autofocus />
+                </label>
+                <label>
+                    Correo electrónico
+                    <input type="email" name="mail" value="{{ mail }}" autocomplete="username" required />
+                </label>
+                <button type="submit" class="btn btn-block btn-tactil" data-cargando="Enviando…">Enviarme el enlace</button>
+            </form>
+            {% endif %}
+
+            <p class="auth-link"><a href="/login">Entrar con mi contraseña</a></p>
+        </div>
+    </main>
+    {% include "_envio_unico.html" %}
+</body>
+</html>

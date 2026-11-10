@@ -30,6 +30,9 @@ MSG_INGRESO_ADMIN = "No pudimos iniciar sesión con esos datos. Revisá tu mail 
 MSG_DEMASIADOS_INTENTOS = "Hiciste demasiados intentos. Esperá unos minutos y probá de nuevo."
 MSG_REINGRESAR = "Volvé a iniciar sesión escribiendo el nombre de tu lugar."
 MSG_LINK_INVALIDO = "El link para restablecer la contraseña venció o ya se usó. Pedí uno nuevo."
+# Mismo mensaje para enlace vencido, usado, inválido o de una persona que no es de ese lugar.
+MSG_ENLACE_INVALIDO = ("No pudimos iniciar sesión con ese enlace. Puede haber vencido o ya se usó, o el nombre del "
+                       "lugar no corresponde. Pedí un enlace nuevo.")
 
 # Solo a estos sitios puede apuntar el link del mail: armarlo con cualquier Host
 # permitiría que alguien desvíe el link (y la sesión) a un dominio propio.
@@ -451,25 +454,77 @@ def cambiar_contrasena(usuario: Usuario, actual: str, nueva: str) -> None:
 
 # ---------- olvidé mi contraseña (link por mail de Supabase) ----------
 
-def url_restablecer(request: Request) -> Optional[str]:
+def _url_sitio(request: Request, ruta: str) -> Optional[str]:
     if request.url.hostname not in SITIOS_PERMITIDOS:
         return None
     esquema = "https" if _es_https(request) else "http"
-    return f"{esquema}://{request.url.netloc}/restablecer-contrasena"
+    return f"{esquema}://{request.url.netloc}{ruta}"
+
+
+def url_restablecer(request: Request) -> Optional[str]:
+    return _url_sitio(request, "/restablecer-contrasena")
+
+
+def url_entrar_con_enlace(request: Request, lugar: str) -> Optional[str]:
+    base = _url_sitio(request, "/entrar-con-enlace/confirmar")
+    return f"{base}?{urlencode({'lugar': lugar})}" if base else None
+
+
+def es_mail_ficticio(mail: str) -> bool:
+    """Cuentas de prueba y demostración (dominio reservado .invalid): nunca se les manda un mail (rebotaría)."""
+    dominio = mail.rsplit("@", 1)[-1].strip().lower().rstrip(".")
+    return dominio == "invalid" or dominio.endswith(".invalid")
+
+
+def _codigo(e: Exception) -> str:
+    return f"{getattr(e, 'status', None)} {getattr(e, 'code', None) or ''}".strip()
 
 
 def pedir_recuperacion(mail: str, redirect_to: Optional[str]) -> None:
-    """No informa si el mail existe: la respuesta es la misma en los dos casos."""
+    """No informa si el mail existe: la respuesta es la misma en los dos casos, también si Supabase frena el
+    envío por haber pedido otro hace poco (eso solo le pasa a una cuenta que existe, así que también la delataría)."""
+    if es_mail_ficticio(mail):
+        return
     try:
         cliente_nuevo().auth.reset_password_for_email(
             mail, {"redirect_to": redirect_to} if redirect_to else {}
         )
     except AuthApiError as e:
-        if getattr(e, "status", None) == 429 or (getattr(e, "code", None) or "").startswith("over_"):
-            raise ErrorAuth("Ya pediste varios links. Esperá unos minutos y probá de nuevo.") from e
-        logging.warning("Supabase no envió el mail de recuperación: %r", e)
+        logging.warning("Supabase no envió el mail de recuperación (%s)", _codigo(e))
     except httpx.HTTPError as e:
         raise ErrorAuth(MSG_CONEXION) from e
+
+
+# ---------- entrar con un enlace por correo (Magic Link de Supabase) ----------
+
+def pedir_enlace_ingreso(mail: str, redirect_to: Optional[str]) -> None:
+    """Pide a Supabase el enlace de ingreso. Nunca crea cuentas y nunca informa si el mail existe, si es de ese
+    lugar o si ya se pidió uno hace poco: cualquier respuesta de Supabase se trata igual (solo se registra el código)."""
+    if es_mail_ficticio(mail) or not redirect_to:
+        return
+    try:
+        cliente_nuevo().auth.sign_in_with_otp({
+            "email": mail,
+            "options": {"should_create_user": False, "email_redirect_to": redirect_to},
+        })
+    except AuthApiError as e:
+        logging.warning("Supabase no envió el enlace de ingreso (%s)", _codigo(e))
+    except httpx.HTTPError as e:
+        raise ErrorAuth(MSG_CONEXION) from e
+
+
+def entrar_con_enlace(token_hash: str) -> Optional[tuple[str, str]]:
+    """Canjea el enlace (un solo uso) por una sesión, del lado del servidor. None si venció, ya se usó o no es válido."""
+    token_hash = (token_hash or "").strip()
+    if not token_hash or len(token_hash) > 200:
+        return None
+    try:
+        sesion = cliente_nuevo().auth.verify_otp({"token_hash": token_hash, "type": "magiclink"}).session
+    except AuthError:
+        return None
+    except httpx.HTTPError as e:
+        raise ErrorAuth(MSG_CONEXION) from e
+    return (sesion.access_token, sesion.refresh_token) if sesion else None
 
 
 def _es_sesion_de_recuperacion(acceso: str) -> bool:
@@ -480,6 +535,18 @@ def _es_sesion_de_recuperacion(acceso: str) -> bool:
     except (IndexError, ValueError):
         return False
     return any(m.get("method") in ("otp", "recovery") for m in claims.get("amr") or [])
+
+
+def _sesion_con_empresa(acceso: str) -> bool:
+    """Una sesión de un enlace de ingreso puede tener el mismo amr («otp») que la del link de recuperación, pero
+    ya entró a un lugar; la de recuperación nunca. Así esa sesión no sirve para cambiar la contraseña."""
+    try:
+        return bool(cliente_con_token(acceso).rpc("empresa_de_sesion", {}).execute().data)
+    except httpx.HTTPError as e:
+        raise ErrorAuth(MSG_CONEXION) from e
+    except Exception as e:
+        logging.warning("No se pudo comprobar la sesión del link de recuperación (%s)", type(e).__name__)
+        raise ErrorAuth(MSG_LINK_INVALIDO) from e
 
 
 def restablecer_contrasena(acceso: str, refresco: str, nueva: str) -> None:
@@ -495,6 +562,8 @@ def restablecer_contrasena(acceso: str, refresco: str, nueva: str) -> None:
         raise ErrorAuth(MSG_LINK_INVALIDO) from e
     except httpx.HTTPError as e:
         raise ErrorAuth(MSG_CONEXION) from e
+    if _sesion_con_empresa(acceso):
+        raise ErrorAuth(MSG_LINK_INVALIDO)
     try:
         cliente.auth.update_user({"password": nueva})
     except (AuthError, httpx.HTTPError) as e:
