@@ -1373,8 +1373,11 @@ Para cada módulo, en este orden:
   «Gimnasia (demostración)» (id 81) y su horario lunes 10:00 (id 204) **no se muestran** (`app/demostracion.py`: por id
   real + nombre + inactivo); se conservan en la base porque sostienen la factura de demostración de Mercado Pago. En
   otra base (Supabase local) los ids se indican con `DEMO_TIPOS_OCULTOS` / `DEMO_HORARIOS_OCULTOS` al levantar la app.
-  Alumna (primera ronda, 04/11): en celular los días ya terminados de Reservar clases son una franja baja
-  (`.card-finalizada`, solo `todas_pasadas`; los cancelados por la profesora no cambian), precios con `|pesos` en el día y
+  Alumna (primera ronda, 04/11; ajustado el 11/11): los días ya terminados de Reservar clases son la MISMA tarjeta que los
+  demás (mismo tamaño, relleno, letra y posición del día y de «N horarios»), solo atenuada (`.card-finalizada`, solo
+  `todas_pasadas`; los cancelados por la profesora no cambian) y con «Finalizado» arriba a la derecha al lado del día, con
+  una grilla y sin tocar el HTML. En las tarjetas angostas (441–680 y 721–1000 px) la etiqueta pasa al lado de
+  «N horarios» para que el día no se parta. Hasta 440 px todas tienen 118 px de alto mínimo. Precios con `|pesos` en el día y
   Mis inscripciones, «Descargar PDF» de 44 px y `body` con 20 px arriba hasta 600 px (afecta a todos los perfiles).
   Alumna (segunda ronda, 05/11): la tarjeta semanal de Reservar clases es toda un enlace al día, alineada a la izquierda:
   «Martes 10/11», «N horarios», solo las etiquetas «Reservada HH» y «En lista de espera HH» (una oferta cuenta como lista

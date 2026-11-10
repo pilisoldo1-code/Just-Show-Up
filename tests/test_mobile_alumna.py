@@ -73,11 +73,22 @@ class ResumenSemanal(Base):
         self.assertNotIn("dia-etiquetas", html)
         self.assertNotIn("Sin lugares", texto(html))
 
-    def test_dia_terminado_compacto_y_accesible_sin_reservar(self):
+    def test_dia_terminado_misma_tarjeta_sin_franja(self):
+        # 11/11: un día terminado es la misma tarjeta que los demás (solo atenuada); ya no es una franja horizontal
+        css = open("app/static/style.css").read()
+        regla = css[css.index(".cards-semana .card.card-finalizada {"):]
+        regla = regla[:regla.index("}")]
+        self.assertNotIn("flex-direction: row", regla)
+        self.assertNotIn("min-height: 0", regla)
+        self.assertNotIn("padding", regla)  # mismo relleno que las demás
+        self.assertIn("opacity", regla)
+        self.assertIn("grid-column: 2;", css[css.index(".cards-semana .card-finalizada > .badge"):][:120])  # al lado del día
+
+    def test_dia_terminado_accesible_sin_reservar(self):
         html = self.grilla([clase(fecha="2026-11-03", hora="08:00", estado="pasada"),
                             clase(fecha="2026-11-04", hora="08:00", estado="disponible")])
         terminado = html[html.index('href="/dia/2026-11-03"') - 200:html.index('href="/dia/2026-11-04"')]
-        self.assertIn("card-finalizada", terminado)  # A1: franja compacta
+        self.assertIn("card-finalizada", terminado)  # atenuada, misma estructura que las demás
         self.assertIn("Finalizado", terminado)
         self.assertNotIn("Ver horarios", terminado)
         self.assertNotIn("card-finalizada", html[html.index('href="/dia/2026-11-04"') - 200:])

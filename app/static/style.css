@@ -490,36 +490,50 @@ main.ancho {
 @media (max-width: 440px) {
     .cards-semana .card {
         flex-basis: 100%;
-        min-height: 0;
+        min-height: 118px;  /* la de un día con «Ver horarios ›»: un día terminado mide lo mismo */
     }
 }
 
-/* Reservar clases: un día ya terminado ocupa una franja baja (día · horarios · Finalizado) y sigue abriéndose para
-   consultar. Mantiene su lugar en la semana; en celular ocupa todo el ancho, así los días con clases quedan a la vista. */
+/* Reservar clases: un día ya terminado es la MISMA tarjeta que los demás (mismo tamaño, relleno y letra; día y cantidad
+   de horarios arriba), solo atenuada y con «Finalizado» arriba a la derecha, al lado del día. Sigue abriéndose para
+   consultar. Sin cambiar el HTML: la etiqueta se ubica con una grilla de dos columnas. */
 .cards-semana .card.card-finalizada {
-    min-height: 0;
-    padding: 12px 16px;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px 12px;
-    text-align: left;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-content: start;
+    column-gap: 12px;
     opacity: 0.6;
 }
 
 .cards-semana .card-finalizada .card-dia {
-    font-size: 1rem;
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.cards-semana .card-finalizada > .badge {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
 }
 
 .cards-semana .card-finalizada .dia-resumen {
-    flex: 1 1 auto;
-    font-size: 0.9rem;
+    grid-column: 1 / -1;
+    grid-row: 2;
 }
 
-@media (max-width: 600px) {
-    .cards-semana .card.card-finalizada {
-        flex-basis: 100%;
+/* en tarjetas angostas (2 por fila en tablet, 3 por fila en ventanas medianas) el día y «Finalizado» no entran en la
+   misma línea: la etiqueta pasa al lado de la cantidad de horarios, así el día nunca se parte ni se mueve */
+@media (min-width: 441px) and (max-width: 680px), (min-width: 721px) and (max-width: 1000px) {
+    .cards-semana .card-finalizada .card-dia {
+        grid-column: 1 / -1;
+    }
+
+    .cards-semana .card-finalizada .dia-resumen {
+        grid-column: 1;
+    }
+
+    .cards-semana .card-finalizada > .badge {
+        grid-row: 2;
     }
 }
 
