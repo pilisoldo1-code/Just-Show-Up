@@ -17,12 +17,15 @@
   **multiempresa** (Just Show Up y Pilates Centro, tres roles, superadministradora, bajas de docentes),
   **Videos On Demand** («Empezar a grabar», PR #45–#46 y #48), **invitaciones por correo** (PR #49: ninguna pantalla
   muestra contraseñas; Magic Link retirado) y pantallas de celular (PR #42, #44, #50).
-- **Base de producción**: 30 migraciones aplicadas, iguales a `supabase/migrations/` (la última, la regla de los 15
-  minutos de Videos, el 10/11 como `20261110163824 videos_regla_15_minutos`, con respaldo previo). Todas las tablas con
+- **Base de producción**: 31 migraciones aplicadas, iguales a `supabase/migrations/` (la última, Mi perfil editable, el
+  10/11 como `20261110230345 perfil_editable`, con respaldo previo). Todas las tablas con
   RLS y sin acceso `anon`.
 - **10/11**: PR #51 integrado (regla de los 15 minutos); 7 facturas de octubre de Just Show Up confirmadas
   (JSU-2026-10-0003…0009) y la de Marta (id 32, $800) **en borrador a propósito** para la defensa; las 11 asistencias
   pendientes de noviembre registradas (7 presentes, 4 ausentes). Detalle en `docs/PROCEDIMIENTOS_DEFENSA.md` §1 y §6.
+- **Mi perfil editable (PR #53, 10/11, `main` = `dfb4a04`)**: cada persona edita nombre, apellido, teléfono, nacimiento
+  y carné; el correo se cambia con doble confirmación (actual y nueva). Verificado en theta con 5 cuentas de
+  demostración. **Falta la prueba real del cambio de correo** con una cuenta que reciba mensajes (ver `CLAUDE.md`).
 - **Videos On Demand probado en producción (10/11)**: primera grabación real publicada sola y reproducida por una alumna
   (`docs/PROCEDIMIENTOS_DEFENSA.md` §2). Falta comprobar el vencimiento (11/11 13:57) y la limpieza (12/11 desde las 05:00).
 - **Falta antes de la defensa**: esa comprobación, cambiar contraseñas de demostración, ensayos.

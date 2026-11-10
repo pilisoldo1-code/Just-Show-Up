@@ -877,7 +877,8 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
-- **Mi perfil editable (rama `perfil-editable`, migración `20261112000000_perfil_editable.sql`, SIN aplicar en producción)**:
+- **Mi perfil editable (PR #53, `main` = `dfb4a04`, desplegado en theta el 10/11; migración `20261112000000_perfil_editable.sql`
+  APLICADA el 10/11 como `20261110230345 perfil_editable`, con respaldo previo `2026-11-10 antes de perfil editable`)**:
   cada persona edita su nombre, apellido, teléfono, fecha de nacimiento y carné con `editar_mis_datos` (solo su propia
   fila; la superadministradora sin fechas); la cédula sigue siendo solo de la administradora. El correo lo cambia Supabase
   Auth con **doble confirmación** (enlace a la dirección actual y a la nueva, plantilla «Change Email Address» =
@@ -893,6 +894,12 @@ Para cada módulo, en este orden:
   - Supabase manda un correo por persona por minuto: dos pedidos seguidos dan 429 («Esperá un minuto»).
   - Pruebas: `tests.test_perfil` (21), `tests/supabase_local/prueba_perfil_reales.py` (59, con Mailpit).
   - Vuelta atrás: `supabase/pendientes/vuelta_atras_perfil_editable.sql`.
+  - **Guardar normaliza el teléfono** (`099 123 456` → `099123456`): pasó el 10/11 con Marta (`alumna@prueba.invalid`) al
+    verificar theta guardando los mismos valores. Las pruebas «sin cambios» en producción tienen que usar perfiles con
+    teléfono ya normalizado o comparar después de normalizar.
+  - Plantilla «Change Email Address» cargada en Supabase por Julieta (10/11) y «Secure email change» activado.
+  - Pruebas reales en local que crean cuentas desde el panel: usar correos que recibe Mailpit y activarlas con
+    `tests/supabase_local/_correo_local.activar_por_correo` (las invitaciones rechazan `.invalid` a propósito).
 - **Invitaciones por correo (rama `invitaciones`, 10/11; sin migraciones; NO desplegado)**: reemplaza a «Entrar con un
   enlace por correo» (PR #47), que se retiró de `/login` (`/entrar-con-enlace` ya no existe). Al crear una alumna,
   profesora o administradora NUEVA, `auth.invitar_cuenta` llama a `invite_user_by_email` con los mismos metadatos del
