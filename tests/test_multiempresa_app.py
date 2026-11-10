@@ -223,7 +223,7 @@ class Menu(Base):
         for texto in ("Just Show Up", "JSU", "Gestionar empresa", 'href="/admin/empresas/1"', "+ Nueva empresa",
                       "<dt>Profesoras</dt><dd>1</dd>", "<dt>Alumnas</dt><dd>9</dd>", "<dt>Administradoras</dt><dd>1</dd>"):
             self.assertIn(texto, r.text)
-        for texto in ("profesora@prueba.invalid", "Pasar a profesora", "Reiniciar contraseña", "También da clases",
+        for texto in ("profesora@prueba.invalid", "Pasar a profesora", "Enviar correo para cambiar la contraseña", "También da clases",
                       ">Horarios</a>", "Facturación", "Mis facturas", "<table"):
             self.assertNotIn(texto, r.text)
 
@@ -233,7 +233,7 @@ class Menu(Base):
         r = self.get("/admin/empresas/1")
         self.assertEqual(r.status_code, 200)
         for texto in ("← Volver a empresas", "Datos generales", "Editar datos", "Desactivar empresa", "Asignar administradora",
-                      "profesora@prueba.invalid", "Pasar a profesora", ">Desactivar</button>", "Reiniciar contraseña", "Reactivar",
+                      "profesora@prueba.invalid", "Pasar a profesora", ">Desactivar</button>", "Enviar correo para cambiar la contraseña", "Reactivar",
                       'class="menu-acciones"', "<dt>Administradoras</dt><dd>1</dd>"):
             self.assertIn(texto, r.text)
         self.assertEqual(r.text.count("Pasar a profesora"), 1)  # solo la activa; la inactiva tiene «Reactivar»
@@ -248,7 +248,7 @@ class Menu(Base):
         # la baja siempre pasa por la vista previa (cancela sus clases próximas): ya no se bloquea por sus horarios
         self.assertIn('action="/admin/empresas/1/administradoras/u1/baja" method="get"', r.text)
         self.assertNotIn("tiene horarios activos", r.text)
-        self.assertIn("en todas las empresas donde usa Just Show Up", r.text)
+        self.assertIn("La actual sigue funcionando hasta que la cambie.", r.text)  # ya no se genera ninguna contraseña
         self.RESUMEN = [{**self.RESUMEN[0], "activa": False}]
         self.responder()
         r = self.get("/admin/empresas/1")
@@ -329,7 +329,7 @@ class ListaPersonas(Base):
         self.assertIn('href="/profesora/profesoras/p1">Gestionar</a>', r.text)
         self.assertIn('href="/profesora/profesoras/ap">Gestionar</a>', r.text)
         self.assertNotIn(">Ver<", r.text)
-        self.assertNotIn("Reiniciar contraseña", r.text)  # está en la ficha
+        self.assertNotIn("Enviar correo para cambiar la contraseña", r.text)  # está en la ficha
         for nombre in ("Eva", "Ines"):
             self.assertNotIn(nombre, r.text)
         self.assertNotIn("Cédula", r.text)  # la cédula se ve en la ficha, no en la lista de profesoras
@@ -347,7 +347,7 @@ class ListaPersonas(Base):
         self.assertIn("<th>Apellido</th>", r.text)
         self.assertIn('href="/profesora/alumnas/a1">Gestionar alumna', r.text)
         self.assertIn('aria-label="Gestionar a Eva Uno">Gestionar</a>', r.text)
-        for texto in ("Cédula", "Carné", "e@x.uy", "Reiniciar contraseña", "<th>Rol</th>"):
+        for texto in ("Cédula", "Carné", "e@x.uy", "Enviar correo para cambiar la contraseña", "<th>Rol</th>"):
             self.assertNotIn(texto, r.text)  # todo eso está en la ficha
         self.sb.rpc.assert_not_called()  # la lista ya no pide datos personales
         self.assertEqual(self.sb.table.return_value.select.call_args_list[-1].args[0], main.COLUMNAS_ALUMNA)
@@ -360,30 +360,31 @@ class ListaPersonas(Base):
         self.assertNotIn("Editar", r.text)
         self.assertEqual(self.sb.table.return_value.select.call_args_list[-1].args[0], main.COLUMNAS_PERSONA_PROFESORA)
         self.assertNotIn("cedula", main.COLUMNAS_PERSONA_PROFESORA)
-        for texto in ("Cédula", "cédula", "Reiniciar contraseña", "Carné", "1.234.567"):
+        for texto in ("Cédula", "cédula", "Enviar correo para cambiar la contraseña", "Carné", "1.234.567"):
             self.assertNotIn(texto, r.text)
         self.sb.rpc.assert_not_called()  # ni siquiera pide los datos personales
         self.assertIn("099123456", r.text)
 
 
 class AltaPersonas(Base):
-    ALTA = {"nombre": "Eva", "apellido": "Uno", "mail": "eva@prueba.invalid"}
+    ALTA = {"nombre": "Eva", "apellido": "Uno", "mail": "eva@ejemplo.test"}
 
     def test_cuenta_nueva_con_rol_en_la_empresa(self):
         self.como(ADMIN)
         with mock.patch.object(main, "_cuenta_existente", return_value=None), \
-                mock.patch.object(main.auth, "crear_cuenta", return_value=("id", "Temporal1")) as cc:
+                mock.patch.object(main.auth, "invitar_cuenta", return_value="id") as cc:
             r = self.post("/profesora/alumnas", {**self.ALTA, "rol": "profesora"})
-        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.status_code, 303)
         self.assertEqual(cc.call_args.kwargs["id_empresa"], 1)
         self.assertEqual(cc.call_args.kwargs["rol_empresa"], "profesora")
-        self.assertIn("Profesora: cuenta creada", r.text)
+        self.assertIn("invitaci%C3%B3n", r.headers["location"])
+        self.assertIn("/profesora/profesoras", r.headers["location"])
 
     def test_nunca_da_de_alta_administradoras(self):
         self.como(ADMIN)
         for rol in ("admin", "admin_profesora", "superadmin"):
             with mock.patch.object(main, "_cuenta_existente", return_value=None), \
-                    mock.patch.object(main.auth, "crear_cuenta", return_value=("id", "Temporal1")) as cc:
+                    mock.patch.object(main.auth, "invitar_cuenta", return_value="id") as cc:
                 r = self.post("/profesora/alumnas", {**self.ALTA, "rol": rol})
             cc.assert_not_called()
             self.assertIn("ok=0", r.headers["location"])
@@ -400,7 +401,7 @@ class AltaPersonas(Base):
                               ({"es_admin": True, "es_profesora": False, "es_alumna": False}, "solo la administración general")):
             self.actual([actual])
             with mock.patch.object(main, "_cuenta_existente", return_value={"id": "x", "nombre": "Pia", "apellido": "Dos"}), \
-                    mock.patch.object(main.auth, "crear_cuenta") as cc:
+                    mock.patch.object(main.auth, "invitar_cuenta") as cc:
                 r = self.post("/profesora/alumnas", {**self.ALTA, "rol": "alumna"})
             self.assertEqual(r.status_code, 400)
             self.assertIn(texto, r.text)
@@ -422,11 +423,12 @@ class AltaPersonas(Base):
         self.rpc("ok")
         self.actual([])
         with mock.patch.object(main, "_cuenta_existente", return_value={"id": "x", "nombre": "Eva", "apellido": "Uno"}), \
-                mock.patch.object(main.auth, "crear_cuenta") as cc:
+                mock.patch.object(main.auth, "invitar_cuenta") as cc:
             r = self.post("/profesora/alumnas", {**self.ALTA, "rol": "alumna"})
-        cc.assert_not_called()
+        cc.assert_not_called()  # nunca se invita (ni se toca la contraseña de) una cuenta que ya existe
         self.assertEqual(r.status_code, 303)
         self.assertIn("misma+contrase", r.headers["location"])
+        self.assertIn("No+se+le+envi%C3%B3+ning%C3%BAn+correo", r.headers["location"])
         self.sb.rpc.assert_called_once_with("asignar_membresia", {"p_id_usuario": "x", "p_es_admin": False,
                                                                  "p_es_profesora": False, "p_es_alumna": True})
 
@@ -508,14 +510,16 @@ class ReiniciarContrasena(Base):
             {"nombre": "Eva", "apellido": "Uno", "mail": "e@x.uy", "rol": "profesora"}]
         with mock.patch.object(auth, "cliente_admin", return_value=admin), \
                 mock.patch.object(auth, "cliente_con_token", return_value=cliente), \
-                mock.patch.object(auth, "reiniciar_contrasena", return_value="Nueva123") as rc:
+                mock.patch.object(auth, "invitacion_pendiente", return_value=False), \
+                mock.patch.object(auth, "pedir_recuperacion") as rc:
             r = self.post(f"/profesora/alumnas/{id_persona}/reiniciar-contrasena", {})
         return r, rc
 
-    def test_no_si_la_persona_esta_en_otra_empresa(self):
+    def test_en_otra_empresa_tambien_recibe_el_correo(self):
+        # ya no se genera ninguna contraseña: el correo solo le permite a ella elegir otra
         r, rc = self.reiniciar([1, 2])
-        self.assertIn("otra+empresa", r.headers["location"])
-        rc.assert_not_called()
+        self.assertIn("ok=1", r.headers["location"])
+        rc.assert_called_once()
 
     def test_no_si_no_es_de_esta_empresa(self):
         r, rc = self.reiniciar([2])
@@ -524,9 +528,11 @@ class ReiniciarContrasena(Base):
 
     def test_profesora_solo_de_esta_empresa(self):
         r, rc = self.reiniciar([1])
-        self.assertEqual(r.status_code, 200)
-        self.assertIn("Nueva123", r.text)
-        rc.assert_called_once_with(self.ID)
+        self.assertEqual(r.status_code, 303)
+        self.assertIn("ok=1", r.headers["location"])
+        self.assertIn("e%40x.uy", r.headers["location"])
+        rc.assert_called_once()
+        self.assertEqual(rc.call_args.args[0], "e@x.uy")
 
 
 class Login(Base):
@@ -726,18 +732,18 @@ class ProfesoraSoloLoSuyo(Base):
 
 
 class PanelEmpresas(Base):
-    ADMIN_INICIAL = {"admin_nombre": "Lia", "admin_apellido": "Paz", "admin_mail": "lia@prueba.invalid"}
+    ADMIN_INICIAL = {"admin_nombre": "Lia", "admin_apellido": "Paz", "admin_mail": "lia@ejemplo.test"}
 
     def test_crear_empresa_con_administradora_inicial(self):
         self.como(SUPER)
         self.rpc({"resultado": "ok", "id": 2})
         with mock.patch.object(main, "_cuenta_existente", return_value=None), \
-                mock.patch.object(main.auth, "crear_cuenta", return_value=("id", "Temporal1")) as cc:
+                mock.patch.object(main.auth, "invitar_cuenta", return_value="id") as cc:
             r = self.post("/admin/empresas", {"nombre": " Pilates   Centro ", "codigo": "pil", **self.ADMIN_INICIAL})
         self.sb.rpc.assert_called_once_with("crear_empresa", {"p_nombre": "Pilates Centro", "p_codigo": "PIL"})
         self.assertEqual((cc.call_args.kwargs["id_empresa"], cc.call_args.kwargs["rol_empresa"]), (2, "admin"))
-        self.assertIn("Temporal1", r.text)
-        self.assertIn("Empresa «Pilates Centro» creada", r.text)
+        self.assertIn("invitaci%C3%B3n", r.headers["location"])
+        self.assertIn("Pilates+Centro", r.headers["location"])
 
     def test_sin_administradora_inicial_no_crea_nada(self):
         self.como(SUPER)
@@ -770,15 +776,15 @@ class PanelEmpresas(Base):
         self.post("/admin/empresas/2/estado", {"activa": 0})
         self.sb.rpc.assert_called_once_with("cambiar_estado_empresa", {"p_id": 2, "p_activa": False})
 
-    def test_administradora_nueva_muestra_contrasena(self):
+    def test_administradora_nueva_recibe_invitacion(self):
         self.como(SUPER)
         with mock.patch.object(main, "_cuenta_existente", return_value=None), \
-                mock.patch.object(main.auth, "crear_cuenta", return_value=("id", "Temporal1")) as cc:
+                mock.patch.object(main.auth, "invitar_cuenta", return_value="id") as cc:
             r = self.post("/admin/empresas/2/administradora",
-                          {"nombre": "Lia", "apellido": "Paz", "mail": "lia@prueba.invalid", "tambien_profesora": "1"})
-        self.assertEqual(r.status_code, 200)
-        self.assertIn("Temporal1", r.text)
-        self.assertIn("/admin/empresas", r.text)
+                          {"nombre": "Lia", "apellido": "Paz", "mail": "lia@ejemplo.test", "tambien_profesora": "1"})
+        self.assertEqual(r.status_code, 303)
+        self.assertIn("invitaci%C3%B3n", r.headers["location"])
+        self.assertIn("/admin/empresas/2", r.headers["location"])
         # un solo rol: la casilla vieja «también da clases» ya no existe (la administradora puede dar clases igual)
         self.assertEqual((cc.call_args.kwargs["id_empresa"], cc.call_args.kwargs["rol_empresa"]), (2, "admin"))
 
@@ -822,7 +828,7 @@ class EditarPersona(Base):
         self.assertEqual(r.status_code, 200)
         for texto in ("Pia Dos", "Guardar datos",
                       f'action="/profesora/profesoras/{self.ID}/baja" method="get"', ">Desactivar</button>", "p@x.uy", "<dt>Teléfono</dt><dd>099123456</dd>", "<dt>Cédula</dt><dd>No registrada</dd>",
-                      "<dt>Carné de salud vence</dt>", "Reiniciar contraseña"):
+                      "<dt>Carné de salud vence</dt>", "Enviar correo para cambiar la contraseña"):
             self.assertIn(texto, r.text)
         for texto in ("es_admin", "Administradora</label>", "Guardar roles"):
             self.assertNotIn(texto, r.text)  # nunca se ofrece el rol de administradora
@@ -857,7 +863,7 @@ class EditarPersona(Base):
         self.preparar()
         r = self.get(f"/profesora/profesoras/{self.ID}")
         self.assertIn("solo los cambia la administración general", r.text)
-        for texto in ("Guardar datos", "Cambiar a", "Dejar inactiva", "name=\"nombre\"", "Reiniciar contraseña"):
+        for texto in ("Guardar datos", "Cambiar a", "Dejar inactiva", "name=\"nombre\"", "Enviar correo para cambiar la contraseña"):
             self.assertNotIn(texto, r.text)
         r = self.post(f"/profesora/profesoras/{self.ID}/datos", {"nombre": "X", "apellido": "Y"})
         self.assertEqual(r.status_code, 403)
@@ -926,7 +932,7 @@ class EditarPersona(Base):
 
 
 class SuperadminAdministradoras(Base):
-    ADM = {"id": "11111111-1111-4111-8111-111111111111", "nombre": "Lia", "apellido": "Paz", "mail": "lia@prueba.invalid",
+    ADM = {"id": "11111111-1111-4111-8111-111111111111", "nombre": "Lia", "apellido": "Paz", "mail": "lia@ejemplo.test",
            "activa": True, "pendientes": []}
 
     def responder(self, **respuestas):
@@ -964,10 +970,12 @@ class SuperadminAdministradoras(Base):
         self.como(SUPER)
         self.responder(asignar_administradora="ok")
         self.assertIn("ok=1", self.post(self.url("reactivar"), {}).headers["location"])
-        with mock.patch.object(main.auth, "reiniciar_contrasena", return_value="Temporal9") as rc:
+        with mock.patch.object(main.auth, "invitacion_pendiente", return_value=False), \
+                mock.patch.object(main.auth, "pedir_recuperacion") as rc:
             r = self.post(self.url("reiniciar-contrasena"), {})
-        rc.assert_called_once_with(self.ADM["id"])
-        self.assertIn("Temporal9", r.text)
+        rc.assert_called_once()
+        self.assertEqual(rc.call_args.args[0], self.ADM["mail"])
+        self.assertIn("ok=1", r.headers["location"])
 
     def test_solo_la_superadministradora(self):
         for u in (ADMIN, PROFE, ALUMNA_DOS):

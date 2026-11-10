@@ -88,6 +88,7 @@
                         <div class="admin-nombre">
                             <strong>{{ quien }}</strong>
                             <span class="badge {{ 'badge-on' if a.activa else 'badge-off' }}">{{ 'Activa' if a.activa else 'Inactiva' }}</span>
+                            {% if a.invitacion_pendiente %}<span class="badge badge-espera">Pendiente de activación</span>{% endif %}
                         </div>
                         {# una sola línea; si no entra se recorta con «…» y, al tocarlo, se despliega completo en su lugar #}
                         {{ correo(a.mail, quien) }}
@@ -114,10 +115,16 @@
                                 <button type="submit">Reactivar</button>
                             </form>
                             {% endif %}
-                            <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/reiniciar-contrasena" method="post"
-                                  data-confirmar="¿Reiniciar la contraseña de {{ quien }}? Se genera una contraseña temporal nueva y la actual deja de funcionar en su cuenta, en todas las empresas donde usa Just Show Up.">
-                                <button type="submit">Reiniciar contraseña</button>
+                            {% if a.invitacion_pendiente %}
+                            <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/reenviar-invitacion" method="post">
+                                <button type="submit">Reenviar invitación</button>
                             </form>
+                            {% else %}
+                            <form action="/admin/empresas/{{ e.id }}/administradoras/{{ a.id }}/reiniciar-contrasena" method="post"
+                                  data-confirmar="¿Enviarle a {{ quien }} un correo para cambiar su contraseña? La actual sigue funcionando hasta que la cambie.">
+                                <button type="submit">Enviar correo para cambiar la contraseña</button>
+                            </form>
+                            {% endif %}
                         </div>
                     </details>
                 </li>
@@ -149,7 +156,7 @@
                 <label>Mail <input type="email" name="mail" required /></label>
                 <p class="nota">La administradora tiene todas las funciones de una profesora: puede dar clases o no.
                     Si el mail ya tiene cuenta, queda como administradora con su misma contraseña (si era alumna o profesora de
-                    esta empresa, deja ese rol). Si no, se crea la cuenta y te mostramos la contraseña temporal una sola vez.</p>
+                    esta empresa, deja ese rol). Si no, se crea la cuenta y le enviamos un correo para que configure su contraseña.</p>
                 <div class="modal-botones">
                     <button type="button" class="btn btn-secundario" onclick="this.closest('dialog').close()">Volver</button>
                     <button type="submit" class="btn">Asignar</button>

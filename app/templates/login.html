@@ -40,9 +40,6 @@
                 <button type="submit" class="btn btn-block btn-tactil">Ingresar</button>
             </form>
 
-            {% if not superadmin %}
-            <p class="auth-link"><a href="/entrar-con-enlace">Entrar con un enlace por correo</a></p>
-            {% endif %}
             <p class="auth-link"><a href="/olvide-contrasena">Olvidé mi contraseña</a></p>
             {% if not superadmin %}
             <p class="nota auth-nota">El nombre del lugar es el del estudio donde tomás tus clases; no importan las mayúsculas

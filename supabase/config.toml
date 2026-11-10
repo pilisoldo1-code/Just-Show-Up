@@ -243,11 +243,11 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Enlace para entrar sin contraseña (Magic Link): lleva a la página de Just Show Up con el botón «Entrar».
-# En el proyecto real, el mismo HTML va en Authentication > Email Templates > Magic Link.
-[auth.email.template.magic_link]
-subject = "Tu enlace para entrar a Just Show Up"
-content_path = "./supabase/templates/enlace_ingreso.html"
+# Invitación a una cuenta nueva: lleva a /activar-cuenta, donde la persona elige su contraseña (el código del enlace se
+# canjea recién al guardar). En el proyecto real, el mismo HTML va en Authentication > Email Templates > Invite user.
+[auth.email.template.invite]
+subject = "Te invitaron a Just Show Up"
+content_path = "./supabase/templates/invitacion.html"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

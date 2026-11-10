@@ -28,7 +28,7 @@
         <section class="bloque-persona ficha-resumen">
             <dl class="ficha-datos">
                 <div><dt>Rol</dt><dd>{{ persona.roles|join(' · ') }}</dd></div>
-                <div><dt>Estado</dt><dd><span class="badge {{ 'badge-on' if persona.membresia.activa else 'badge-off' }}">{{ 'Activa' if persona.membresia.activa else 'Inactiva' }}</span></dd></div>
+                <div><dt>Estado</dt><dd>{% if persona.membresia.activa and persona.invitacion_pendiente %}<span class="badge badge-espera">Pendiente de activación</span>{% else %}<span class="badge {{ 'badge-on' if persona.membresia.activa else 'badge-off' }}">{{ 'Activa' if persona.membresia.activa else 'Inactiva' }}</span>{% endif %}</dd></div>
                 <div class="ficha-ancho"><dt>Correo</dt><dd>{{ correo(persona.mail, persona.nombre ~ ' ' ~ persona.apellido) }}</dd></div>
                 <div><dt>Teléfono</dt><dd>{{ persona.telefono or '—' }}</dd></div>
                 <div><dt>Cédula</dt><dd>{{ persona.cedula_txt or 'No registrada' }}</dd></div>
@@ -83,14 +83,20 @@
         {% if not persona.yo %}
         <section class="bloque-persona">
             <h2>Estado</h2>
+            {% set lugar = usuario.empresa_nombre or 'tu empresa' %}
+            {% if persona.invitacion_pendiente %}
+            {% set estado_txt = "Pendiente de activación: todavía no puede iniciar sesión (primero tiene que configurar su contraseña con el correo de invitación)." %}
+            {% else %}
+            {% set estado_txt = "Activa: puede iniciar sesión en " ~ lugar ~ "." %}
+            {% endif %}
             {% if persona.membresia.activa and persona.rol == 'profesora' %}
-            <p class="nota">Activa: puede iniciar sesión en {{ usuario.empresa_nombre or 'tu empresa' }}. Al desactivarla se
+            <p class="nota">{{ estado_txt }} Al desactivarla se
                 desactivan sus horarios y se cancelan sus clases próximas (con sus reservas); antes ves exactamente qué cambia.</p>
             <form action="/profesora/{{ seccion }}/{{ persona.id }}/baja" method="get">
                 <button type="submit" class="btn btn-secundario">Desactivar</button>
             </form>
             {% elif persona.membresia.activa %}
-            <p class="nota">Activa: puede iniciar sesión en {{ usuario.empresa_nombre or 'tu empresa' }}.</p>
+            <p class="nota">{{ estado_txt }}</p>
             <form action="/profesora/{{ seccion }}/{{ persona.id }}/estado" method="post"
                   data-confirmar="¿Dejar inactiva a {{ persona.nombre }} {{ persona.apellido }}? No va a poder entrar a tu empresa; sus datos e historial se conservan.">
                 <input type="hidden" name="activa" value="0" />
@@ -107,13 +113,28 @@
 
         <section class="bloque-persona">
             <h2>Contraseña</h2>
-            <p class="nota">Genera una contraseña temporal nueva, que se muestra una sola vez. La actual deja de funcionar en su
-                cuenta, en todas las empresas donde usa Just Show Up.</p>
+            {% if persona.invitacion_pendiente %}
+            <p class="nota"><span class="badge badge-espera">Pendiente de activación</span> Todavía no configuró su contraseña
+                con el correo de invitación. El enlace vence en 1 hora: si no le llegó o venció, reenviala. Si el mail está
+                mal escrito, anulá la invitación y creala de nuevo.</p>
+            <div class="acciones-persona">
+                <form action="/profesora/{{ seccion }}/{{ persona.id }}/reenviar-invitacion" method="post">
+                    <button type="submit" class="btn" data-cargando="Enviando…">Reenviar invitación</button>
+                </form>
+                <form action="/profesora/{{ seccion }}/{{ persona.id }}/anular-invitacion" method="post"
+                      data-confirmar="¿Anular la invitación de {{ persona.mail }}? Se borra esta cuenta pendiente (nunca se usó).">
+                    <button type="submit" class="btn btn-secundario">Anular invitación</button>
+                </form>
+            </div>
+            {% else %}
+            <p class="nota">Le enviamos un correo para que elija una contraseña nueva. Nadie ve su contraseña y la actual sigue
+                funcionando hasta que la cambie.</p>
             <form action="/profesora/alumnas/{{ persona.id }}/reiniciar-contrasena" method="post"
-                  data-confirmar="¿Generar una contraseña nueva para {{ persona.nombre }} {{ persona.apellido }}? La anterior deja de funcionar en su cuenta, en todas las empresas donde usa Just Show Up.">
+                  data-confirmar="¿Enviarle a {{ persona.mail }} un correo para cambiar su contraseña?">
                 <input type="hidden" name="desde" value="{{ seccion }}" />
-                <button type="submit" class="btn btn-secundario">Reiniciar contraseña</button>
+                <button type="submit" class="btn btn-secundario">Enviar correo para cambiar la contraseña</button>
             </form>
+            {% endif %}
         </section>
         {% endif %}
         {% endif %}

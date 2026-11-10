@@ -69,7 +69,8 @@
                 Vencimiento del carné de salud
                 <input type="date" name="fecha_vencimiento_carne_salud" value="{{ datos.get('fecha_vencimiento_carne_salud', '') }}" min="{{ manana_iso }}" />
             </label>
-            <p class="nota">Al crearla se genera una contraseña temporal que te mostramos una sola vez.</p>
+            <p class="nota">Si la cuenta es nueva, le enviamos un correo para que configure su propia contraseña (el enlace vence en
+                1 hora y se puede reenviar desde su ficha). Nadie más ve su contraseña.</p>
             <button type="submit" class="btn">Crear cuenta</button>
         </form>
     </main>

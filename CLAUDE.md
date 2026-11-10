@@ -144,10 +144,9 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     **`rol`, `mail` e `id` no son editables por el cliente**. El trigger crea el
     perfil siempre como `alumna`. FK `reserva.id_alumna` y
     `listadeespera.id_alumna` → `profiles(id)`.
-  - Cuentas creadas solo desde el servidor con la `SUPABASE_SERVICE_KEY`
-    (`auth.admin.create_user`, ya confirmadas, sin mail de confirmación). Se
-    muestra la contraseña temporal **una sola vez** (todavía no se envía por
-    mail: falta cuenta de Resend + dominio propio verificado).
+  - Cuentas creadas solo desde el servidor con la `SUPABASE_SERVICE_KEY`. Desde las **invitaciones** (ver Gotchas)
+    las pantallas ya no generan ni muestran contraseñas: la cuenta nueva recibe un correo y elige la suya. Los scripts
+    (`crear_profesora.py`, `crear_superadmin.py`, `empresa_demo.py`) siguen usando `auth.crear_cuenta` con contraseña.
   - **Cuentas de prueba para la demo (creadas 2026-10-07)**:
     `profesora@prueba.invalid` (rol profesora) y `alumna@prueba.invalid`. Las
     contraseñas **no se documentan acá**: están en el archivo local
@@ -872,26 +871,43 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
-- **Entrar con un enlace por correo (Magic Link, rama `magic-links`, 09/11; sin migraciones; NO desplegado)**: `/login` →
-  «Entrar con un enlace por correo» (`/entrar-con-enlace`: lugar + mail) → `sign_in_with_otp` con `should_create_user=False`
-  → el mail lleva a `/entrar-con-enlace/confirmar?lugar=…#token_hash=…` → botón «Entrar» → el servidor canjea el código
-  (`verify_otp`, `type=magiclink`) y llama a la misma `entrar_a_empresa`; si falla, cierra esa sesión y responde 401
-  (`MSG_ENLACE_INVALIDO`). Abrir la página NO gasta el enlace (los antivirus del correo la visitan solos); el código va
-  después del `#` para que no quede en los registros del servidor. La superadministradora no tiene enlace (sin membresía,
-  da 401). Pedir el enlace y «Olvidé mi contraseña» responden siempre igual (también si Supabase frena el envío por
-  haber pedido otro hace menos de 60 s: eso solo le pasa a cuentas que existen). Nunca se manda mail a dominios
-  `.invalid` (`auth.es_mail_ficticio`).
-  - **La sesión de un enlace y la de recuperación tienen el mismo `amr` (`otp`)** (verificado en el Supabase local): por
-    eso `/restablecer-contrasena` además rechaza las sesiones que ya entraron a un lugar (`empresa_de_sesion()`).
-  - **Necesita la plantilla del mail**: `supabase/templates/enlace_ingreso.html` (local, vía `config.toml`). En el
-    proyecto real hay que pegarla en Authentication > Email Templates > Magic Link ANTES del merge; con la plantilla de
-    Supabase por defecto el enlace no funciona.
-  - Pruebas: `tests.test_magic_links` (27, simuladas) y `tests/supabase_local/prueba_magic_links_reales.py` (54, con
-    Mailpit; necesita en la copia aislada `http://localhost:8000/**` en las Redirect URLs, la plantilla y
-    `max_frequency = "60s"`, que trae `supabase/config.toml`).
-  - El mailer incluido de Supabase solo entrega a miembros del equipo (2/h): para usuarias reales se decidió **Gmail
-    SMTP con una cuenta exclusiva del proyecto** (500/día, contraseña de aplicación solo en el panel de Supabase);
-    plan B: Brevo Free. Ver el informe en `CONTINUIDAD_PROYECTO.md` cuando se configure.
+- **Invitaciones por correo (rama `invitaciones`, 10/11; sin migraciones; NO desplegado)**: reemplaza a «Entrar con un
+  enlace por correo» (PR #47), que se retiró de `/login` (`/entrar-con-enlace` ya no existe). Al crear una alumna,
+  profesora o administradora NUEVA, `auth.invitar_cuenta` llama a `invite_user_by_email` con los mismos metadatos del
+  alta (el trigger arma perfil y membresía de ESA empresa): la cuenta queda sin contraseña y no puede iniciar sesión.
+  Supabase manda la plantilla «Invite user» (`supabase/templates/invitacion.html`) con `{{ .RedirectTo }}#token_hash=…`
+  → `/activar-cuenta` (el código va después del `#` y se canjea recién al tocar «Guardar contraseña», con
+  `verify_otp(type="invite")` del lado del servidor; la contraseña se valida ANTES de canjear, así un error de tipeo no
+  gasta el enlace) → pone la contraseña, cierra esa sesión y manda a `/login`.
+  - **Verificado en el Supabase local**: reinvitar una cuenta pendiente la conserva (mismo id y metadatos, sin
+    duplicar) y deja inválido el enlace anterior; un enlace vencido (1 h, el «OTP expiration» que comparten todos los
+    correos de Supabase) o ya usado da `otp_expired`; una cuenta ya activa no se puede reinvitar (`email_exists`). La
+    reinvitación desde el admin API no tiene el freno de 60 s (sí el tope de correos por hora del proyecto).
+  - «Pendiente» = `invited_at` con valor y sin `email_confirmed_at` ni `last_sign_in_at` (`auth.invitacion_pendiente`,
+    con la clave del servidor; se consulta solo al abrir la ficha, nunca al editar datos). Ficha pendiente: «Reenviar
+    invitación» y «Anular invitación» (borra la cuenta solo si es solo de esa empresa y no tiene reservas). Las
+    administradoras pendientes se reenvían desde «Gestionar empresa».
+  - Una cuenta que YA existe (otra empresa) nunca recibe invitación: solo se le agrega la membresía, como antes, y la
+    pantalla dice que no se le envió ningún correo. Un correo informativo no se puede mandar gratis (Supabase solo manda
+    sus correos de autenticación y theta no tiene las credenciales de Gmail).
+  - Si el envío falla, `_borrar_si_quedo` borra la cuenta solo si quedó pendiente (nunca una activa).
+  - **Activación interrumpida**: canjear la invitación confirma la cuenta y Supabase le deja una contraseña interna que
+    nadie conoce (la columna `encrypted_password` NO queda vacía), así que deja de figurar pendiente. Sin intervención de
+    nadie, «Olvidé mi contraseña» le permite elegir una (probado; también funciona si nunca abrió la invitación).
+  - Ficha de una cuenta pendiente: el estado dice «Pendiente de activación: todavía no puede iniciar sesión».
+  - «Reiniciar contraseña» ahora es «Enviar correo para cambiar la contraseña»: usa `pedir_recuperacion` (el mismo flujo
+    de «Olvidé mi contraseña», sin cambios) y la contraseña actual sigue hasta que la persona elija otra.
+  - Mails `.invalid`: solo scripts. Desde la pantalla, una cuenta NUEVA `.invalid` se rechaza (`MSG_MAIL_FICTICIO`); una
+    `.invalid` que ya existe se puede sumar a otra empresa (no recibe correo).
+  - **La sesión de un enlace (invitación, magic link) y la de recuperación tienen el mismo `amr` (`otp`)**: por eso
+    `/restablecer-contrasena` rechaza las sesiones que ya entraron a un lugar (`empresa_de_sesion()`).
+  - Producción: hay que pegar la plantilla «Invite user» ANTES del merge (con la de Supabase por defecto el enlace lleva
+    a la confirmación de Supabase, no a `/activar-cuenta`). La plantilla «Magic Link» que se cargó queda sin uso.
+  - Pruebas: `tests.test_invitaciones` (simuladas) y `tests/supabase_local/prueba_invitaciones_reales.py` (47, con
+    Mailpit). `prueba_altas_reales.py` ahora activa cada cuenta con su invitación y usa `@ejemplo.test` (base local
+    recién creada: `supabase db reset` en la copia aislada).
+  - Correos: Gmail SMTP de la cuenta exclusiva del proyecto, configurado en el panel de Supabase (500/día; tope del
+    proyecto 30/h). Plan B: Brevo Free.
 
 - **Cobro del 25 % por inasistencia (rama `cobro-inasistencia`, PR #35; migración `20261105000000_cobro_inasistencia.sql`
   APLICADA en Supabase el 03/11 como `20261103170757 cobro_inasistencia`, con respaldo previo `2026-11-03 antes de cobro por
