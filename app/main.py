@@ -2322,7 +2322,7 @@ def baja_admin_confirmar(request: Request, empresa_id: int, persona_id: str, mot
 
 @app.get("/videos")
 def videos_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_espectadora)):
-    grabaciones, tipos, sb = [], [], None
+    grabaciones, tipos, ultimas, sb = [], [], [], None
     try:
         sb = _sb(usuario)
         lista = videos.disponibles(sb)
@@ -2334,8 +2334,13 @@ def videos_lista(request: Request, ok: int = 0, aviso: str = "", usuario: Usuari
             grabaciones, tipos = videos.mis_grabaciones(sb), videos.tipos_para_grabar(sb)
         except Exception:
             logging.exception("No se pudieron cargar las grabaciones independientes")
-    return _render(request, "videos.html", usuario, videos=lista, grabaciones=grabaciones, tipos=tipos, aviso=aviso,
-                   aviso_ok=bool(ok), titulo_max=videos.TITULO_MAX, descripcion_max=videos.DESCRIPCION_MAX)
+    if usuario.es_admin and sb is not None:
+        try:  # estado y errores de las últimas grabaciones (antes estaba en la pantalla de horarios, retirada)
+            ultimas = videos.ultimas_grabaciones(sb)
+        except Exception:
+            logging.exception("No se pudieron cargar las últimas grabaciones")
+    return _render(request, "videos.html", usuario, videos=lista, grabaciones=grabaciones, tipos=tipos, ultimas=ultimas,
+                   aviso=aviso, aviso_ok=bool(ok), titulo_max=videos.TITULO_MAX, descripcion_max=videos.DESCRIPCION_MAX)
 
 
 # Grabaciones independientes: contenido grabado solo para la biblioteca (sin horario, clase ni reserva).
@@ -2364,28 +2369,11 @@ def videos_grabacion_cancelar(grabacion_id: int, usuario: Usuario = Depends(requ
                             status_code=303)
 
 
-# Antes de /videos/{video_id}: si no, «configuracion» se toma como un id.
+# Antes de /videos/{video_id}: si no, «configuracion» se toma como un id. La configuración de horarios que se graban
+# se retiró de la pantalla (09/11): ahora se graba con «Empezar a grabar»; los datos guardados no se tocan.
 @app.get("/videos/configuracion")
-def videos_configuracion(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_admin)):
-    try:
-        sb = _sb(usuario)
-        horarios, grabaciones = videos.configuracion(sb), videos.ultimas_grabaciones(sb)
-    except Exception:
-        logging.exception("No se pudo cargar la configuración de videos")
-        horarios, grabaciones, aviso, ok = [], [], "No pudimos cargar la configuración. Probá de nuevo.", 0
-    return _render(request, "videos_configuracion.html", usuario, horarios=horarios, grabaciones=grabaciones,
-                   aviso=aviso, aviso_ok=bool(ok))
-
-
-@app.post("/videos/configuracion/{horario_id}")
-def videos_programar(horario_id: int, activa: bool = Form(False), usuario: Usuario = Depends(requiere_admin)):
-    try:
-        resultado = videos.programar(_sb(usuario), horario_id, activa)
-    except Exception:
-        logging.exception("No se pudo guardar la configuración de videos")
-        resultado = None
-    query = urlencode({"ok": int(resultado == "ok"), "aviso": videos.MSG_PROGRAMAR.get(resultado, auth.MSG_GENERICO)})
-    return RedirectResponse(url=f"/videos/configuracion?{query}", status_code=303)
+def videos_configuracion(usuario: Usuario = Depends(requiere_espectadora)):
+    return RedirectResponse(url="/videos", status_code=303)
 
 
 @app.get("/videos/{video_id}")

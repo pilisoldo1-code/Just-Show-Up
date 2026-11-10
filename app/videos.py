@@ -175,14 +175,16 @@ def programar(sb: Client, id_horario: int, activa: bool) -> str:
 
 TITULO_MIN, TITULO_MAX, DESCRIPCION_MAX = 3, 80, 300
 MSG_GRABACION = {
-    "ok": "Listo. Tenés tiempo hasta las {hora} para comenzar a grabar con Zoom.",
+    "ok": "Listo, la clase quedó registrada. En Zoom, tocá «Unirse» y después «Grabar». Tenés hasta las {hora} para "
+          "empezar a grabar.",
     "cancelada": "Se canceló la grabación.",
     "datos_invalidos": f"El título tiene que tener entre {TITULO_MIN} y {TITULO_MAX} caracteres "
                        f"y la descripción hasta {DESCRIPCION_MAX}.",
     "tipo_invalido": "Elegí un tipo de clase activo de la lista.",
     "sin_tipos": "No hay tipos de clase activos. Primero hay que crear o activar uno en Tipos de clase.",
     "sin_computadora": "Todavía no hay una computadora autorizada para subir tus grabaciones. Pedíselo a la administración.",
-    "ya_hay_una": "Ya tenés una grabación esperando. Grabala o cancelala antes de preparar otra.",
+    "ya_hay_una": "Ya tenés una clase esperando grabación. Abrí Zoom desde «Mis clases grabadas» o cancelala antes de "
+                  "registrar otra.",
     "no_autorizada": "Solo las docentes pueden preparar grabaciones.",
     "no_encontrada": "No encontramos esa grabación.",
     "no_se_puede": "Esa grabación ya no se puede cancelar.",

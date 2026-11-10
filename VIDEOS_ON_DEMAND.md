@@ -30,7 +30,7 @@ Zoom (app de escritorio, grabación local)
 
 | Persona | Qué hace |
 |---|---|
-| **Administradora** | Elige qué horarios se graban (`/videos/configuracion`). Lo que no está activado no se procesa ni ocupa espacio. Ve las últimas grabaciones y sus errores. |
+| **Administradora** | Desde el 09/11 ya no elige horarios: la pantalla «Elegir qué horarios se graban» se retiró (`/videos/configuracion` vuelve a Videos; lo guardado no se borró). Si da clases, graba como una profesora. Ve el estado y los errores de las grabaciones al final de Videos On Demand. |
 | **Profesora** | Da la clase con Zoom desde la computadora donde está instalado el programa y graba en la computadora. Nada más. |
 | **Alumna** | Entra a «Videos On Demand», elige la clase y la mira. Ve cuánto tiempo le queda. |
 | **Quien administra el sistema** | Crea el token de cada computadora (`scripts/video_agente.py`) y configura el entorno una sola vez. |
@@ -60,7 +60,7 @@ planificación.
 
 1. La docente (profesora o administradora con clases) entra a **Videos On Demand** → «Grabar una nueva clase», escribe
    el **nombre de la clase** (3 a 80 caracteres), elige el **tipo de clase** (obligatorio: uno ACTIVO del catálogo de
-   Tipos de clase de su empresa) y, si quiere, una descripción (hasta 300), y toca **Preparar clase**. Necesita tener
+   Tipos de clase de su empresa) y, si quiere, una descripción (hasta 300), escribe su **ID personal de reunión de Zoom** (se guarda solo en ese navegador, no en la base) y toca **Empezar a grabar**: la base registra la clase y recién entonces la página abre Zoom en su sala personal (`zoommtg://zoom.us/join?action=join&confno=<ID>`; el navegador pregunta «Abrir zoom.us»). En Zoom toca **Unirse** (entra como anfitriona: verificado el 09/11 con Zoom Básico 7.1.9) y **Grabar** a mano: no se activa la grabación automática. La pantalla nunca dice «grabando»: la clase figura «Pendiente de grabación» hasta que el programa recibe el video. Necesita tener
    una computadora autorizada (token del programa local); si no, la pantalla lo avisa. Si la empresa no tiene tipos
    activos, la pantalla lo explica y no deja crearla.
 2. Desde ese momento tiene **3 horas para EMPEZAR a grabar** con Zoom en esa computadora. El plazo no limita la duración.

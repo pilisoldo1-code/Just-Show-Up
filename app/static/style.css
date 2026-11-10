@@ -4713,3 +4713,21 @@ a.video-card-biblioteca:hover .video-play {
 .auth-card .aviso {
     overflow-wrap: anywhere;
 }
+
+/* ---------- videos: empezar a grabar ---------- */
+.pasos-grabar {
+    margin: 4px 0 12px;
+    padding-left: 22px;
+    color: var(--muted);
+    line-height: 1.5;
+}
+.pasos-grabar li + li {
+    margin-top: 4px;
+}
+.pasos-grabar + .grabar-nota {
+    margin: 0 0 18px;
+}
+.ultimas-grabaciones .video-card strong,
+.ultimas-grabaciones .video-card .video-dato {
+    display: block;
+}

@@ -524,8 +524,13 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   duración bajado temporalmente con `videos_prueba_datos.py margen` y restaurado después). **No verificado**: una
   grabación real de Zoom de 34–41 min (corte de Zoom Básico a los 40 min) y Android; Julieta decidió no hacer la prueba
   larga. Mux Free sigue en evaluación.
-  - **Selección**: la administradora activa los horarios en `/videos/configuracion` (`video_programacion`; solo
-    horarios de `duracion_clase_min`, 40). Después de cada clase es automático. Lo no activado no se comprime ni se sube.
+  - **Selección (cambió el 09/11, rama `videos-empezar-a-grabar`)**: la pantalla de horarios que se graban se retiró;
+    `/videos/configuracion` redirige a `/videos` y `video_programacion` quedó como estaba (no se borró nada; el servidor
+    todavía aceptaría un horario activado, pero ya no hay forma de activarlo desde la app). Se graba con «Empezar a
+    grabar»: misma `grabacion_independiente_crear` y, si la base responde ok, la página abre
+    `zoommtg://zoom.us/join?action=join&confno=<ID personal>` (el ID solo en `localStorage`, clave `jsu_zoom_id`). Con la
+    cuenta dueña iniciada en Zoom, `join` sobre su ID personal entra como anfitriona (verificado 09/11, Zoom 7.1.9);
+    `zoommtg://zoom.us/start?confno=...` NO abrió nada. La grabación la inicia ella («Grabar»): no se usa la automática.
   - **Flujo**: `agente/agente_videos.py`, en la computadora de la profesora, detecta el `.mp4`, consulta
     `/api/videos/agente/consultar` **antes de comprimir** y, si está autorizada, comprime a ~400 kbps (~120 MB para 40
     min, estimado), divide en partes de hasta 45 MB y sube con URLs firmadas directo a Storage (Vercel limita los
@@ -589,8 +594,7 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     tiene 10 secciones: la suya dice «Videos» (con «Videos On Demand» no entran en el header de 1200 px), el header lleva
     `.menu-largo` (más de 9 secciones), que pasa al desplegable ☰ hasta 1219 px (los demás roles, hasta 1099) y oculta
     el nombre junto a las iniciales. El script del menú usa el mismo corte. Pantalla de Videos: mismas piezas que Mi
-    perfil (`.panel` + `h2` + `.subtitle` + `horario-form form-plano`) y Tipos de clase (`.seccion-encabezado` con el
-    botón «Elegir qué horarios se graban»).
+    perfil (`.panel` + `h2` + `.subtitle` + `horario-form form-plano`) y Tipos de clase (`.seccion-encabezado`).
   - **Borrar cuentas y empresas**: `video_reproduccion.id_usuario` queda vacío y `video_agente` cae en cascada.
     `empresa_demo.py borrar` borra primero los archivos de Storage, verifica listando el bucket y, si algo falla, corta sin
     borrar ninguna fila.
@@ -605,7 +609,8 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
   - **Pruebas reales**: procedimiento en `agente/PRUEBAS_REALES.md`. `scripts/videos_prueba_migrar.py` (sin `--aplicar`
     solo revisa; exige proyecto vacío y confirmación) y `scripts/videos_prueba_datos.py` leen solo `.env.videos-prueba`,
     nunca el `.env`. **Sin ejecutar contra Supabase remoto.**
-  - **Errores visibles**: `/videos/configuracion` muestra «Últimas grabaciones» solo a la administradora. Los mensajes
+  - **Errores visibles**: «Estado y errores de las grabaciones» (antes «Últimas grabaciones» en `/videos/configuracion`)
+    está al final de `/videos`, plegado y solo para la administradora (`videos.ultimas_grabaciones`, sin cambios). Los mensajes
     pasan por `videos.limpiar_mensaje` (saca URLs firmadas, rutas y tokens). Lo que nunca salió de la computadora, como
     `no_autorizada`, queda solo en `agente/trabajo/agente.log`.
   - **Respaldos**: `verificar_despliegue.py` y `restaurar_datos.py` incluyen las tablas si existen, y funcionan antes de la
