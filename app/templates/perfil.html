@@ -16,23 +16,62 @@
         <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
         {% endif %}
 
+        {% if errores %}
+        <div class="aviso aviso-error">
+            <strong>{{ 'Corregí estos datos:' if errores|length > 1 else 'Corregí este dato:' }}</strong>
+            <ul class="lista-errores">{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+        {% set f = form or {'nombre': datos.nombre, 'apellido': datos.apellido, 'telefono': datos.telefono,
+                            'fecha_nacimiento': datos.fecha_nacimiento_iso,
+                            'fecha_vencimiento_carne_salud': datos.fecha_vencimiento_carne_salud_iso} %}
         <section class="panel">
-            <h2>Información de contacto</h2>
-            <dl class="datos-perfil">
-                <div><dt>Nombre</dt><dd>{{ datos.nombre }} {{ datos.apellido }}</dd></div>
-                <div><dt>Mail</dt><dd>{{ datos.mail or '—' }}</dd></div>
-                <div><dt>Cédula</dt><dd>{{ datos.cedula or 'No registrada' }}</dd></div>
-                <div><dt>Teléfono</dt><dd>{{ datos.telefono or '—' }}</dd></div>
-                {% if not usuario.es_profesora %}
-                <div><dt>Fecha de nacimiento</dt><dd>{{ datos.fecha_nacimiento or '—' }}</dd></div>
-                <div><dt>Vencimiento del carné de salud</dt><dd>{{ datos.fecha_vencimiento_carne_salud or '—' }}</dd></div>
+            <h2>Mis datos</h2>
+            <form action="/perfil/datos" method="post" class="horario-form form-plano">
+                <label>Nombre *
+                    <input type="text" name="nombre" value="{{ f.nombre }}" maxlength="60" autocomplete="given-name" required /></label>
+                <label>Apellido *
+                    <input type="text" name="apellido" value="{{ f.apellido }}" maxlength="60" autocomplete="family-name" required /></label>
+                <label>Teléfono (09xxxxxxx)
+                    <input type="tel" name="telefono" value="{{ f.telefono or '' }}" inputmode="numeric" maxlength="9"
+                           pattern="09[0-9]{7}" placeholder="099123456" autocomplete="tel" /></label>
+                {% if con_fechas %}
+                <label>Fecha de nacimiento
+                    <input type="date" name="fecha_nacimiento" value="{{ f.fecha_nacimiento or '' }}" max="{{ ayer_iso }}" /></label>
+                <label>Vencimiento del carné de salud
+                    <input type="date" name="fecha_vencimiento_carne_salud" value="{{ f.fecha_vencimiento_carne_salud or '' }}" /></label>
                 {% endif %}
-            </dl>
-            {% if not usuario.es_profesora %}
-            <p class="nota">Si algún dato no es correcto, avisale a tu profesora.</p>
+                {% if not usuario.es_superadmin %}
+                <p class="nota">Cédula: <strong>{{ datos.cedula or 'No registrada' }}</strong>. La carga tu lugar: si no es
+                    correcta, avisale a la administración.</p>
+                {% endif %}
+                <p class="nota">Estos datos son de tu cuenta: se ven igual en todos los lugares donde estés.</p>
+                <button type="submit" class="btn btn-tactil" data-cargando="Guardando…">Guardar datos</button>
+            </form>
+        </section>
+        <section class="panel">
+            <h2>Correo electrónico</h2>
+            <p>Tu correo actual: <strong>{{ datos.mail or '—' }}</strong>. Es el que usás para iniciar sesión.</p>
+            {% if usuario.mail_pendiente %}
+            <div class="aviso aviso-ok"><span class="badge badge-espera">Pendiente de confirmación</span>
+                Pediste cambiarlo a <strong>{{ usuario.mail_pendiente }}</strong>. Abrí los enlaces que te enviamos a las dos
+                direcciones (vencen en 1 hora). Hasta entonces seguís entrando con el actual.</div>
+            {% endif %}
+            {% if correo_ficticio %}
+            <p class="nota">Las cuentas de prueba (correo .invalid) no pueden cambiar el correo: el cambio se confirma desde la
+                dirección actual y esa no recibe mensajes.</p>
+            {% else %}
+            <form action="/perfil/correo" method="post" class="horario-form form-plano">
+                <label>Correo nuevo
+                    <input type="email" name="nuevo" value="{{ form_correo.nuevo or '' }}" maxlength="254" autocomplete="email" required /></label>
+                <label>Contraseña actual (para confirmar que sos vos)
+                    <input type="password" name="contrasena" autocomplete="current-password" required /></label>
+                <p class="nota">Te vamos a enviar un enlace a tu correo actual y otro al nuevo: el cambio se aplica cuando
+                    abras los dos. Tu cuenta, tus lugares y toda tu información siguen igual.</p>
+                <button type="submit" class="btn btn-tactil" data-cargando="Enviando…">{{ 'Pedir el cambio de nuevo' if usuario.mail_pendiente else 'Cambiar correo' }}</button>
+            </form>
             {% endif %}
         </section>
-
         <section class="panel">
             <h2>Cambiar contraseña</h2>
             <p class="subtitle">La nueva contraseña debe tener al menos 8 caracteres.</p>

@@ -877,6 +877,22 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **Mi perfil editable (rama `perfil-editable`, migración `20261112000000_perfil_editable.sql`, SIN aplicar en producción)**:
+  cada persona edita su nombre, apellido, teléfono, fecha de nacimiento y carné con `editar_mis_datos` (solo su propia
+  fila; la superadministradora sin fechas); la cédula sigue siendo solo de la administradora. El correo lo cambia Supabase
+  Auth con **doble confirmación** (enlace a la dirección actual y a la nueva, plantilla «Change Email Address» =
+  `supabase/templates/cambio_correo.html`, página `/confirmar-correo` que canjea el `#token_hash` recién al tocar el
+  botón) y el trigger `on_auth_user_email_changed` copia el correo nuevo a `profiles.mail`. Se pide la contraseña actual.
+  Las cuentas `.invalid` no pueden cambiar el correo (no reciben el enlace de la dirección actual).
+  - **La doble confirmación solo rige si «Confirm email» está activado** (`mailer_autoconfirm = false`; con autoconfirm,
+    GoTrue cambia el correo con el primer enlace aunque «Secure email change» esté activo). Producción lo tiene activado
+    (`/auth/v1/settings`, 10/11); el `config.toml` del repo ahora también (`enable_confirmations = true` en `[auth.email]`).
+  - **supabase-py no entiende la respuesta de la primera confirmación** (`{"msg": ...}` sin usuario: falla validando
+    `User`): `auth.confirmar_cambio_correo` llama a `POST /auth/v1/verify` con httpx y cierra la sesión que devuelve la
+    segunda (`/auth/v1/logout?scope=local`).
+  - Supabase manda un correo por persona por minuto: dos pedidos seguidos dan 429 («Esperá un minuto»).
+  - Pruebas: `tests.test_perfil` (21), `tests/supabase_local/prueba_perfil_reales.py` (59, con Mailpit).
+  - Vuelta atrás: `supabase/pendientes/vuelta_atras_perfil_editable.sql`.
 - **Invitaciones por correo (rama `invitaciones`, 10/11; sin migraciones; NO desplegado)**: reemplaza a «Entrar con un
   enlace por correo» (PR #47), que se retiró de `/login` (`/entrar-con-enlace` ya no existe). Al crear una alumna,
   profesora o administradora NUEVA, `auth.invitar_cuenta` llama a `invite_user_by_email` con los mismos metadatos del

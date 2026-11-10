@@ -33,6 +33,10 @@ MSG_LINK_INVALIDO = "El link para restablecer la contraseña venció o ya se us�
 MSG_INVITACION_INVALIDA = ("El enlace para configurar tu contraseña venció o ya se usó. Pedile a tu lugar que te reenvíe "
                            "la invitación, o usá «Olvidé mi contraseña» con tu mail.")
 MSG_MAIL_FICTICIO = "Los mails .invalid son solo para cuentas de prueba creadas con los scripts: no reciben correos."
+MSG_CORREO_LINK_INVALIDO = ("El enlace para confirmar el cambio de correo venció o ya se usó. Si el cambio todavía no se "
+                            "completó, pedilo de nuevo desde Mi perfil.")
+MSG_CORREO_FICTICIO_ACTUAL = ("Las cuentas de prueba (correo .invalid) no pueden cambiar el correo: el cambio se confirma "
+                              "desde la dirección actual y esa no recibe mensajes.")
 
 # Solo a estos sitios puede apuntar el link del mail: armarlo con cualquier Host
 # permitiría que alguien desvíe el link (y la sesión) a un dominio propio.
@@ -71,6 +75,7 @@ class Usuario:
     empresa_nombre: str = ""
     empresa_codigo: str = ""
     con_membresias: bool = False
+    mail_pendiente: str = ""  # correo nuevo pedido y todavía sin las dos confirmaciones
 
     def __post_init__(self):
         if not self.con_membresias and not self.es_superadmin:
@@ -205,6 +210,7 @@ def usuario_de_acceso(acceso: str) -> Optional[Usuario]:
     usuario = Usuario(
         id=respuesta.user.id, mail=p["mail"], nombre=p["nombre"], apellido=p["apellido"], rol=p["rol"],
         token=acceso, es_superadmin=bool(p.get("es_superadmin")), con_membresias=True,
+        mail_pendiente=(getattr(respuesta.user, "new_email", None) or "").lower(),
     )
     if usuario.es_superadmin:
         return usuario
@@ -460,6 +466,10 @@ def url_activar(request: Request) -> Optional[str]:
     return _url_sitio(request, "/activar-cuenta")
 
 
+def url_confirmar_correo(request: Request) -> Optional[str]:
+    return _url_sitio(request, "/confirmar-correo")
+
+
 def es_mail_ficticio(mail: str) -> bool:
     """Cuentas de prueba y demostración (dominio reservado .invalid): nunca se les manda un mail (rebotaría)."""
     dominio = mail.rsplit("@", 1)[-1].strip().lower().rstrip(".")
@@ -648,3 +658,83 @@ def restablecer_contrasena(acceso: str, refresco: str, nueva: str) -> None:
         cliente.auth.sign_out()
     except Exception:
         logging.warning("No se pudo cerrar la sesión del link de recuperación.")
+
+
+# ---------- cambio de correo (Supabase Auth con doble confirmación: dirección actual y nueva) ----------
+
+def pedir_cambio_correo(usuario: Usuario, nuevo: str, contrasena: str, redirect_to: Optional[str]) -> str:
+    """Pide el cambio con la contraseña actual (una sesión robada no alcanza). Supabase manda un enlace a cada dirección
+    y el correo cambia recién con las dos confirmaciones; mientras tanto se sigue entrando con el actual. Devuelve el
+    correo nuevo normalizado."""
+    nuevo = (nuevo or "").strip().lower()
+    problema = validar_mail(nuevo)
+    if problema:
+        raise ErrorAuth(problema)
+    if nuevo == (usuario.mail or "").lower():
+        raise ErrorAuth("Ese ya es tu correo.")
+    if es_mail_ficticio(usuario.mail or ""):
+        raise ErrorAuth(MSG_CORREO_FICTICIO_ACTUAL)
+    if es_mail_ficticio(nuevo):
+        raise ErrorAuth(MSG_MAIL_FICTICIO)
+    if not redirect_to:
+        raise ErrorAuth("El correo solo se puede cambiar desde el sitio de Just Show Up.")
+    cliente = cliente_nuevo()
+    try:
+        cliente.auth.sign_in_with_password({"email": usuario.mail, "password": contrasena})
+    except AuthApiError as e:
+        if getattr(e, "status", None) == 429:
+            raise ErrorAuth(MSG_DEMASIADOS_INTENTOS) from e
+        raise ErrorAuth("La contraseña actual no es correcta.") from e
+    except httpx.HTTPError as e:
+        raise ErrorAuth(MSG_CONEXION) from e
+    try:
+        cliente.auth.update_user({"email": nuevo}, {"email_redirect_to": redirect_to})
+    except AuthApiError as e:
+        codigo = (getattr(e, "code", None) or "").lower()
+        if codigo in ("email_exists", "user_already_exists") or "already been registered" in (e.message or "").lower():
+            raise ErrorAuth("Ese correo ya pertenece a otra cuenta.") from e
+        if getattr(e, "status", None) == 429 or "rate_limit" in codigo:
+            raise ErrorAuth("Ya pediste un cambio hace muy poco. Esperá un minuto y probá de nuevo.") from e
+        raise ErrorAuth(traducir_error(e)) from e
+    except httpx.HTTPError as e:
+        raise ErrorAuth(MSG_CONEXION) from e
+    finally:
+        try:
+            cliente.auth.sign_out({"scope": "local"})
+        except Exception:
+            logging.warning("No se pudo cerrar la sesión usada para pedir el cambio de correo.")
+    return nuevo
+
+
+def confirmar_cambio_correo(token_hash: str) -> Optional[str]:
+    """Canjea uno de los dos enlaces (del lado del servidor y recién al tocar el botón). Devuelve el correo nuevo si con
+    este se completó el cambio, o None si todavía falta confirmar desde la otra dirección. Se llama a la API de Auth
+    directamente porque la librería no entiende la respuesta de la primera confirmación (no trae usuario). La sesión
+    que devuelve la segunda no se usa: se cierra enseguida (para entrar hay que iniciar sesión como siempre)."""
+    token_hash = (token_hash or "").strip()
+    if not token_hash or len(token_hash) > 200:
+        raise ErrorAuth(MSG_CORREO_LINK_INVALIDO)
+    base = os.environ["SUPABASE_URL"].rstrip("/") + "/auth/v1"
+    clave = {"apikey": os.environ["SUPABASE_KEY"]}
+    try:
+        r = httpx.post(f"{base}/verify", headers=clave, json={"type": "email_change", "token_hash": token_hash}, timeout=20)
+    except httpx.HTTPError as e:
+        raise ErrorAuth(MSG_CONEXION) from e
+    if r.status_code == 429:
+        raise ErrorAuth(MSG_DEMASIADOS_INTENTOS)
+    try:
+        datos = r.json()
+    except ValueError:
+        datos = {}
+    if r.status_code != 200 or not isinstance(datos, dict):
+        raise ErrorAuth(MSG_CORREO_LINK_INVALIDO)
+    acceso = datos.get("access_token")
+    if not acceso:
+        return None  # primera de las dos confirmaciones
+    correo = ((datos.get("user") or {}).get("email") or "").lower() or None
+    try:
+        httpx.post(f"{base}/logout", params={"scope": "local"},
+                   headers={**clave, "Authorization": f"Bearer {acceso}"}, timeout=20)
+    except httpx.HTTPError:
+        logging.warning("No se pudo cerrar la sesión del enlace de cambio de correo.")
+    return correo

@@ -1,0 +1,6 @@
+<h2>Confirmá el cambio de correo en Just Show Up</h2>
+<p>Pediste cambiar el correo de tu cuenta de <strong>{{ .Email }}</strong> a <strong>{{ .NewEmail }}</strong>.</p>
+<p>Para que el cambio se aplique hay que confirmarlo desde <strong>las dos direcciones</strong>: abrí el enlace de este correo y también el que llegó a la otra.</p>
+<p><a href="{{ .RedirectTo }}#token_hash={{ .TokenHash }}" style="display:inline-block;padding:12px 20px;background:#8de0bd;color:#111111;border-radius:8px;text-decoration:none;font-weight:600">Confirmar el cambio de correo</a></p>
+<p>El enlace vence en 1 hora y sirve una sola vez. Hasta completar el cambio seguís entrando con tu correo actual. Si venció, pedí el cambio de nuevo desde Mi perfil.</p>
+<p>Si no fuiste vos, no abras el enlace y cambiá tu contraseña: sin las dos confirmaciones el correo no cambia.</p>
