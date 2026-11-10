@@ -30,9 +30,9 @@ MSG_INGRESO_ADMIN = "No pudimos iniciar sesión con esos datos. Revisá tu mail 
 MSG_DEMASIADOS_INTENTOS = "Hiciste demasiados intentos. Esperá unos minutos y probá de nuevo."
 MSG_REINGRESAR = "Volvé a iniciar sesión escribiendo el nombre de tu lugar."
 MSG_LINK_INVALIDO = "El link para restablecer la contraseña venció o ya se usó. Pedí uno nuevo."
-# Mismo mensaje para enlace vencido, usado, inválido o de una persona que no es de ese lugar.
-MSG_ENLACE_INVALIDO = ("No pudimos iniciar sesión con ese enlace. Puede haber vencido o ya se usó, o el nombre del "
-                       "lugar no corresponde. Pedí un enlace nuevo.")
+MSG_INVITACION_INVALIDA = ("El enlace para configurar tu contraseña venció o ya se usó. Pedile a tu lugar que te reenvíe "
+                           "la invitación, o usá «Olvidé mi contraseña» con tu mail.")
+MSG_MAIL_FICTICIO = "Los mails .invalid son solo para cuentas de prueba creadas con los scripts: no reciben correos."
 
 # Solo a estos sitios puede apuntar el link del mail: armarlo con cualquier Host
 # permitiría que alguien desvíe el link (y la sesión) a un dominio propio.
@@ -427,15 +427,6 @@ def crear_cuenta(
     return creada.user.id, contrasena
 
 
-def reiniciar_contrasena(usuario_id: str) -> str:
-    nueva = generar_contrasena_temporal()
-    try:
-        cliente_admin().auth.admin.update_user_by_id(usuario_id, {"password": nueva})
-    except (AuthError, httpx.HTTPError) as e:
-        raise ErrorAuth(traducir_error(e)) from e
-    return nueva
-
-
 def cambiar_contrasena(usuario: Usuario, actual: str, nueva: str) -> None:
     problema = validar_contrasena(nueva)
     if problema:
@@ -465,9 +456,8 @@ def url_restablecer(request: Request) -> Optional[str]:
     return _url_sitio(request, "/restablecer-contrasena")
 
 
-def url_entrar_con_enlace(request: Request, lugar: str) -> Optional[str]:
-    base = _url_sitio(request, "/entrar-con-enlace/confirmar")
-    return f"{base}?{urlencode({'lugar': lugar})}" if base else None
+def url_activar(request: Request) -> Optional[str]:
+    return _url_sitio(request, "/activar-cuenta")
 
 
 def es_mail_ficticio(mail: str) -> bool:
@@ -495,36 +485,121 @@ def pedir_recuperacion(mail: str, redirect_to: Optional[str]) -> None:
         raise ErrorAuth(MSG_CONEXION) from e
 
 
-# ---------- entrar con un enlace por correo (Magic Link de Supabase) ----------
+# ---------- invitaciones (cuentas nuevas: la persona elige su contraseña con un enlace por correo) ----------
 
-def pedir_enlace_ingreso(mail: str, redirect_to: Optional[str]) -> None:
-    """Pide a Supabase el enlace de ingreso. Nunca crea cuentas y nunca informa si el mail existe, si es de ese
-    lugar o si ya se pidió uno hace poco: cualquier respuesta de Supabase se trata igual (solo se registra el código)."""
-    if es_mail_ficticio(mail) or not redirect_to:
-        return
+def _cuenta_auth(usuario_id: str):
     try:
-        cliente_nuevo().auth.sign_in_with_otp({
-            "email": mail,
-            "options": {"should_create_user": False, "email_redirect_to": redirect_to},
-        })
+        return cliente_admin().auth.admin.get_user_by_id(usuario_id).user
+    except (AuthError, httpx.HTTPError) as e:
+        raise ErrorAuth(traducir_error(e)) from e
+
+
+def invitacion_pendiente(usuario_id: str) -> bool:
+    """True si la cuenta se creó por invitación y todavía nadie configuró la contraseña (nunca entró)."""
+    u = _cuenta_auth(usuario_id)
+    return bool(u and getattr(u, "invited_at", None) and not getattr(u, "email_confirmed_at", None)
+                and not getattr(u, "last_sign_in_at", None))
+
+
+def invitar_cuenta(
+    mail: str, nombre: str, apellido: str, redirect_to: Optional[str], extras: Optional[dict] = None,
+    id_empresa: Optional[int] = None, rol_empresa: Optional[str] = None,
+) -> str:
+    """Crea la cuenta SIN contraseña y Supabase le manda la invitación (plantilla «Invite user»). La base arma el perfil
+    y la membresía de esa empresa con los mismos datos que el alta de siempre. Si algo falla, no queda nada a medias."""
+    if es_mail_ficticio(mail):
+        raise ErrorAuth(MSG_MAIL_FICTICIO)
+    if not redirect_to:
+        raise ErrorAuth("Las invitaciones solo se pueden enviar desde el sitio de Just Show Up.")
+    admin = cliente_admin()
+    meta = {"nombre": nombre, "apellido": apellido, "id_empresa": id_empresa, "rol_empresa": rol_empresa or "alumna"}
+    try:
+        creada = admin.auth.admin.invite_user_by_email(mail, {"data": meta, "redirect_to": redirect_to})
+    except (AuthError, httpx.HTTPError) as e:
+        _borrar_si_quedo(admin, mail)
+        if isinstance(e, AuthApiError) and getattr(e, "status", None) == 429:
+            raise ErrorAuth("Se enviaron muchos correos en la última hora. Probá de nuevo más tarde.") from e
+        raise ErrorAuth(traducir_error(e)) from e
+    cambios = {k: v for k, v in (extras or {}).items() if v}
+    if cambios:
+        try:
+            admin.table("profiles").update(cambios).eq("id", creada.user.id).execute()
+        except Exception as e:
+            logging.exception("No se pudieron guardar los datos del perfil; se borra la cuenta recién invitada")
+            try:
+                admin.auth.admin.delete_user(creada.user.id)
+            except Exception:
+                logging.exception("No se pudo borrar la cuenta a medias")
+            raise ErrorAuth(MSG_GENERICO) from e
+    return creada.user.id
+
+
+def _borrar_si_quedo(admin, mail: str) -> None:
+    """Si el envío falló pero la cuenta llegó a crearse, se borra (solo si quedó pendiente, nunca una cuenta activa)."""
+    try:
+        filas = admin.table("profiles").select("id").eq("mail", mail.strip().lower()).execute().data
+        if filas and invitacion_pendiente(filas[0]["id"]):
+            admin.auth.admin.delete_user(filas[0]["id"])
+            logging.warning("Se borró una cuenta invitada que quedó sin enviar")
+    except Exception:
+        logging.exception("No se pudo revisar si quedó una cuenta invitada a medias")
+
+
+def reenviar_invitacion(usuario_id: str, mail: str, redirect_to: Optional[str]) -> None:
+    """Manda un enlace nuevo a una cuenta PENDIENTE (misma cuenta, el anterior deja de servir). Nunca a una activa."""
+    if es_mail_ficticio(mail):
+        raise ErrorAuth(MSG_MAIL_FICTICIO)
+    if not redirect_to:
+        raise ErrorAuth("Las invitaciones solo se pueden enviar desde el sitio de Just Show Up.")
+    if not invitacion_pendiente(usuario_id):
+        raise ErrorAuth("Esa cuenta ya está activa: puede entrar con su contraseña o usar «Olvidé mi contraseña».")
+    try:
+        cliente_admin().auth.admin.invite_user_by_email(mail, {"redirect_to": redirect_to})
     except AuthApiError as e:
-        logging.warning("Supabase no envió el enlace de ingreso (%s)", _codigo(e))
+        if getattr(e, "status", None) == 429:
+            raise ErrorAuth("Se enviaron muchos correos en la última hora. Probá de nuevo más tarde.") from e
+        raise ErrorAuth(traducir_error(e)) from e
     except httpx.HTTPError as e:
         raise ErrorAuth(MSG_CONEXION) from e
 
 
-def entrar_con_enlace(token_hash: str) -> Optional[tuple[str, str]]:
-    """Canjea el enlace (un solo uso) por una sesión, del lado del servidor. None si venció, ya se usó o no es válido."""
+def anular_invitacion(usuario_id: str) -> None:
+    """Borra una cuenta que nunca se activó (las condiciones de la empresa las revisa quien llama)."""
+    if not invitacion_pendiente(usuario_id):
+        raise ErrorAuth("Esa cuenta ya está activa: no se puede anular la invitación.")
+    try:
+        cliente_admin().auth.admin.delete_user(usuario_id)
+    except (AuthError, httpx.HTTPError) as e:
+        raise ErrorAuth(traducir_error(e)) from e
+
+
+def activar_cuenta(token_hash: str, nueva: str) -> None:
+    """Canjea el enlace de invitación del lado del servidor (un solo uso; recién al guardar, así los antivirus del
+    correo no lo gastan), pone la contraseña elegida y cierra esa sesión: después se entra con lugar, mail y contraseña."""
+    problema = validar_contrasena(nueva)
+    if problema:
+        raise ErrorAuth(problema)  # antes de canjear: un error de tipeo no gasta el enlace
     token_hash = (token_hash or "").strip()
     if not token_hash or len(token_hash) > 200:
-        return None
+        raise ErrorAuth(MSG_INVITACION_INVALIDA)
+    cliente = cliente_nuevo()
     try:
-        sesion = cliente_nuevo().auth.verify_otp({"token_hash": token_hash, "type": "magiclink"}).session
-    except AuthError:
-        return None
+        sesion = cliente.auth.verify_otp({"token_hash": token_hash, "type": "invite"}).session
+    except AuthError as e:
+        raise ErrorAuth(MSG_INVITACION_INVALIDA) from e
     except httpx.HTTPError as e:
         raise ErrorAuth(MSG_CONEXION) from e
-    return (sesion.access_token, sesion.refresh_token) if sesion else None
+    if sesion is None:
+        raise ErrorAuth(MSG_INVITACION_INVALIDA)
+    try:
+        cliente.auth.update_user({"password": nueva})
+    except (AuthError, httpx.HTTPError) as e:
+        raise ErrorAuth(traducir_error(e)) from e
+    finally:
+        try:
+            cliente.auth.sign_out()
+        except Exception:
+            logging.warning("No se pudo cerrar la sesión del enlace de invitación.")
 
 
 def _es_sesion_de_recuperacion(acceso: str) -> bool:

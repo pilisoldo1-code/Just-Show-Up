@@ -277,7 +277,7 @@ def restablecer(
     return respuesta
 
 
-# ---------- entrar con un enlace por correo (alumnas, profesoras y administradoras; no la superadministradora) ----------
+# ---------- activar cuenta (enlace de invitación: la persona elige su contraseña inicial) ----------
 
 def _sin_referer(respuesta):
     # el enlace trae su código después del «#»: que ningún pedido de esta página lo comparta
@@ -285,68 +285,29 @@ def _sin_referer(respuesta):
     return respuesta
 
 
-@app.get("/entrar-con-enlace")
-def enlace_form(request: Request):
-    usuario = auth.usuario_opcional(request)
-    if usuario is not None and not usuario.sin_empresa:
-        return RedirectResponse(url=_destino(usuario), status_code=303)
-    return _render(request, "entrar_con_enlace.html", lugar="", mail="", enviado=False, aviso="")
-
-
-@app.post("/entrar-con-enlace")
-def enlace_pedir(request: Request, lugar: str = Form(""), mail: str = Form("")):
-    lugar, mail = " ".join(lugar.split()), mail.strip().lower()
-    datos = {"lugar": lugar, "mail": mail}
-    if not lugar or not mail:
-        return _render(request, "entrar_con_enlace.html", status_code=400, enviado=False, **datos,
-                       aviso="Completá el nombre del lugar y tu mail.")
-    problema = auth.validar_mail(mail)
-    if problema:
-        return _render(request, "entrar_con_enlace.html", status_code=400, enviado=False, aviso=problema, **datos)
-    try:
-        auth.pedir_enlace_ingreso(mail, auth.url_entrar_con_enlace(request, lugar))
-    except ErrorAuth as e:  # solo problemas de conexión: no dicen nada de la cuenta
-        return _render(request, "entrar_con_enlace.html", status_code=503, enviado=False, aviso=str(e), **datos)
-    return _render(request, "entrar_con_enlace.html", enviado=True, aviso="", **datos)
-
-
-def _confirmar(request: Request, lugar: str, status_code: int = 200, aviso: str = "", invalido: bool = False,
-               token_hash: str = ""):
-    return _sin_referer(_render(request, "entrar_con_enlace_confirmar.html", status_code=status_code, lugar=lugar,
-                                aviso=aviso, invalido=invalido, token_hash=token_hash,
-                                mensaje_invalido=auth.MSG_ENLACE_INVALIDO))
-
-
-@app.get("/entrar-con-enlace/confirmar")
-def enlace_confirmar_form(request: Request, lugar: str = ""):
+@app.get("/activar-cuenta")
+def activar_form(request: Request):
     # No se canjea el enlace al abrir la página: los antivirus del correo la visitan solos y lo gastarían.
-    return _confirmar(request, " ".join(lugar.split())[:80])
+    return _sin_referer(_render(request, "activar_cuenta.html", mensaje_invalido=auth.MSG_INVITACION_INVALIDA, aviso="", invalido=False, token_hash=""))
 
 
-@app.post("/entrar-con-enlace/confirmar")
-def enlace_confirmar(request: Request, lugar: str = Form(""), token_hash: str = Form("")):
-    lugar = " ".join(lugar.split())[:80]
-    tokens = empresa_id = None
+@app.post("/activar-cuenta")
+def activar(request: Request, token_hash: str = Form(""), nueva: str = Form(""), repetir: str = Form("")):
+    if nueva != repetir:
+        return _sin_referer(_render(request, "activar_cuenta.html", mensaje_invalido=auth.MSG_INVITACION_INVALIDA, status_code=400, aviso="Las contraseñas no coinciden.",
+                                    invalido=False, token_hash=token_hash))
     try:
-        if lugar:  # sin lugar no se gasta el enlace
-            tokens = auth.entrar_con_enlace(token_hash)
-            empresa_id = auth.entrar_a_empresa(tokens[0], lugar) if tokens else None
+        auth.activar_cuenta(token_hash, nueva)
     except ErrorAuth as e:
-        # problema de conexión: el enlace puede no haberse usado, se deja reintentar
-        return _confirmar(request, lugar, 503, str(e), token_hash=token_hash if not tokens else "",
-                          invalido=bool(tokens))
-    except Exception:
-        logging.exception("Error inesperado al entrar con un enlace")
-        if tokens:
-            auth.cerrar_sesion(tokens[0])
-        return _confirmar(request, lugar, 503, auth.MSG_CONEXION, invalido=True)
-    if empresa_id is None:
-        if tokens:
-            auth.cerrar_sesion(tokens[0])  # el enlace era válido pero no es de ese lugar: la sesión no queda
-        return _confirmar(request, lugar, 401, auth.MSG_ENLACE_INVALIDO, invalido=True)
-    usuario = auth.usuario_de_acceso(tokens[0])
-    respuesta = RedirectResponse(url=_destino(usuario) if usuario else "/", status_code=303)
-    auth.poner_cookies(respuesta, request, tokens[0], tokens[1])
+        invalido = str(e) == auth.MSG_INVITACION_INVALIDA
+        return _sin_referer(_render(request, "activar_cuenta.html", mensaje_invalido=auth.MSG_INVITACION_INVALIDA, status_code=400, aviso=str(e), invalido=invalido,
+                                    token_hash="" if invalido else token_hash))
+    respuesta = RedirectResponse(
+        url="/login?" + urlencode({"ok": 1, "aviso": "Listo, tu contraseña quedó configurada. Iniciá sesión con el nombre "
+                                                     "de tu lugar, tu mail y tu contraseña."}),
+        status_code=303,
+    )
+    auth.borrar_cookies(respuesta)
     return respuesta
 
 
@@ -1315,7 +1276,8 @@ def alumna_crear(
                 return _volver_seccion(_seccion(rol), not nota,
                                        f"{existente['nombre']} {existente['apellido']} ya tenía cuenta en Just Show Up: "
                                        f"quedó como {ROLES_PERSONA[rol].lower()} en {usuario.empresa_nombre or 'tu empresa'} "
-                                       "con su misma contraseña (lo que tenga en otros lugares no cambia)."
+                                       "con su misma contraseña (lo que tenga en otros lugares no cambia). No se le envió "
+                                       "ningún correo: avisale que ya puede entrar con su mail y su contraseña de siempre."
                                        + (f" {nota}" if nota else ""))
             if not errores:
                 errores = [_mensaje_rol(r) or "No se pudo agregar a esa persona. Probá de nuevo."]
@@ -1323,9 +1285,8 @@ def alumna_crear(
     if not errores:
         try:
             # la cédula no va al perfil (que es de toda la cuenta): se guarda en la empresa de esta administradora
-            nuevo_id, contrasena = auth.crear_cuenta(
-                datos["mail"], datos["nombre"], datos["apellido"],
-                rol="alumna" if rol == "alumna" else "profesora",
+            nuevo_id = auth.invitar_cuenta(
+                datos["mail"], datos["nombre"], datos["apellido"], auth.url_activar(request),
                 extras={k: datos[k] for k in ("telefono", "fecha_nacimiento", "fecha_vencimiento_carne_salud")},
                 id_empresa=usuario.empresa_id, rol_empresa=rol,
             )
@@ -1338,13 +1299,10 @@ def alumna_crear(
     if errores:
         return _form_nueva(request, usuario, _seccion(rol), {**{k: v.strip() for k, v in ingresados.items()}, "rol": rol},
                            errores, 400)
-    seccion = _seccion(rol)
-    return _render(
-        request, "alumna_credenciales.html", usuario,
-        titulo=f"{ROLES_PERSONA[rol]}: cuenta creada", nombre=f"{datos['nombre']} {datos['apellido']}",
-        mail=datos["mail"], contrasena=contrasena, nota=nota,
-        volver=(f"/profesora/{seccion}", f"Volver a {SECCIONES_PERSONAS[seccion]['titulo'].lower()}"),
-    )
+    return _volver_seccion(_seccion(rol), not nota,
+                           f"Listo: le enviamos a {datos['mail']} una invitación para que configure su contraseña. El enlace "
+                           "vence en 1 hora; si no le llega o vence, podés reenviarla desde su ficha."
+                           + (f" {nota}" if nota else ""))
 
 
 MSG_CEDULA_REPETIDA = "Ya hay otra persona de tu empresa con esa cédula."
@@ -1422,25 +1380,61 @@ def alumna_reiniciar(request: Request, alumna_id: str, desde: str = Form("alumna
             filas = []
         elif _sb(usuario).rpc("puede_gestionar_persona", {"p_id_usuario": alumna_id}).execute().data == "es_administradora":
             return _volver_seccion(desde, False, MSG_OTRA_ADMIN)
-        elif empresas - {usuario.empresa_id}:
-            return _volver_seccion(desde, False, "Esa persona también usa Just Show Up en otra empresa: puede cambiar su "
-                                                 "contraseña desde Mi perfil o con «Olvidé mi contraseña».")
         else:
             filas[0]["rol"] = "alumna"
     if not filas or filas[0]["rol"] != "alumna":
         return _volver_seccion(desde, False, "No encontramos a esa persona.")
+    return _enviar_cambio_contrasena(request, filas[0], alumna_id, lambda ok, aviso: _volver_seccion(desde, ok, aviso))
+
+
+def _enviar_cambio_contrasena(request: Request, persona: dict, persona_id: str, volver):
+    """Le manda el correo de «Olvidé mi contraseña» (el mismo flujo, sin cambios): nadie ve ni genera una contraseña y
+    la actual sigue funcionando hasta que ella elija otra. A una cuenta pendiente le corresponde reenviar la invitación."""
     try:
-        contrasena = auth.reiniciar_contrasena(alumna_id)
+        if auth.invitacion_pendiente(persona_id):
+            return volver(False, "Todavía no configuró su contraseña: usá «Reenviar invitación».")
+        if auth.es_mail_ficticio(persona["mail"]):
+            return volver(False, auth.MSG_MAIL_FICTICIO)
+        auth.pedir_recuperacion(persona["mail"], auth.url_restablecer(request))
     except ErrorAuth as e:
-        return _volver_seccion(desde, False, str(e))
-    a = filas[0]
-    seccion = desde if desde in SECCIONES_PERSONAS else "alumnas"
-    return _render(
-        request, "alumna_credenciales.html", usuario,
-        titulo="Contraseña reiniciada", nombre=f"{a['nombre']} {a['apellido']}",
-        mail=a["mail"], contrasena=contrasena,
-        volver=(f"/profesora/{seccion}", f"Volver a {SECCIONES_PERSONAS[seccion]['titulo'].lower()}"),
-    )
+        return volver(False, str(e))
+    return volver(True, f"Le enviamos a {persona['mail']} un correo para elegir una contraseña nueva. Su contraseña actual "
+                        "sigue funcionando hasta que la cambie.")
+
+
+@app.post("/profesora/{seccion}/{persona_id}/reenviar-invitacion")
+def persona_reenviar_invitacion(request: Request, seccion: str, persona_id: str, usuario: Usuario = Depends(requiere_admin)):
+    persona = _persona_de_empresa(usuario, persona_id) if seccion in SECCIONES_PERSONAS else None
+    if persona is None or persona["solo_lectura"] or persona["yo"]:
+        return _volver_seccion(seccion, False, "No encontramos a esa persona.")
+    try:
+        auth.reenviar_invitacion(persona_id, persona["mail"], auth.url_activar(request))
+    except ErrorAuth as e:
+        return _volver_seccion(seccion, False, str(e))
+    return _volver_seccion(seccion, True, f"Le reenviamos la invitación a {persona['mail']}. El enlace anterior ya no sirve.")
+
+
+@app.post("/profesora/{seccion}/{persona_id}/anular-invitacion")
+def persona_anular_invitacion(seccion: str, persona_id: str, usuario: Usuario = Depends(requiere_admin)):
+    """Para un mail mal escrito: borra la cuenta solo si nunca se activó, es solo de esta empresa y no tiene reservas."""
+    persona = _persona_de_empresa(usuario, persona_id) if seccion in SECCIONES_PERSONAS else None
+    if persona is None or persona["solo_lectura"] or persona["yo"]:
+        return _volver_seccion(seccion, False, "No encontramos a esa persona.")
+    try:
+        admin = auth.cliente_admin()
+        empresas = {m["id_empresa"] for m in admin.table("membresia").select("id_empresa").eq("id_usuario", persona_id)
+                    .execute().data}
+        reservas = admin.table("reserva").select("id").eq("id_alumna", persona_id).limit(1).execute().data
+        if empresas != {usuario.empresa_id} or reservas:
+            return _volver_seccion(seccion, False, "No se puede anular: esa cuenta ya tiene información en Just Show Up.")
+        auth.anular_invitacion(persona_id)
+    except ErrorAuth as e:
+        return _volver_seccion(seccion, False, str(e))
+    except Exception:
+        logging.exception("No se pudo anular la invitación")
+        return _volver_seccion(seccion, False, auth.MSG_GENERICO)
+    return _volver_seccion(seccion, True, f"Se anuló la invitación de {persona['mail']}. Si el mail estaba mal escrito, "
+                                          "creala de nuevo con el correcto.")
 
 
 # ---------- profesora: estadísticas ----------
@@ -1765,7 +1759,16 @@ def _admins_de_empresa(sb, empresa_id: int) -> list[dict]:
     admins = sb.rpc("administradoras_empresa", {"p_id_empresa": empresa_id}).execute().data or []
     for a in admins:
         a["pendientes_txt"] = [PENDIENTES.get(c, c) for c in a.get("pendientes") or []]
+        a["invitacion_pendiente"] = _invitacion_pendiente(a["id"])
     return admins
+
+
+def _invitacion_pendiente(persona_id: str) -> bool:
+    try:
+        return auth.invitacion_pendiente(persona_id)
+    except Exception:
+        logging.warning("No se pudo saber si la invitación está pendiente", exc_info=True)
+        return False
 
 
 @app.get("/admin/empresas")
@@ -1904,20 +1907,18 @@ def _asignar_administradora(request: Request, usuario: Usuario, empresa_id: int,
                                                            "p_es_profesora": False}).execute().data
             if r == "ok":
                 return _volver_empresas(True, prefijo + f"{existente['nombre']} {existente['apellido']} ya tenía cuenta: "
-                                              "ahora administra la empresa con su misma contraseña.", empresa_id)
+                                              "ahora administra la empresa con su misma contraseña. No se le envió ningún "
+                                              "correo: avisale que ya puede entrar.", empresa_id)
             return _volver_empresas(False, prefijo + (MSG_EMPRESA.get(r) or _mensaje_rol(r) or auth.MSG_GENERICO), empresa_id)
-        _, contrasena = auth.crear_cuenta(
-            datos["mail"], datos["nombre"], datos["apellido"], rol="profesora",
-            id_empresa=empresa_id, rol_empresa="admin",
-        )
+        auth.invitar_cuenta(datos["mail"], datos["nombre"], datos["apellido"], auth.url_activar(request),
+                            id_empresa=empresa_id, rol_empresa="admin")
     except ErrorAuth as e:
         return _volver_empresas(False, prefijo + "No se pudo crear la administradora: " + str(e), empresa_id)
     except Exception:
         logging.exception("No se pudo asignar la administradora")
         return _volver_empresas(False, prefijo + "No se pudo crear la administradora: " + auth.MSG_GENERICO, empresa_id)
-    return _render(request, "alumna_credenciales.html", usuario, titulo=prefijo + "Administradora: cuenta creada",
-                   nombre=f"{datos['nombre']} {datos['apellido']}", mail=datos["mail"], contrasena=contrasena,
-                   volver=(f"/admin/empresas/{empresa_id}", "Ir a la empresa"))
+    return _volver_empresas(True, prefijo + f"Le enviamos a {datos['mail']} una invitación para que configure su contraseña "
+                                            "(vence en 1 hora; se puede reenviar desde la empresa).", empresa_id)
 
 
 def _administradora_de(usuario: Usuario, empresa_id: int, persona_id: str) -> dict | None:
@@ -1976,13 +1977,20 @@ def admin_reiniciar_administradora(request: Request, empresa_id: int, persona_id
     a = _administradora_de(usuario, empresa_id, persona_id)
     if a is None:
         return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"], empresa_id)
+    return _enviar_cambio_contrasena(request, a, persona_id, lambda ok, aviso: _volver_empresas(ok, aviso, empresa_id))
+
+
+@app.post("/admin/empresas/{empresa_id}/administradoras/{persona_id}/reenviar-invitacion")
+def admin_reenviar_invitacion(request: Request, empresa_id: int, persona_id: str,
+                              usuario: Usuario = Depends(requiere_superadmin)):
+    a = _administradora_de(usuario, empresa_id, persona_id)
+    if a is None:
+        return _volver_empresas(False, MSG_EMPRESA["no_es_administradora"], empresa_id)
     try:
-        contrasena = auth.reiniciar_contrasena(persona_id)
+        auth.reenviar_invitacion(persona_id, a["mail"], auth.url_activar(request))
     except ErrorAuth as e:
         return _volver_empresas(False, str(e), empresa_id)
-    return _render(request, "alumna_credenciales.html", usuario, titulo="Contraseña reiniciada",
-                   nombre=f"{a['nombre']} {a['apellido']}", mail=a["mail"], contrasena=contrasena,
-                   volver=(f"/admin/empresas/{empresa_id}", "Volver a la empresa"))
+    return _volver_empresas(True, f"Le reenviamos la invitación a {a['mail']}. El enlace anterior ya no sirve.", empresa_id)
 
 
 # ---------- multiempresa: panel de la administradora ----------
@@ -2069,6 +2077,9 @@ def persona_ver(request: Request, seccion: str, persona_id: str, ok: int = 0, av
     persona = _persona_de_empresa(usuario, persona_id)
     if persona is None:
         return _volver_seccion(seccion, False, "No encontramos a esa persona en tu empresa.")
+    # solo al abrir la ficha (con la clave del servidor se lee si la cuenta todavía no se activó; los datos se editan
+    # siempre con la sesión de la administradora)
+    persona["invitacion_pendiente"] = not persona["yo"] and _invitacion_pendiente(persona_id)
     return _editar_persona(request, usuario, seccion, persona, aviso=aviso, ok=ok)
 
 

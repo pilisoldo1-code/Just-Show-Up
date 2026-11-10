@@ -4,42 +4,50 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="referrer" content="no-referrer" />
-    <title>Just Show Up - Entrar</title>
+    <title>Just Show Up - Configurar tu contraseña</title>
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
     <main class="auth-main">
         <div class="auth-card">
-            <h1>Just Show Up</h1>
+            <h1>Configurar tu contraseña</h1>
 
             <div id="enlace-invalido" {% if not invalido %}hidden{% endif %}>
                 <div class="aviso aviso-error">{{ aviso if invalido else mensaje_invalido }}</div>
-                <a class="btn btn-block btn-tactil" href="/entrar-con-enlace">Pedir un enlace nuevo</a>
+                <a class="btn btn-block btn-tactil" href="/olvide-contrasena">Olvidé mi contraseña</a>
             </div>
 
             <div id="formulario" {% if invalido or not token_hash %}hidden{% endif %}>
-                <p class="subtitle">Vas a entrar a <strong>{{ lugar }}</strong>.</p>
+                <p class="subtitle">Elegí una contraseña de al menos 8 caracteres. Después vas a entrar con el nombre de tu
+                    lugar, tu mail y esta contraseña.</p>
                 {% if aviso and not invalido %}
                 <div class="aviso aviso-error">{{ aviso }}</div>
                 {% endif %}
-                <form action="/entrar-con-enlace/confirmar" method="post" class="horario-form auth-form">
-                    <input type="hidden" name="lugar" value="{{ lugar }}" />
+                <form action="/activar-cuenta" method="post" class="horario-form auth-form">
                     <input type="hidden" name="token_hash" id="token_hash" value="{{ token_hash or '' }}" />
-                    <button type="submit" class="btn btn-block btn-tactil" data-cargando="Entrando…">Entrar</button>
+                    <label>
+                        Contraseña
+                        <input type="password" name="nueva" autocomplete="new-password" minlength="8" required />
+                    </label>
+                    <label>
+                        Repetir contraseña
+                        <input type="password" name="repetir" autocomplete="new-password" minlength="8" required />
+                    </label>
+                    <button type="submit" class="btn btn-block btn-tactil" data-cargando="Guardando…">Guardar contraseña</button>
                 </form>
             </div>
 
-            <p class="auth-link"><a href="/login">Entrar con mi contraseña</a></p>
+            <p class="auth-link"><a href="/login">Ir a iniciar sesión</a></p>
         </div>
     </main>
     {% if not invalido and not token_hash %}
     <script>
         // El código del enlace viene después del "#" (no llega al servidor ni queda en sus registros): se pasa al
-        // formulario y se borra de la barra de direcciones. El enlace se usa recién al tocar «Entrar».
+        // formulario y se borra de la barra de direcciones. El enlace se usa recién al tocar «Guardar contraseña».
         (function () {
             var codigo = new URLSearchParams(location.hash.slice(1)).get("token_hash");
-            history.replaceState(null, "", location.pathname + location.search);
-            if (codigo && {{ "true" if lugar else "false" }}) {
+            history.replaceState(null, "", location.pathname);
+            if (codigo) {
                 document.getElementById("token_hash").value = codigo;
                 document.getElementById("formulario").hidden = false;
             } else {
@@ -48,6 +56,7 @@
         })();
     </script>
     {% endif %}
+    {% include "_ojo_contrasena.html" %}
     {% include "_envio_unico.html" %}
 </body>
 </html>

@@ -498,7 +498,7 @@ class Cedula(Base):
         self.assertEqual(v.formatear_cedula("12345672"), "1.234.567-2")
         self.assertEqual(v.formatear_cedula(None), "")
 
-    ALTA = {"nombre": "Ana", "apellido": "Uno", "mail": "ana@prueba.invalid", "cedula": "1.234.567-2"}
+    ALTA = {"nombre": "Ana", "apellido": "Uno", "mail": "ana@ejemplo.test", "cedula": "1.234.567-2"}
 
     def setUp(self):
         super().setUp()
@@ -511,30 +511,30 @@ class Cedula(Base):
         self.como(PROFESORA)
         with mock.patch.object(main, "_cedula_en_uso", return_value=False), \
                 mock.patch.object(main, "_guardar_cedula", return_value="") as gc, \
-                mock.patch.object(main.auth, "crear_cuenta", return_value=("id", "Temporal1")) as cc:
+                mock.patch.object(main.auth, "invitar_cuenta", return_value="id") as cc:
             r = self.post("/profesora/alumnas", self.ALTA)
-        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.status_code, 303)
         self.assertNotIn("cedula", cc.call_args.kwargs["extras"])
         gc.assert_called_once_with(PROFESORA, "id", "12345672")
 
     def test_alta_cedula_invalida_o_repetida(self):
         self.como(PROFESORA)
-        with mock.patch.object(main, "_cedula_en_uso", return_value=False), mock.patch.object(main.auth, "crear_cuenta") as cc:
+        with mock.patch.object(main, "_cedula_en_uso", return_value=False), mock.patch.object(main.auth, "invitar_cuenta") as cc:
             r = self.post("/profesora/alumnas", {**self.ALTA, "cedula": "1.234.567-9"})
         self.assertEqual(r.status_code, 400)
         self.assertIn("dígito verificador", r.text)
         cc.assert_not_called()
-        with mock.patch.object(main, "_cedula_en_uso", return_value=True), mock.patch.object(main.auth, "crear_cuenta") as cc:
+        with mock.patch.object(main, "_cedula_en_uso", return_value=True), mock.patch.object(main.auth, "invitar_cuenta") as cc:
             r = self.post("/profesora/alumnas", self.ALTA)
         self.assertIn(main.MSG_CEDULA_REPETIDA, r.text)
         cc.assert_not_called()
 
     def test_alta_sin_cedula_sigue_funcionando(self):
         self.como(PROFESORA)
-        with mock.patch.object(main.auth, "crear_cuenta", return_value=("id", "Temporal1")) as cc, \
+        with mock.patch.object(main.auth, "invitar_cuenta", return_value="id") as cc, \
                 mock.patch.object(main, "_cedula_en_uso") as uso:
             r = self.post("/profesora/alumnas", {**self.ALTA, "cedula": ""})
-        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.status_code, 303)
         uso.assert_not_called()
         self.assertNotIn("cedula", cc.call_args.kwargs["extras"])
 

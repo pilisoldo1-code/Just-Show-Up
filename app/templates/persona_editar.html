@@ -107,13 +107,28 @@
 
         <section class="bloque-persona">
             <h2>Contraseña</h2>
-            <p class="nota">Genera una contraseña temporal nueva, que se muestra una sola vez. La actual deja de funcionar en su
-                cuenta, en todas las empresas donde usa Just Show Up.</p>
+            {% if persona.invitacion_pendiente %}
+            <p class="nota"><span class="badge badge-espera">Pendiente de activación</span> Todavía no configuró su contraseña
+                con el correo de invitación. El enlace vence en 1 hora: si no le llegó o venció, reenviala. Si el mail está
+                mal escrito, anulá la invitación y creala de nuevo.</p>
+            <div class="acciones-persona">
+                <form action="/profesora/{{ seccion }}/{{ persona.id }}/reenviar-invitacion" method="post">
+                    <button type="submit" class="btn" data-cargando="Enviando…">Reenviar invitación</button>
+                </form>
+                <form action="/profesora/{{ seccion }}/{{ persona.id }}/anular-invitacion" method="post"
+                      data-confirmar="¿Anular la invitación de {{ persona.mail }}? Se borra esta cuenta pendiente (nunca se usó).">
+                    <button type="submit" class="btn btn-secundario">Anular invitación</button>
+                </form>
+            </div>
+            {% else %}
+            <p class="nota">Le enviamos un correo para que elija una contraseña nueva. Nadie ve su contraseña y la actual sigue
+                funcionando hasta que la cambie.</p>
             <form action="/profesora/alumnas/{{ persona.id }}/reiniciar-contrasena" method="post"
-                  data-confirmar="¿Generar una contraseña nueva para {{ persona.nombre }} {{ persona.apellido }}? La anterior deja de funcionar en su cuenta, en todas las empresas donde usa Just Show Up.">
+                  data-confirmar="¿Enviarle a {{ persona.mail }} un correo para cambiar su contraseña?">
                 <input type="hidden" name="desde" value="{{ seccion }}" />
-                <button type="submit" class="btn btn-secundario">Reiniciar contraseña</button>
+                <button type="submit" class="btn btn-secundario">Enviar correo para cambiar la contraseña</button>
             </form>
+            {% endif %}
         </section>
         {% endif %}
         {% endif %}

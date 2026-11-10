@@ -4708,9 +4708,10 @@ a.video-card-biblioteca:hover .video-play {
     display: none;
 }
 
-/* ---------- entrar con un enlace / olvidé mi contraseña ---------- */
-/* un mail largo dentro del aviso («te enviamos un correo a …») se parte en vez de salirse de la pantalla */
-.auth-card .aviso {
+/* ---------- invitaciones / olvidé mi contraseña ---------- */
+/* un mail largo dentro de un aviso («te enviamos un correo a …», «le enviamos una invitación a …») se parte en vez de
+   salirse de la pantalla */
+.aviso {
     overflow-wrap: anywhere;
 }
 
@@ -4730,4 +4731,9 @@ a.video-card-biblioteca:hover .video-play {
 .ultimas-grabaciones .video-card strong,
 .ultimas-grabaciones .video-card .video-dato {
     display: block;
+}
+.acciones-persona {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
 }
