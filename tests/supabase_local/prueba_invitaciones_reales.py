@@ -130,7 +130,8 @@ JSU = sql("select id from empresa where codigo = 'JSU'", uno=True)["id"]
 NOMBRE_B = f"Pilates Prueba {S}"
 B = sql("insert into empresa (nombre, codigo) values (%s, %s) returning id",
         (NOMBRE_B, "".join(random.choice(string.ascii_uppercase) for _ in range(5))), uno=True)["id"]
-M = {k: f"{k}.{S}@ejemplo.test" for k in ("admin", "super", "nueva", "typo", "corregida", "deb", "adminb", "vence")}
+M = {k: f"{k}.{S}@ejemplo.test" for k in ("admin", "super", "nueva", "typo", "corregida", "deb", "adminb", "vence",
+                                           "olvido", "cortada")}
 creadas = []
 try:
     for k, empresa, rol in (("admin", JSU, "admin"), ("deb", B, "alumna")):
@@ -169,6 +170,8 @@ try:
     ok("la ficha la muestra pendiente con «Reenviar invitación» y «Anular invitación»",
        "Pendiente de activación" in ficha.text and "Reenviar invitación" in ficha.text and "Anular invitación" in ficha.text
        and "Enviar correo para cambiar la contraseña" not in ficha.text)
+    ok("y su estado dice que todavía no puede iniciar sesión",
+       "Pendiente de activación: todavía no puede iniciar sesión" in ficha.text and "Activa: puede iniciar sesión" not in ficha.text)
 
     # ---------- reenviar: misma cuenta, el enlace anterior deja de servir ----------
     r = adm.post(f"/profesora/alumnas/{c_nueva['id']}/reenviar-invitacion", follow_redirects=False)
@@ -269,6 +272,43 @@ try:
     r = adm.post("/profesora/alumnas", data={"nombre": "Ficticia", "apellido": "Prueba", "mail": ficticia, "rol": "alumna"})
     ok("un mail .invalid nuevo no se crea desde la pantalla", r.status_code == 400 and auth.MSG_MAIL_FICTICIO in html.unescape(r.text)
        and cuenta(ficticia) is None)
+
+    # ---------- activación interrumpida: «Olvidé mi contraseña» basta, sin la administradora ----------
+    def recuperar(mail, clave):
+        antes = len(mails_para(mail))
+        navegador().post("/olvide-contrasena", data={"mail": mail})
+        enlace, _ = mail_nuevo(mail, antes)
+        salto = httpx.get(enlace, follow_redirects=False).headers.get("location", "") if enlace else ""
+        frag = parse_qs(urlsplit(salto).fragment)
+        r = navegador().post("/restablecer-contrasena", data={"acceso": frag.get("access_token", [""])[0],
+                                                              "refresco": frag.get("refresh_token", [""])[0],
+                                                              "nueva": clave, "repetir": clave}, follow_redirects=False)
+        return enlace, r
+
+    adm.post("/profesora/alumnas", data={"nombre": "Olvido", "apellido": "Prueba", "mail": M["olvido"], "rol": "alumna"})
+    c_olv = cuenta(M["olvido"])
+    creadas.append(c_olv["id"])
+    enlace_o, r = recuperar(M["olvido"], "PorOlvide-444")
+    ok("nunca abrió la invitación: «Olvidé mi contraseña» le manda el correo y elige su contraseña",
+       enlace_o is not None and r.status_code == 303, (enlace_o, r.status_code))
+    ok("y entra normalmente, sin que intervenga la administradora",
+       entrar("Just Show Up", M["olvido"], "PorOlvide-444")[1].headers.get("location") == "/")
+    adm.post("/profesora/alumnas", data={"nombre": "Cortada", "apellido": "Prueba", "mail": M["cortada"], "rol": "alumna"})
+    c_cor = cuenta(M["cortada"])
+    creadas.append(c_cor["id"])
+    enlace_c, _ = mail_nuevo(M["cortada"], 0)
+    auth.cliente_nuevo().auth.verify_otp({"token_hash": codigo(enlace_c), "type": "invite"})  # se cortó: canjeó y no guardó
+    estado_cor = cuenta(M["cortada"])
+    reuso = activar(codigo(enlace_c), "Cortada-555")[1].status_code
+    ok("activación cortada: el enlace ya se usó y ella no tiene ninguna contraseña que conozca",
+       bool(estado_cor["email_confirmed_at"]) and reuso == 400
+       and entrar("Just Show Up", M["cortada"], "Cortada-555")[1].status_code == 401, (bool(estado_cor["email_confirmed_at"]), reuso))
+    r = adm.post(f"/profesora/alumnas/{c_cor['id']}/reenviar-invitacion", follow_redirects=False)
+    ok("(ya no figura pendiente: reenviar se rechaza con un mensaje que lleva a «Olvidé mi contraseña»)",
+       "ok=0" in r.headers["location"] and "Olvidé mi contraseña" in aviso(r), aviso(r))
+    enlace_c2, r = recuperar(M["cortada"], "Cortada-555")
+    ok("con «Olvidé mi contraseña» recupera el acceso sola", enlace_c2 is not None and r.status_code == 303
+       and entrar("Just Show Up", M["cortada"], "Cortada-555")[1].headers.get("location") == "/")
 
     # ---------- superadministradora: administradora nueva por invitación ----------
     sa = navegador()

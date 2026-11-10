@@ -294,8 +294,11 @@ fila = sql("select p.apellido, p.telefono, m.cedula from profiles p join membres
            "where p.id = %s", (PIL, ALU), uno=True)
 ok("editar datos de una alumna: perfil y cédula de la empresa guardados", r.status_code == 303
    and fila == {"apellido": "Editada", "telefono": "099555444", "cedula": "11111111"}, fila)
-ok("su ficha ofrece cambiar a profesora (nunca a administradora)",
-   "Cambiar a profesora" in (f := A2.get(f"/profesora/alumnas/{ALU}").text) and "Administradora</label>" not in f)
+# Desde el 03/11 (commit f4b44be) la ficha ya no muestra el cambio de rol alumna ↔ profesora; la ruta /roles sigue y se
+# prueba justo abajo con la cuenta real.
+ok("su ficha ya no ofrece cambiar el rol (ni a profesora ni a administradora)",
+   "Cambiar a profesora" not in (f := A2.get(f"/profesora/alumnas/{ALU}").text) and "Administradora</label>" not in f
+   and "Rol actual: <strong>Alumna</strong>" in f)
 r = A2.post(f"/profesora/alumnas/{ALU}/roles", data={"rol": "profesora"}, follow_redirects=False)
 ok("rol: la alumna sin nada pendiente pasa a profesora (misma cuenta) y su ficha pasa a Profesoras",
    membresias("nueva.alumna.pil@ejemplo.test") == {"PIL": (False, True, False)}

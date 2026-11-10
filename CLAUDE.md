@@ -891,6 +891,10 @@ Para cada módulo, en este orden:
     pantalla dice que no se le envió ningún correo. Un correo informativo no se puede mandar gratis (Supabase solo manda
     sus correos de autenticación y theta no tiene las credenciales de Gmail).
   - Si el envío falla, `_borrar_si_quedo` borra la cuenta solo si quedó pendiente (nunca una activa).
+  - **Activación interrumpida**: canjear la invitación confirma la cuenta y Supabase le deja una contraseña interna que
+    nadie conoce (la columna `encrypted_password` NO queda vacía), así que deja de figurar pendiente. Sin intervención de
+    nadie, «Olvidé mi contraseña» le permite elegir una (probado; también funciona si nunca abrió la invitación).
+  - Ficha de una cuenta pendiente: el estado dice «Pendiente de activación: todavía no puede iniciar sesión».
   - «Reiniciar contraseña» ahora es «Enviar correo para cambiar la contraseña»: usa `pedir_recuperacion` (el mismo flujo
     de «Olvidé mi contraseña», sin cambios) y la contraseña actual sigue hasta que la persona elija otra.
   - Mails `.invalid`: solo scripts. Desde la pantalla, una cuenta NUEVA `.invalid` se rechaza (`MSG_MAIL_FICTICIO`); una
@@ -899,7 +903,7 @@ Para cada módulo, en este orden:
     `/restablecer-contrasena` rechaza las sesiones que ya entraron a un lugar (`empresa_de_sesion()`).
   - Producción: hay que pegar la plantilla «Invite user» ANTES del merge (con la de Supabase por defecto el enlace lleva
     a la confirmación de Supabase, no a `/activar-cuenta`). La plantilla «Magic Link» que se cargó queda sin uso.
-  - Pruebas: `tests.test_invitaciones` (simuladas) y `tests/supabase_local/prueba_invitaciones_reales.py` (41, con
+  - Pruebas: `tests.test_invitaciones` (simuladas) y `tests/supabase_local/prueba_invitaciones_reales.py` (47, con
     Mailpit). `prueba_altas_reales.py` ahora activa cada cuenta con su invitación y usa `@ejemplo.test` (base local
     recién creada: `supabase db reset` en la copia aislada).
   - Correos: Gmail SMTP de la cuenta exclusiva del proyecto, configurado en el panel de Supabase (500/día; tope del
