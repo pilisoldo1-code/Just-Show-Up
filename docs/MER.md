@@ -1,6 +1,6 @@
 # Modelo entidad-relación (MER) — Just Show Up
 
-> Generado el **10/11/2026** a partir del esquema real de producción (Supabase `nspgafucytcjqkqnmkry`, 29 migraciones
+> Generado el **10/11/2026** a partir del esquema real de producción (Supabase `nspgafucytcjqkqnmkry`, 30 migraciones
 > aplicadas, iguales a `supabase/migrations/`). Solo estructura: no contiene datos.
 > Reemplaza al borrador de la rama `documentacion-mer` (02/11), que no incluía bajas, correcciones de asistencia,
 > cobro del 25 %, Videos On Demand ni invitaciones.

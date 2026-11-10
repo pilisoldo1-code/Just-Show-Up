@@ -7,9 +7,10 @@
 ## Antes de empezar (el día anterior y una hora antes)
 
 - Entrar a theta (Supabase Free se pausa tras ~7 días sin uso). `/api/health` tiene que responder.
-- Decidir antes (ver `docs/PROCEDIMIENTOS_DEFENSA.md` §5): si se confirman las facturas de octubre de Just Show Up y si se
-  registran las asistencias de noviembre. **Hoy Sofía ve «Todavía no tenés facturas»** porque octubre está en borrador.
-- En Estadísticas usar «Últimos 3 meses»: «Este mes» todavía tiene casi todo sin registrar.
+- Octubre de Just Show Up: 7 facturas confirmadas (Sofía ve la suya, JSU-2026-10-0009, «Vencida» desde el 11/11) y la
+  de **Marta en borrador para confirmarla en vivo** (ver `docs/PROCEDIMIENTOS_DEFENSA.md` §6). Noviembre no tiene
+  asistencias pendientes al 10/11; las clases que terminen después sí (se marcan en la clase o en «Clases terminadas»).
+- En Estadísticas, «Últimos 3 meses» muestra más datos que «Este mes».
 - Ojo: abrir Asistencias, la grilla de una semana nueva o Planificación con una fecha **genera clases** (es lo normal).
 - Mercado Pago: seguir `GUIA_DEFENSA_MERCADO_PAGO.md` (la factura de demostración aparece «Vencida», se paga igual).
 
@@ -40,7 +41,7 @@
 | Horarios / Tipos de clase | Recorrer | Horarios semanales, tipos con precio, duración y cupo |
 | Alumnas → una ficha | Abrir | Datos, cédula, estado, «Enviar correo para cambiar la contraseña» |
 | Alumnas → Nueva alumna | Mostrar (sin crear) | «Le enviamos un correo para que configure su propia contraseña» |
-| Facturación | Elegir octubre | Borradores (o confirmadas, según la decisión) con detalle, 25 % y PDF |
+| Facturación | Elegir octubre | 7 confirmadas y la de Marta en borrador → abrirla → **Confirmar** (sale JSU-2026-10-0010); detalle, 25 % y PDF |
 | Estadísticas | «Últimos 3 meses» | Asistencia general, gráficos, top de asistencias y faltas, por profesora |
 | Videos | Bajar hasta el final | «Estado y errores de las grabaciones» |
 
@@ -58,7 +59,7 @@
 | Reservar clases | Semana actual | Días terminados atenuados con «Finalizado»; los demás con «Ver horarios ›» |
 | Un día futuro | Reservar clase | Pasa a «Reservada», con hora límite para cancelar |
 | Mis inscripciones / Mi historial | Recorrer | Próximas clases; historial por mes con Presente / Ausente / 25 % |
-| Mis facturas | Abrir | Facturas confirmadas con detalle y PDF (si octubre está confirmado) |
+| Mis facturas | Abrir | JSU-2026-10-0009 con detalle (presentes al 100 %, ausencias al 25 %) y PDF |
 | Mi perfil | Abrir | Datos de solo lectura y cambio de contraseña |
 
 ## 5. Multiempresa

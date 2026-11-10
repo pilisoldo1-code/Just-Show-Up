@@ -1,6 +1,6 @@
 # Arquitectura de Just Show Up
 
-> Estado al **10/11/2026** (`main` = `8cc250f`, desplegado en theta). Complementa `docs/MER.md`. Detalle de cada regla
+> Estado al **10/11/2026** (`main` = `3f765ee`, desplegado en theta). Complementa `docs/MER.md`. Detalle de cada regla
 > y sus pruebas en `CLAUDE.md`; estado y pendientes en `CONTINUIDAD_PROYECTO.md`.
 
 ## 1. Tecnologías (todo en planes gratuitos, costo $0)
@@ -215,6 +215,9 @@ sequenceDiagram
 ```
 
 - El programa no lleva claves de Supabase: URL, entorno y un token por computadora (en la base solo su huella).
+- **Regla de los 15 minutos** (`_video_evaluar`, 10/11): una grabación se asocia a la solicitud de «Empezar a grabar»;
+  una clase presencial solo compite si tiene grabación activada o ya tiene video. Sin solicitud ni clase candidata, no se
+  sube nada.
 - Reproducción con URLs firmadas de hasta 90 min; topes de almacenamiento y transferencia en `video_parametros`.
 
 ## 11. Seguridad
