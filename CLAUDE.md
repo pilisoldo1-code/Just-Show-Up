@@ -877,6 +877,26 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **Novedades (notificaciones, fase 1; rama `notificaciones-novedades`, 10/11; sin migraciones; NO desplegado)**: campana
+  en el menú de los cuatro roles (`.campana`, antes del menú de cuenta; no aparece sin empresa) y pantalla `/novedades`.
+  Las novedades **se calculan en el momento y son SOLO LECTURA** (`app/novedades.py`): no hay tabla, ni «leída», ni
+  correos; cada una desaparece sola cuando se resuelve. Alumna: ofertas vigentes de la lista de espera (urgente),
+  facturas publicadas vencidas (urgente) o pendientes, y clases futuras canceladas por la profesora (agrupadas).
+  Profesora: clases terminadas sin asistencia (`asistencias_pendientes_resumen`, ya limitada a sus clases).
+  Administradora: eso más borradores de facturación por mes y facturas vencidas sin pagar (con nombres). Superadministradora:
+  administradoras activas con la invitación sin usar (`auth.invitacion_pendiente`, una llamada al admin API por
+  administradora). El número lo pide el menú con `fetch("/novedades/contador")` **después** de cargar la página: si falla,
+  la campana queda sin número y la página no se entera.
+  - **Nunca llamar desde Novedades a funciones que escriben**: `actualizar_listas_espera`, `sincronizar_borradores`,
+    `generar_clases` ni la conciliación de Mercado Pago (las siguen haciendo las pantallas de cada sección). Por eso una
+    oferta recién liberada aparece cuando alguien abrió una pantalla que procesa la lista de espera, y una oferta ya vencida
+    se descarta por `oferta_vence_en`.
+  - **`mi_lista_espera` NO filtra por empresa** (`security definer` por `auth.uid()`): la alumna compartida vería listas de
+    otra empresa. Novedades lee `listadeespera` y `clase` con la sesión (RLS por `empresa_activa()`) y además filtra
+    `id_empresa` explícitamente en todas las consultas.
+  - Cada bloque va en su propio `try`: si uno falla, se muestran los demás con un aviso.
+  - Pruebas: `tests.test_novedades` (19: roles, aislamiento entre empresas, solo lectura, rutas y menú).
+
 - **Mi perfil editable (rama `perfil-editable`, migración `20261112000000_perfil_editable.sql`, SIN aplicar en producción)**:
   cada persona edita su nombre, apellido, teléfono, fecha de nacimiento y carné con `editar_mis_datos` (solo su propia
   fila; la superadministradora sin fechas); la cédula sigue siendo solo de la administradora. El correo lo cambia Supabase

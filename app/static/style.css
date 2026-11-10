@@ -4751,3 +4751,110 @@ a.video-card-biblioteca:hover .video-play {
     flex-wrap: wrap;
     gap: 12px;
 }
+
+/* ---------- novedades (campana del menú y pantalla) ---------- */
+.campana {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    margin-right: 8px;
+    border-radius: 50%;
+    color: var(--muted);
+    flex-shrink: 0;
+}
+
+.menu-cuenta a.campana {
+    color: var(--muted);
+}
+
+.menu-cuenta a.campana:hover,
+.menu-cuenta a.campana:focus-visible,
+.menu-cuenta a.campana.activo {
+    color: var(--accent);
+}
+
+.campana-numero {
+    position: absolute;
+    top: 2px;
+    right: 0;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: #0f1115;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+}
+
+.campana-numero.campana-urgente {
+    background: #f87171;
+}
+
+.campana-numero[hidden] {
+    display: none;
+}
+
+.novedades-lista {
+    list-style: none;
+    margin: 16px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.novedad {
+    background: var(--card);
+    border: 1px solid #2a2e37;
+    border-left: 4px solid #2a2e37;
+    border-radius: 12px;
+    padding: 14px 16px;
+}
+
+.novedad-urgente {
+    border-left-color: #f87171;
+}
+
+.novedad-pendiente {
+    border-left-color: #fbbf24;
+}
+
+.novedad-cabeza {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.novedad-titulo {
+    margin: 0;
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+}
+
+.novedad-detalle {
+    margin: 8px 0 0;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.novedad-lineas {
+    margin: 8px 0 0;
+    padding-left: 20px;
+    color: var(--muted);
+}
+
+.novedad-accion {
+    display: inline-block;
+    margin-top: 12px;
+}
+
+.novedades-nota {
+    margin-top: 24px;
+}

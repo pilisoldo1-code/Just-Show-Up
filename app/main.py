@@ -13,7 +13,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app import auth, clases, entorno, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones, videos
+from app import (auth, clases, entorno, estadisticas, factura_pdf, facturas, mercadopago, novedades, personas, validaciones,
+                 videos)
 from app.auth import (ErrorAuth, Redirigir, Usuario, requiere_admin, requiere_alumna, requiere_espectadora, requiere_login,
                       requiere_profesora, requiere_superadmin)
 from app.clases import DIAS_ORDEN
@@ -2601,3 +2602,26 @@ def video_limpieza(request: Request):
     if not videos.secreto_valido(request.headers.get("authorization", ""), secreto):
         return Response(status_code=401)
     return videos.limpiar()
+
+
+# ---------- novedades (notificaciones, fase 1: solo lectura) ----------
+
+def _novedades(usuario: Usuario) -> dict:
+    return novedades.de_usuario(_sb(usuario), usuario, _invitacion_pendiente)
+
+
+@app.get("/novedades")
+def novedades_pantalla(request: Request, usuario: Usuario = Depends(requiere_login)):
+    if usuario.sin_empresa:
+        return RedirectResponse(url=_destino(usuario), status_code=303)
+    datos = _novedades(usuario)
+    aviso = "" if datos["completas"] else "No pudimos revisar todas tus novedades. Probá de nuevo en un rato."
+    return _render(request, "novedades.html", usuario, novedades=datos["novedades"], aviso=aviso, aviso_ok=False)
+
+
+@app.get("/novedades/contador")
+def novedades_contador(usuario: Usuario = Depends(requiere_login)):
+    """Lo pide el menú después de cargar la página: si falla, la campana queda sin número y la página no se entera."""
+    if usuario.sin_empresa:
+        return {"total": 0, "urgentes": 0}
+    return novedades.contador(_novedades(usuario)["novedades"])
