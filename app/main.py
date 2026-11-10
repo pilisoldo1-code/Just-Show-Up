@@ -392,8 +392,9 @@ def perfil_correo(request: Request, nuevo: str = Form(""), contrasena: str = For
         nuevo = auth.pedir_cambio_correo(usuario, nuevo, contrasena, auth.url_confirmar_correo(request))
     except ErrorAuth as e:
         return _perfil(request, usuario, aviso=str(e), form_correo={"nuevo": nuevo.strip()}, status_code=400)
+    # el aviso va en la dirección de la página: sin los correos (no deben quedar en el historial ni en los registros)
     return RedirectResponse(url="/perfil?" + urlencode({"ok": 1, "aviso": (
-        f"Te enviamos un enlace a {usuario.mail} y otro a {nuevo}. El correo cambia cuando abras los dos; mientras "
+        "Te enviamos un enlace a tu correo actual y otro al nuevo. El correo cambia cuando abras los dos; mientras "
         "tanto seguís entrando con el actual.")}), status_code=303)
 
 

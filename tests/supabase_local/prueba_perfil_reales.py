@@ -243,6 +243,7 @@ try:
 
     r = c.post("/perfil/correo", data={"nuevo": "  " + nuevo.upper() + " ", "contrasena": CLAVE}, follow_redirects=False)
     ok("pedido válido: avisa que hay que abrir los dos enlaces", r.status_code == 303 and "abras los dos" in aviso(r))
+    ok("la dirección del aviso no lleva los correos", "@" not in aviso(r))
     ok("queda pendiente en Supabase, sin cambiar todavía", correo_auth(U["alumna"]) == {"email": M["alumna"], "email_change": nuevo})
     ok("el perfil sigue con el correo actual", perfil(U["alumna"])["mail"] == M["alumna"])
     enlace_viejo, asunto, cuerpo = mail_nuevo(M["alumna"], mails_antes)
