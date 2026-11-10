@@ -283,5 +283,55 @@ class Rutas(unittest.TestCase):
         self.assertEqual(r.json(), {"total": 0, "urgentes": 0})
 
 
+class ScriptPruebaReal(unittest.TestCase):
+    """scripts/prueba_novedades_real.py: solo servidor local, no sigue la redirección del login y lee la pantalla."""
+
+    def setUp(self):
+        import importlib.util, os
+        ruta = os.path.join(os.path.dirname(__file__), "..", "scripts", "prueba_novedades_real.py")
+        spec = importlib.util.spec_from_file_location("prueba_novedades_real", ruta)
+        self.m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.m)
+
+    def test_solo_servidor_local(self):
+        self.assertEqual(self.m.base_local("http://localhost:8000"), "http://localhost:8000")
+        for url in ("https://just-show-up-theta.vercel.app", "http://just-show-up-amber.vercel.app", "https://localhost:8000"):
+            with self.subTest(url=url), self.assertRaises(SystemExit):
+                self.m.base_local(url)
+
+    def test_no_sigue_la_redireccion_ni_pide_otras_pantallas(self):
+        import httpx
+        pagina = main.templates.get_template("novedades.html").render(
+            request=SimpleNamespace(url=SimpleNamespace(path="/novedades")), usuario=alumna(), aviso="", aviso_ok=False,
+            novedades=[novedades._novedad(novedades.URGENTE, "Factura de octubre 2026 vencida", "x", "/mis-facturas", "Ver"),
+                       novedades._novedad(novedades.AVISO, "La profesora canceló 1 clase", "y", "/", "Ver", ["a"])])
+        vistos = []
+
+        def servidor(req):
+            vistos.append((req.method, req.url.path, req.headers.get("cookie", "")))
+            if req.url.path == "/login":
+                return httpx.Response(303, headers=[("location", "/"), ("set-cookie", "sb_acceso=A; Path=/; HttpOnly"),
+                                                    ("set-cookie", "sb_refresco=R; Path=/; HttpOnly")])
+            if req.url.path == "/novedades":
+                return httpx.Response(200, text=pagina)
+            if req.url.path == "/novedades/contador":
+                return httpx.Response(200, json={"total": 2, "urgentes": 1})
+            if req.url.path == "/logout":
+                return httpx.Response(303, headers=[("location", "/login"), ("set-cookie", 'sb_acceso=""; Max-Age=0; Path=/')])
+            return httpx.Response(500)
+
+        c = self.m.Cliente("http://localhost:8000", httpx.MockTransport(servidor))
+        self.assertTrue(c.entrar("Just Show Up", "alumna@prueba.invalid", "x"))
+        estado, html_ = c.novedades()
+        self.assertEqual(self.m.titulos(html_), [("Urgente", "Factura de octubre 2026 vencida"),
+                                                 ("Aviso", "La profesora canceló 1 clase")])
+        self.assertEqual(c.contador(), {"total": 2, "urgentes": 1})
+        c.salir()
+        self.assertEqual([p for _, p, _ in vistos], ["/login", "/novedades", "/novedades/contador", "/logout"])
+        self.assertIn("sb_acceso=A", vistos[1][2])
+        with self.assertRaises(RuntimeError):
+            c._pedir("GET", "/")
+
+
 if __name__ == "__main__":
     unittest.main()

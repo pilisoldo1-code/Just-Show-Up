@@ -895,7 +895,12 @@ Para cada módulo, en este orden:
     otra empresa. Novedades lee `listadeespera` y `clase` con la sesión (RLS por `empresa_activa()`) y además filtra
     `id_empresa` explícitamente en todas las consultas.
   - Cada bloque va en su propio `try`: si uno falla, se muestran los demás con un aviso.
-  - Pruebas: `tests.test_novedades` (19: roles, aislamiento entre empresas, solo lectura, rutas y menú).
+  - Pruebas: `tests.test_novedades` (21: roles, aislamiento entre empresas, solo lectura, rutas, menú y el script).
+  - **Prueba con datos reales sin escribir en la base**: servidor local con el `.env` y
+    `scripts/prueba_novedades_real.py` (solo localhost; inicia sesión SIN seguir la redirección, porque la alumna va a
+    `/`, que genera clases y procesa listas de espera; pide solo `/novedades`, el contador y `/logout`). Las otras tres
+    cuentas pueden usar el navegador: sus pantallas de inicio solo leen. Iniciar sesión cambia `profiles.empresa_activa`
+    y la sesión, como siempre (`verificar_despliegue.py` ya las ignora).
 
 - **Mi perfil editable (rama `perfil-editable`, migración `20261112000000_perfil_editable.sql`, SIN aplicar en producción)**:
   cada persona edita su nombre, apellido, teléfono, fecha de nacimiento y carné con `editar_mis_datos` (solo su propia
