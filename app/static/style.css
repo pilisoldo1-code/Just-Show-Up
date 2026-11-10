@@ -4858,3 +4858,11 @@ a.video-card-biblioteca:hover .video-play {
 .novedades-nota {
     margin-top: 24px;
 }
+
+/* 320–400 px: con la campana de 40 px el encabezado no entraba en una línea */
+@media (max-width: 400px) {
+    .campana {
+        width: 34px;
+        margin-right: 4px;
+    }
+}
