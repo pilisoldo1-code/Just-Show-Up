@@ -647,7 +647,7 @@ class GrabacionesIndependientes(unittest.TestCase):
                           "Mis clases grabadas", "Yoga suave", "Pendiente de grabación",
                           "Tenés tiempo hasta las 10:00 para comenzar a grabar.", "/videos/grabaciones/3/cancelar",
                           'href="/videos/9">Ver video', "Accedé a tus clases grabadas durante las 24 horas posteriores",
-                          "una de tus clases programadas"):
+                          "Registrá una clase por vez"):
                 self.assertIn(texto, r.text)
 
     def test_empezar_a_grabar_explica_los_pasos_y_no_promete_que_graba(self):

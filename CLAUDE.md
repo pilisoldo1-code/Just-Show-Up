@@ -530,6 +530,12 @@ scripts/seed.py          script standalone de prueba de conexión a Supabase
     `zoommtg://zoom.us/join?action=join&confno=<ID personal>` (el ID solo en `localStorage`, clave `jsu_zoom_id`). Con la
     cuenta dueña iniciada en Zoom, `join` sobre su ID personal entra como anfitriona (verificado 09/11, Zoom 7.1.9);
     `zoommtg://zoom.us/start?confno=...` NO abrió nada. La grabación la inicia ella («Grabar»): no se usa la automática.
+  - **Regla de los 15 minutos (rama `videos-regla-15-min`, migración `20261111000000_videos_regla_15_minutos.sql`, NO
+    aplicada todavía)**: en `_video_evaluar` solo compiten con una solicitud las clases con grabación activada
+    (`_video_programada`) o que ya tienen video; sin solicitud, cerca de una clase, sigue `no_autorizada`. Pruebas:
+    `tests/base_local/test_videos_regla_15_base.py` (27, antes/después y vuelta atrás exacta a la huella de producción).
+    Vuelta atrás: `supabase/pendientes/vuelta_atras_videos_regla_15_minutos.sql`. Orden: migración primero, merge después
+    (la pantalla deja de advertir los 15 minutos).
   - **Flujo**: `agente/agente_videos.py`, en la computadora de la profesora, detecta el `.mp4`, consulta
     `/api/videos/agente/consultar` **antes de comprimir** y, si está autorizada, comprime a ~400 kbps (~120 MB para 40
     min, estimado), divide en partes de hasta 45 MB y sube con URLs firmadas directo a Storage (Vercel limita los

@@ -67,7 +67,8 @@ planificación.
 3. El programa local es el mismo y no cambia nada: informa la hora de inicio y la duración real. El servidor la asocia
    a la solicitud **solo si es la única candidata de esa profesora**:
    - empezó dentro del plazo (con 2 minutos de tolerancia por diferencias de reloj);
-   - si a esa hora (±15 min) la profesora también tiene una **clase**, es ambiguo y **no se publica** (no se adivina);
+   - una clase presencial suya a la misma hora ya no la vuelve ambigua (migración `20261111000000_videos_regla_15_minutos`):
+     solo compiten las clases con grabación activada, y desde el 09/11 no se activan;
    - una sola solicitud esperando por profesora; una vez asociada, la solicitud solo acepta esa grabación (y sus
      reintentos), nunca otra; la siguiente grabación va a una solicitud nueva.
 4. Se comprime, se genera la miniatura, se sube al bucket privado y se **publica sola**. La empresa sale de la
