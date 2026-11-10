@@ -32,6 +32,7 @@ import psycopg2  # noqa: E402
 import psycopg2.extras  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from app import auth, clases, main  # noqa: E402
+from tests.supabase_local._correo_local import SITIO as SITIO_LOCAL, activar_por_correo  # noqa: E402
 
 DB = psycopg2.connect(estado["DB_URL"])
 DB.autocommit = True
@@ -65,24 +66,27 @@ def huella_empresa(empresa):
 
 
 CLAVE = "ClaveDePrueba-" + uuid.uuid4().hex[:8]
+# la administradora la crea la superadministradora desde el panel: recibe una invitación, así que su correo no
+# puede ser .invalid (lo recibe Mailpit) y se activa con el enlace, como en producción
+ADMIN_PIL = f"admin.pil.{uuid.uuid4().hex[:6]}@ejemplo.test"
 JSU = sql("select id from empresa where codigo = 'JSU'", uno=True)["id"]
 sup_id, _ = auth.crear_cuenta("superadmin@prueba.invalid", "Administración", "General", contrasena=CLAVE, sin_empresa=True)
 auth.cliente_admin().table("profiles").update({"es_superadmin": True}).eq("id", sup_id).execute()
 auth.crear_cuenta("profesora@prueba.invalid", "Profe", "Prueba", rol="profesora", contrasena=CLAVE, id_empresa=JSU,
                   rol_empresa="admin")
-SA = TestClient(main.app, base_url="http://testserver")
+SA = TestClient(main.app, base_url=SITIO_LOCAL)  # sitio permitido: el panel manda la invitación
 SA.post("/admin/login", data={"mail": "superadmin@prueba.invalid", "contrasena": CLAVE}, follow_redirects=False)
 SA.post("/admin/empresas", data={"nombre": "Pilates Centro", "codigo": "PIL", "admin_nombre": "Lucía",
-                                 "admin_apellido": "Bentancor", "admin_mail": "admin.pil@prueba.invalid"})
+                                 "admin_apellido": "Bentancor", "admin_mail": ADMIN_PIL})
 PIL = sql("select id from empresa where codigo = 'PIL'", uno=True)["id"]
-ADMIN = sql("select id::text from profiles where mail = 'admin.pil@prueba.invalid'", uno=True)["id"]
-auth.cliente_admin().auth.admin.update_user_by_id(ADMIN, {"password": CLAVE})
+ADMIN = sql("select id::text from profiles where mail = %s", (ADMIN_PIL,), uno=True)["id"]
+activar_por_correo(estado, main.app, ADMIN_PIL, CLAVE)
 cuentas = {m: auth.crear_cuenta(m, n, "Prueba", contrasena=CLAVE, id_empresa=PIL, rol_empresa=r)[0]
            for m, n, r in (("profe.pil@prueba.invalid", "Pía", "profesora"), ("ana.pil@prueba.invalid", "Ana", "alumna"),
                            ("eva.pil@prueba.invalid", "Eva", "alumna"), ("ines.pil@prueba.invalid", "Inés", "alumna"))}
 PROF, ANA, EVA, INES = (cuentas[m] for m in ("profe.pil@prueba.invalid", "ana.pil@prueba.invalid", "eva.pil@prueba.invalid",
                                              "ines.pil@prueba.invalid"))
-A, P, AL = entrar("Pilates Centro", "admin.pil@prueba.invalid"), entrar("Pilates Centro", "profe.pil@prueba.invalid"), \
+A, P, AL = entrar("Pilates Centro", ADMIN_PIL), entrar("Pilates Centro", "profe.pil@prueba.invalid"), \
     entrar("Pilates Centro", "ana.pil@prueba.invalid")
 J1 = entrar("Just Show Up", "profesora@prueba.invalid")
 ok("entran la administradora, la profesora y una alumna de Pilates Centro, y la administradora de Just Show Up",

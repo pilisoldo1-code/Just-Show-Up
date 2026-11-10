@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Just Show Up - Confirmar cambio de correo</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <main class="auth-main">
+        <div class="auth-card">
+            <h1>Confirmar cambio de correo</h1>
+
+            {% if terminado %}
+            <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+            {% else %}
+            <div id="enlace-invalido" hidden>
+                <div class="aviso aviso-error">{{ mensaje_invalido }}</div>
+            </div>
+            <div id="formulario" hidden>
+                <p class="subtitle">Tocá el botón para confirmar el cambio de correo de tu cuenta de Just Show Up.</p>
+                <form action="/confirmar-correo" method="post" class="horario-form auth-form">
+                    <input type="hidden" name="token_hash" id="token_hash" value="" />
+                    <button type="submit" class="btn btn-block btn-tactil" data-cargando="Confirmando…">Confirmar cambio de correo</button>
+                </form>
+            </div>
+            {% endif %}
+
+            <p class="auth-link"><a href="/login">Ir a iniciar sesión</a></p>
+        </div>
+    </main>
+    {% if not terminado %}
+    <script>
+        // El código viene después del "#" (no llega al servidor ni a sus registros): se pasa al formulario y se borra de
+        // la barra de direcciones. El enlace se usa recién al tocar el botón.
+        (function () {
+            var codigo = new URLSearchParams(location.hash.slice(1)).get("token_hash");
+            history.replaceState(null, "", location.pathname);
+            if (codigo) {
+                document.getElementById("token_hash").value = codigo;
+                document.getElementById("formulario").hidden = false;
+            } else {
+                document.getElementById("enlace-invalido").hidden = false;
+            }
+        })();
+    </script>
+    {% endif %}
+    {% include "_envio_unico.html" %}
+</body>
+</html>

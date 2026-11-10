@@ -321,7 +321,8 @@ def _fecha_legible(iso: str | None) -> str:
 
 def _datos_perfil(usuario: Usuario) -> dict:
     datos = {"nombre": usuario.nombre, "apellido": usuario.apellido, "mail": usuario.mail,
-             "telefono": "", "fecha_nacimiento": "", "fecha_vencimiento_carne_salud": "", "cedula": ""}
+             "telefono": "", "fecha_nacimiento": "", "fecha_vencimiento_carne_salud": "", "cedula": "",
+             "fecha_nacimiento_iso": "", "fecha_vencimiento_carne_salud_iso": ""}
     try:
         sb = auth.cliente_con_token(usuario.token)
         filas = personas.completar(sb, sb.table("profiles").select("id, telefono").eq("id", usuario.id).execute().data)
@@ -333,12 +334,91 @@ def _datos_perfil(usuario: Usuario) -> dict:
         datos["cedula"] = validaciones.formatear_cedula(filas[0].get("cedula"))
         datos["fecha_nacimiento"] = _fecha_legible(filas[0]["fecha_nacimiento"])
         datos["fecha_vencimiento_carne_salud"] = _fecha_legible(filas[0]["fecha_vencimiento_carne_salud"])
+        datos["fecha_nacimiento_iso"] = filas[0]["fecha_nacimiento"] or ""
+        datos["fecha_vencimiento_carne_salud_iso"] = filas[0]["fecha_vencimiento_carne_salud"] or ""
     return datos
+
+
+def _perfil(request: Request, usuario: Usuario, aviso: str = "", aviso_ok: bool = False, errores=None,
+            form=None, form_correo=None, status_code: int = 200):
+    # La superadministradora no tiene datos de alumna ni de docente: solo nombre, apellido, teléfono y correo.
+    return _render(request, "perfil.html", usuario, status_code=status_code, datos=_datos_perfil(usuario), aviso=aviso,
+                   aviso_ok=aviso_ok, errores=errores or [], form=form, form_correo=form_correo or {},
+                   con_fechas=not usuario.es_superadmin, correo_ficticio=auth.es_mail_ficticio(usuario.mail or ""),
+                   **_fechas_formulario())
 
 
 @app.get("/perfil")
 def perfil(request: Request, ok: int = 0, aviso: str = "", usuario: Usuario = Depends(requiere_login)):
-    return _render(request, "perfil.html", usuario, datos=_datos_perfil(usuario), aviso=aviso, aviso_ok=bool(ok))
+    return _perfil(request, usuario, aviso=aviso, aviso_ok=bool(ok))
+
+
+@app.post("/perfil/datos")
+def perfil_datos(
+    request: Request, nombre: str = Form(""), apellido: str = Form(""), telefono: str = Form(""),
+    fecha_nacimiento: str = Form(""), fecha_vencimiento_carne_salud: str = Form(""),
+    usuario: Usuario = Depends(requiere_login),
+):
+    actuales = _datos_perfil(usuario)
+    if usuario.es_superadmin:
+        fecha_nacimiento = actuales["fecha_nacimiento_iso"]
+        fecha_vencimiento_carne_salud = actuales["fecha_vencimiento_carne_salud_iso"]
+    ingresados = {"nombre": nombre, "apellido": apellido, "mail": usuario.mail, "telefono": telefono,
+                  "fecha_nacimiento": fecha_nacimiento, "fecha_vencimiento_carne_salud": fecha_vencimiento_carne_salud}
+    datos, errores = validaciones.validar_alumna(ingresados, clases.ahora().date())
+    carne_sin_cambios = datos["fecha_vencimiento_carne_salud"] == actuales["fecha_vencimiento_carne_salud_iso"]
+    errores = [e for e in errores if not (carne_sin_cambios and "carné" in e)]  # uno ya vencido que no se toca no frena
+    if errores:
+        return _perfil(request, usuario, errores=errores, form={k: v.strip() for k, v in ingresados.items()},
+                       status_code=400)
+    try:
+        r = _sb(usuario).rpc("editar_mis_datos", {
+            "p_nombre": datos["nombre"], "p_apellido": datos["apellido"], "p_telefono": datos["telefono"] or None,
+            "p_fecha_nacimiento": datos["fecha_nacimiento"] or None,
+            "p_fecha_vencimiento_carne_salud": datos["fecha_vencimiento_carne_salud"] or None}).execute().data
+    except Exception:
+        logging.exception("No se pudieron guardar los datos del perfil")
+        r = None
+    if r != "ok":
+        return _perfil(request, usuario, errores=["No se pudieron guardar tus datos. Probá de nuevo."],
+                       form={k: v.strip() for k, v in ingresados.items()}, status_code=400)
+    return RedirectResponse(url="/perfil?" + urlencode({"ok": 1, "aviso": "Tus datos se guardaron."}), status_code=303)
+
+
+@app.post("/perfil/correo")
+def perfil_correo(request: Request, nuevo: str = Form(""), contrasena: str = Form(""),
+                  usuario: Usuario = Depends(requiere_login)):
+    try:
+        nuevo = auth.pedir_cambio_correo(usuario, nuevo, contrasena, auth.url_confirmar_correo(request))
+    except ErrorAuth as e:
+        return _perfil(request, usuario, aviso=str(e), form_correo={"nuevo": nuevo.strip()}, status_code=400)
+    # el aviso va en la dirección de la página: sin los correos (no deben quedar en el historial ni en los registros)
+    return RedirectResponse(url="/perfil?" + urlencode({"ok": 1, "aviso": (
+        "Te enviamos un enlace a tu correo actual y otro al nuevo. El correo cambia cuando abras los dos; mientras "
+        "tanto seguís entrando con el actual.")}), status_code=303)
+
+
+@app.get("/confirmar-correo")
+def confirmar_correo_form(request: Request):
+    # Igual que la invitación: abrir la página no gasta el enlace (los antivirus del correo la visitan solos).
+    return _sin_referer(_render(request, "confirmar_correo.html", aviso="", aviso_ok=False, token_hash="",
+                                mensaje_invalido=auth.MSG_CORREO_LINK_INVALIDO, terminado=False))
+
+
+@app.post("/confirmar-correo")
+def confirmar_correo(request: Request, token_hash: str = Form("")):
+    try:
+        correo = auth.confirmar_cambio_correo(token_hash)
+    except ErrorAuth as e:
+        return _sin_referer(_render(request, "confirmar_correo.html", status_code=400, aviso=str(e), aviso_ok=False,
+                                    token_hash="", mensaje_invalido=auth.MSG_CORREO_LINK_INVALIDO, terminado=True))
+    if correo:
+        aviso = f"Listo: tu correo ahora es {correo}. Usalo, con tu misma contraseña, para iniciar sesión."
+    else:
+        aviso = ("Confirmación registrada. Para completar el cambio abrí también el enlace que llegó a tu otra dirección "
+                 "(si ya lo abriste, el cambio está hecho).")
+    return _sin_referer(_render(request, "confirmar_correo.html", aviso=aviso, aviso_ok=True, token_hash="",
+                                mensaje_invalido=auth.MSG_CORREO_LINK_INVALIDO, terminado=True))
 
 
 @app.post("/perfil/contrasena")
@@ -358,8 +438,7 @@ def perfil_contrasena(
         except ErrorAuth as e:
             aviso = str(e)
     if aviso:
-        return _render(request, "perfil.html", usuario, status_code=400,
-                       datos=_datos_perfil(usuario), aviso=aviso, aviso_ok=False)
+        return _perfil(request, usuario, aviso=aviso, status_code=400)
     # Supabase cierra las sesiones al cambiar la contraseña: se abre una nueva para
     # que la usuaria no quede afuera apenas la cambia.
     try:

@@ -91,6 +91,9 @@ ok("ninguna tabla nueva sin id_empresa quedó afuera de la comparación", {"asis
 
 # ---------- 1) Just Show Up con datos ficticios (cuentas, clases, asistencias, factura y pago) ----------
 CLAVE = "ClaveDePrueba-" + uuid.uuid4().hex[:8]
+# Las cuentas nuevas creadas desde el panel reciben una invitación: tienen que poder recibir correo (Mailpit), así que
+# no pueden ser .invalid (las invitaciones las rechazan a propósito). Las del escenario las crea el script y sí lo son.
+MARTA = f"marta.pilates.{uuid.uuid4().hex[:6]}@ejemplo.test"
 JSU = sql("select id from empresa where codigo = 'JSU'", uno=True)["id"]
 cuenta = lambda m, n, rol: auth.crear_cuenta(m, n, "Prueba", rol="profesora" if rol != "alumna" else "alumna", contrasena=CLAVE,
                                              id_empresa=JSU, rol_empresa=rol)[0]
@@ -170,7 +173,7 @@ with mock.patch("builtins.input", lambda *_: next(respuestas)), mock.patch("getp
 SUP = sql("select id::text, es_superadmin from profiles where mail = 'superadmin@prueba.invalid'", uno=True)
 ok("crear_superadmin.py: cuenta creada, sin ninguna empresa", SUP and SUP["es_superadmin"]
    and sql("select count(*) n from membresia where id_usuario = %s", (SUP["id"],), True)["n"] == 0)
-SA = TestClient(main.app, base_url="http://testserver")
+SA = TestClient(main.app, base_url="http://localhost:8000")  # sitio permitido: el panel manda invitaciones
 r = SA.post("/admin/login", data={"mail": "superadmin@prueba.invalid", "contrasena": CLAVE_SA}, follow_redirects=False)
 ok("la superadministradora entra por /admin/login", r.status_code == 303 and "/admin/empresas" in r.headers["location"])
 ok("…y no puede entrar como lugar (no pertenece a ninguna empresa)",
@@ -208,8 +211,8 @@ ok("editar el nombre de la empresa", "ok=1" in r.headers["location"]
    and sql("select nombre from empresa where id = %s", (PIL,), True)["nombre"] == "Pilates Centro Demo")
 SA.post(f"/admin/empresas/{PIL}/editar", data={"nombre": "Pilates Centro", "codigo": "PIL"})
 r = SA.post(f"/admin/empresas/{PIL}/administradora", data={"nombre": "Marta", "apellido": "Suárez",
-                                                             "mail": "marta.pilates@demo.invalid"})
-ADM2_P = sql("select id::text from profiles where mail = 'marta.pilates@demo.invalid'", uno=True)
+                                                             "mail": MARTA})
+ADM2_P = sql("select id::text from profiles where mail = %s", (MARTA,), uno=True)
 ok("asignar una segunda administradora (cuenta nueva)", r.status_code == 200 and ADM2_P and sql(
    "select es_admin from membresia where id_usuario = %s and id_empresa = %s", (ADM2_P["id"], PIL), True)["es_admin"])
 ADM2_P = ADM2_P["id"]
@@ -219,7 +222,7 @@ ok("pasar la segunda administradora a profesora", "ok=1" in r.headers["location"
 r = SA.post(f"/admin/empresas/{PIL}/administradoras/{ADM_P}/quitar", data={"accion": "profesora"}, follow_redirects=False)
 ok("nunca deja la empresa sin administradora activa", "ok=0" in r.headers["location"]
    and sql("select es_admin from membresia where id_usuario = %s and id_empresa = %s", (ADM_P, PIL), True)["es_admin"])
-SA.post(f"/admin/empresas/{PIL}/administradora", data={"nombre": "Marta", "apellido": "Suárez", "mail": "marta.pilates@demo.invalid"})
+SA.post(f"/admin/empresas/{PIL}/administradora", data={"nombre": "Marta", "apellido": "Suárez", "mail": MARTA})
 prev = SA.get(f"/admin/empresas/{PIL}/administradoras/{ADM2_P}/baja").text
 firma = re.search(r'name="firma" value="([^"]*)"', prev)
 r = SA.post(f"/admin/empresas/{PIL}/administradoras/{ADM2_P}/baja", data={"motivo": "Ensayo local", "firma": firma and firma.group(1)},
@@ -363,6 +366,18 @@ ok("borrar se niega si la empresa tiene una cuenta que no es ficticia, sin borra
    and huella_empresa(PIL) == foto_pil and sql("select count(*) n from empresa where id = %s", (PIL,), True)["n"] == 1)
 auth.cliente_admin().auth.admin.delete_user(REAL)
 mails_pil = [r["mail"] for r in sql("select p.mail from profiles p join membresia m on m.id_usuario = p.id where m.id_empresa = %s", (PIL,))]
+antes_borrar = huella_empresa(PIL)
+try:
+    with mock.patch("builtins.print"):
+        empresa_demo.borrar(db, guardar_contrasenas=False)
+    se_nego = False
+except SystemExit as e:
+    se_nego = MARTA in str(e)
+ok("empresa_demo.py borrar se niega mientras haya una cuenta que no es ficticia (la creada desde el panel)",
+   se_nego and huella_empresa(PIL) == antes_borrar)
+# la prueba borra la cuenta que creó ella (su desactivación primero: baja_docente la referencia) y recién ahí borra la empresa
+sql("delete from baja_docente where id_usuario = %s and id_empresa = %s", (ADM2_P, PIL))
+auth.cliente_admin().auth.admin.delete_user(ADM2_P)
 try:
     with mock.patch("builtins.print"):
         empresa_demo.borrar(db, guardar_contrasenas=False)
@@ -374,7 +389,8 @@ ok("empresa_demo.py borrar: termina sin errores", borrada)
 ok("…la empresa ya no existe", sql("select count(*) n from empresa where id = %s", (PIL,), True)["n"] == 0)
 restos = {t: sql(f"select count(*) n from public.{t} where id_empresa = %s", (PIL,), True)["n"] for t in TABLAS_EMPRESA}
 ok("…ninguna fila de Pilates en ninguna tabla", not any(restos.values()), {t: n for t, n in restos.items() if n})
-quedan = [m for m in mails_pil if m.endswith("@demo.invalid") and sql("select 1 from auth.users where email = %s", (m,))]
+quedan = [m for m in mails_pil if (m.endswith("@demo.invalid") or m == MARTA)
+          and sql("select 1 from auth.users where email = %s", (m,))]
 ok("…ninguna cuenta de Pilates (también la creada desde el panel)", not quedan, quedan)
 ok("…sin perfiles sin empresa ni sesiones colgadas", sql(
    "select count(*) n from profiles p where not p.es_superadmin and not exists (select 1 from membresia m where m.id_usuario = p.id)",
