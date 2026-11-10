@@ -23,7 +23,9 @@
 - **10/11**: PR #51 integrado (regla de los 15 minutos); 7 facturas de octubre de Just Show Up confirmadas
   (JSU-2026-10-0003…0009) y la de Marta (id 32, $800) **en borrador a propósito** para la defensa; las 11 asistencias
   pendientes de noviembre registradas (7 presentes, 4 ausentes). Detalle en `docs/PROCEDIMIENTOS_DEFENSA.md` §1 y §6.
-- **Falta antes de la defensa**: prueba completa de Videos en producción, cambiar contraseñas de demostración, ensayos.
+- **Videos On Demand probado en producción (10/11)**: primera grabación real publicada sola y reproducida por una alumna
+  (`docs/PROCEDIMIENTOS_DEFENSA.md` §2). Falta comprobar el vencimiento (11/11 13:57) y la limpieza (12/11 desde las 05:00).
+- **Falta antes de la defensa**: esa comprobación, cambiar contraseñas de demostración, ensayos.
   Claves legacy: con Pilar o después de la defensa.
 - **Theta es la plataforma de la defensa.** Cualquier push a `main` despliega solo en theta: consultar siempre antes.
 - Entrar al sitio entre semana: Supabase Free se pausa tras ~7 días sin uso.
@@ -187,7 +189,7 @@ Detalle completo en `CLAUDE.md` (sección "Facturación mensual y pagos") y en l
   confirmadas una por una ($87.000; vencen el 10/11, así que desde el 11/11 se ven «Vencidas»); la de Marta Gómez
   (id 32, $800) queda en borrador para confirmarla en vivo en la defensa. 11 asistencias de noviembre registradas con
   «Clases terminadas» (motivo de regularización de datos ficticios). Detalle en `docs/PROCEDIMIENTOS_DEFENSA.md` §6.
-- **Pendiente antes de la defensa**: §2–§4 de `docs/PROCEDIMIENTOS_DEFENSA.md` (prueba completa de Videos, claves
+- **Pendiente antes de la defensa**: §2–§4 de `docs/PROCEDIMIENTOS_DEFENSA.md` (vencimiento y limpieza del video de prueba, claves
   legacy, contraseñas de demostración) y los ensayos con `docs/GUIA_DEMOSTRACION.md`.
 - **Para después de la defensa**: notificaciones por correo (facturas, recordatorios), regla de 48 h para asistencias,
   reasignar horarios de una profesora inactiva, instalador del programa de videos para otras computadoras, estadística

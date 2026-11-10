@@ -88,6 +88,7 @@
   Para repetir: **anular el pago** (nunca «Anular y reemitir» esa factura).
 
 ## 10. Videos On Demand
-- Si se hizo la prueba completa (ver `docs/PROCEDIMIENTOS_DEFENSA.md` §2) y el video sigue dentro de sus 24 h: mostrarlo
+- La prueba real funcionó el 10/11 (`docs/PROCEDIMIENTOS_DEFENSA.md` §2), pero ese video vence el 11/11. Para mostrar
+  uno en vivo, grabar otro corto el día anterior o la mañana de la defensa (vive 24 h). Si el video sigue dentro de sus 24 h: mostrarlo
   como alumna (reproducción, tiempo restante). Si no, mostrar la pantalla «Empezar a grabar», el estado de las
   grabaciones y explicar el recorrido con el diagrama de `docs/ARQUITECTURA.md` §10.

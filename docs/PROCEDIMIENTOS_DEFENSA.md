@@ -1,6 +1,7 @@
 # Procedimientos para cerrar antes de la defensa (17/11/2026)
 
-> Preparado el **10/11/2026**. §1, §5 y §6 ya se ejecutaron (con autorización de Julieta); §2–§4 esperan su OK
+> Preparado el **10/11/2026**. §1, §5 y §6 ya se ejecutaron (con autorización de Julieta) y §2 se publicó bien
+> (falta comprobar el vencimiento); §3–§4 esperan su OK
 > (**[autorización]**). Nunca se escriben contraseñas, tokens ni claves en este archivo ni en el chat.
 
 ## 1. Regla de los 15 minutos — HECHO (10/11)
@@ -22,7 +23,7 @@
 **Vuelta atrás** (si hiciera falta): `supabase/pendientes/vuelta_atras_videos_regla_15_minutos.sql` deja la función con
 la huella anterior (`c789cf0e…`), probado en local; revertir también el merge.
 
-## 2. Prueba completa de Videos On Demand (grabación corta, unos 2 minutos)
+## 2. Prueba completa de Videos On Demand (grabación corta, unos 2 minutos) — PUBLICACIÓN HECHA (10/11)
 
 **Estado del programa local (10/11)**: corriendo con `launchd` (`com.justshowup.agente`), configuración de producción con
 permisos 600 que apunta a amber (amber responde), FFmpeg instalado, lee `~/Documents/Zoom` (tiene acceso total al disco).
@@ -51,6 +52,40 @@ Hoy reintenta una reunión de prueba del 09/11 (`sin_clase`); deja de reintentar
    biblioteca y se reproduce; muestra cuánto le queda.
 5. Al día siguiente, pasada la hora de publicación + 24 h: ya no se ve; después de la limpieza diaria (cron de amber,
    07:17 UTC) Claude verifica que los archivos se borraron y el registro quedó (`video.estado`, `archivo_eliminado_en`).
+
+### Resultado de la primera prueba real (10/11, verificado solo leyendo)
+
+Julieta la hizo desde su Mac, sin intervención manual: «Prueba Videos On Demand» (Gimnasia) → Zoom → unos 2 minutos →
+«Pendiente de grabación» → «Procesando» → «Publicado»; como alumna se vio y se reprodujo.
+
+- `grabacion_independiente` 3: Just Show Up, `profesora@prueba.invalid`, tipo Gimnasia (de JSU), creada 13:49:02,
+  grabación iniciada 13:49:31 (dentro del plazo), no cancelada.
+- `video` 1: `publicado`, `id_grabacion` 3, `id_clase` vacío (no se pegó a ninguna clase presencial), empresa 1, 150 s,
+  886.044 bytes en 1 parte, huella sha256 guardada, miniatura y lista HLS presentes, 1 intento, sin errores.
+- **Publicado 10/11 13:56:27 (hora de Montevideo); vence 11/11 13:56:27**: exactamente 24 h.
+- Storage: un solo objeto, `videos-clases/1/1/parte-00.ts` (886.044 bytes, `video/mp2t`). El bucket es **privado** y no
+  tiene políticas para sesiones: solo el servidor lo lee y la reproducción usa URLs firmadas.
+- `video_reproduccion`: 2 filas (la profesora y la alumna), de la misma empresa.
+- Nada incompleto: 0 videos en otro estado, 0 grabaciones esperando, 0 horarios con grabación activada. En la cola del
+  programa: este video `publicado` y, aparte, la reunión de prueba del 09/11 (sin clase, nunca autorizada), que el
+  programa cierra solo al cumplir 24 h de detectada (10/11 14:59). Los errores del registro son anteriores y
+  transitorios (sin red o lentitud al revisar la carpeta mientras la Mac dormía); ninguno de esta prueba.
+
+### Comprobación del vencimiento y de la limpieza (solo lectura)
+
+La **visibilidad** la decide la base con `vence_en` (`now() < vence_en`), al instante. La **limpieza** de archivos la
+hacen (a) el cron diario de Vercel, `17 7 * * *` UTC = **04:17 de Montevideo**, que en el plan Hobby puede correr en
+cualquier momento de esa hora (04:00–04:59), y (b) cada nueva publicación de un video (`limpiar_sin_fallar`). La pasada
+del 11/11 a las 04:17 es **antes** del vencimiento, así que no borra nada.
+
+| Cuándo (Montevideo) | Qué comprobar |
+|---|---|
+| **11/11 después de las 13:57** | Como alumna: la biblioteca ya no muestra el video. En la base: `video` 1 sigue `publicado` con `vence_en` ya pasado, archivo todavía en Storage (normal hasta la limpieza). |
+| **12/11 después de las 05:00** | `video` 1 con `archivo_eliminado_en` lleno, `limpieza_error` vacío, `limpieza_intentos` sin errores; 0 objetos en `videos-clases`; el registro (título, duración, huella, reproducciones) se conserva. |
+| Las dos veces | Otros datos sin cambios. Foto del 10/11 a las 14:01: 84 clases, 221 reservas, 209 asistencias, 3 grabaciones, 1 video, huella de `grabacion_independiente` `d3f455d5da43394f137a0b7291ddf5af` y de `resumen_mensual` `15a6a0f3ecdeed29de2a199af9f1d3c0` (las clases y reservas pueden crecer por la generación automática al abrir pantallas: eso no es un efecto de la limpieza). |
+
+Si el 12/11 el archivo sigue: mirar `limpieza_error` y los registros de la ejecución del cron en Vercel (amber). Nunca
+ejecutar la limpieza a mano sin autorización. Si se publica otro video antes, la limpieza corre en ese momento.
 
 ## 3. Claves legacy de Supabase
 
