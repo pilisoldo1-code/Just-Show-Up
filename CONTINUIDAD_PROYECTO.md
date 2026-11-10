@@ -1,8 +1,8 @@
 # Continuidad del proyecto Just Show Up — traspaso entre sesiones
 
-> Actualizado: **30/10/2026** (computadora de Julieta: Mercado Pago de prueba terminado y restringido a
-> la alumna de la demostración (PR #21–#23), rediseño de la pantalla de pagos de la profesora (PR #24),
-> todo desplegado en theta; **listo para la defensa del 17/11**).
+> Actualizado: **10/11/2026** (`main` = `3f765ee`, desplegado en theta). Para la defensa del **17/11** ver además
+> `docs/GUIA_DEMOSTRACION.md` (recorrido por rol), `docs/PROCEDIMIENTOS_DEFENSA.md` (lo que falta autorizar),
+> `docs/ARQUITECTURA.md` (diagramas) y `docs/MER.md` (modelo real de la base).
 > Leer junto con `CLAUDE.md` (reglas, gotchas, detalle de cada módulo). Este archivo dice
 > **dónde quedamos y qué sigue**; `CLAUDE.md` es la referencia permanente.
 > No contiene contraseñas, tokens ni claves: esas viven solo en `.env` y `.env.cuentas-prueba`
@@ -10,29 +10,25 @@
 
 ---
 
-## 0. Resumen en 30 segundos
+## 0. Resumen en 30 segundos (10/11/2026)
 
-- **En `main` y desplegado en theta (`4fa97ba`)**: módulo 6 (facturación + cédula, PR #15),
-  cancelación de clases puntuales + menú de la profesora (PR #16–#18), traspaso (PR #19),
-  **header responsive** con menú ☰ y menú de la alumna (PR #20), **Mercado Pago de prueba (PR #21)**,
-  guía de la defensa (PR #22), **Mercado Pago solo para `alumna@prueba.invalid` (PR #23)** y
-  **rediseño de la sección Pago de la profesora (PR #24)**. Todos integrados por Julieta.
-- **Planificación: terminada.** Pruebas finales "opción A" (solo lectura) hechas el 28/10 (§9) y
-  revisión visual en theta (escritorio y celular).
-- **Mercado Pago Checkout Pro, SOLO MODO DE PRUEBA** (§7): integrado en theta, **encendido** y
-  probado de punta a punta el 29/10 (rechazado, aprobado, sin duplicados, vista de la profesora,
-  anulación). **Factura de demostración** JSU-2026-09-0001 ($800 ficticios, `alumna@prueba.invalid`)
-  lista para la **defensa del 17/11**: guía en `GUIA_DEFENSA_MERCADO_PAGO.md`.
-- **Estado de Mercado Pago (30/10):** encendido, solo modo de prueba (vendedora y compradora de
-  prueba, dinero ficticio), credencial de prueba cifrada en el Vault; solo `alumna@prueba.invalid` puede
-  iniciar un pago (lo controlan el servidor **y** la base); la factura JSU-2026-09-0001 ($800) está
-  publicada y pendiente; 0 pagos registrados; datos reales idénticos al respaldo del 29/10.
-- **Antes de la defensa (§6):** entrar al sitio al menos una vez por semana y el día anterior (Supabase
-  Free se pausa tras ~7 días sin uso) y hacer las comprobaciones de la guía unos días antes.
-- **Theta es la plataforma de la defensa.** Mercado Pago se enciende con un interruptor en la base
-  (no hace falta tocar el Vercel de Pilar).
-- Después: Videos On Demand (§8). **Cinco ideas para evaluar, no aprobadas** (§11).
-- **Cualquier push a `main` despliega solo en theta**: consultar siempre antes.
+- **En `main` y en theta**: reservas, lista de espera, horarios, tipos de clase, planificación, asistencias (con
+  correcciones), facturación (vencimiento, 25 % por inasistencia, PDF), Mercado Pago de prueba, estadísticas,
+  **multiempresa** (Just Show Up y Pilates Centro, tres roles, superadministradora, bajas de docentes),
+  **Videos On Demand** («Empezar a grabar», PR #45–#46 y #48), **invitaciones por correo** (PR #49: ninguna pantalla
+  muestra contraseñas; Magic Link retirado) y pantallas de celular (PR #42, #44, #50).
+- **Base de producción**: 30 migraciones aplicadas, iguales a `supabase/migrations/` (la última, la regla de los 15
+  minutos de Videos, el 10/11 como `20261110163824 videos_regla_15_minutos`, con respaldo previo). Todas las tablas con
+  RLS y sin acceso `anon`.
+- **10/11**: PR #51 integrado (regla de los 15 minutos); 7 facturas de octubre de Just Show Up confirmadas
+  (JSU-2026-10-0003…0009) y la de Marta (id 32, $800) **en borrador a propósito** para la defensa; las 11 asistencias
+  pendientes de noviembre registradas (7 presentes, 4 ausentes). Detalle en `docs/PROCEDIMIENTOS_DEFENSA.md` §1 y §6.
+- **Videos On Demand probado en producción (10/11)**: primera grabación real publicada sola y reproducida por una alumna
+  (`docs/PROCEDIMIENTOS_DEFENSA.md` §2). Falta comprobar el vencimiento (11/11 13:57) y la limpieza (12/11 desde las 05:00).
+- **Falta antes de la defensa**: esa comprobación, cambiar contraseñas de demostración, ensayos.
+  Claves legacy: con Pilar o después de la defensa.
+- **Theta es la plataforma de la defensa.** Cualquier push a `main` despliega solo en theta: consultar siempre antes.
+- Entrar al sitio entre semana: Supabase Free se pausa tras ~7 días sin uso.
 
 ## 1. Qué es y cómo está armado
 
@@ -90,6 +86,8 @@
 
 ## 3. GitHub
 
+- **Al 10/11/2026: `main` = `3f765ee`** (merge del PR #51, regla de los 15 minutos de Videos). Integrados del #25 al
+  #51. Lo que sigue en esta sección es el registro hasta el 30/10.
 - Repo: `pilisoldo1-code/Just-Show-Up`. **`main` = `4fa97ba`** (merge del PR #24, 30/10). Integrados
   por Julieta y desplegados en theta: **PR #21** (Mercado Pago de prueba, 29/10), **PR #22** (guía de la
   defensa y script de la factura de demostración, 29/10), **PR #23** (Mercado Pago solo para
@@ -174,6 +172,30 @@ Detalle completo en `CLAUDE.md` (sección "Facturación mensual y pagos") y en l
   cambio de año, PDF de una factura real (todavía no hay facturas).
 
 ## 6. Estado de tareas
+
+### Estado al 10/11/2026 (lo vigente)
+- **Integrado y desplegado del 31/10 al 10/11**: multiempresa (#27–#29), bajas de docentes (#32), correcciones de
+  asistencia (#34), cobro del 25 % (#35), escenario de Pilates Centro (#36–#39, #43), estadísticas con gráficas
+  (#40–#41), celular de profesora/administradora/alumna (#42, #44), Videos On Demand (#45, #46, #48), Magic Links
+  (#47, retirado en #49), invitaciones por correo (#49), tarjetas de días terminados (#50).
+- **Correos**: Gmail SMTP de la cuenta exclusiva del proyecto en Supabase Auth (plantillas «Invite user» y
+  «Reset Password» en español). Invitación y recuperación probadas por Julieta en theta.
+- **Revisión de celular (10/11)**: 27 pantallas de alumna, profesora y administradoras leídas de theta + pantallas de la
+  superadministración con datos simulados, a 320/375/390/430 px: sin desbordes ni textos cortados.
+- **Regla de los 15 minutos (PR #51, 10/11)**: migración aplicada con respaldo previo y merge; theta verificada.
+- **Ramas viejas ya integradas** (se pueden archivar): `mobile-administracion` (en #44), `escenario-pilates-asignaciones`
+  (en #43), `magic-links` local (reemplazada). `documentacion-mer` quedó reemplazada por `docs/MER.md`.
+- **Facturas y asistencias (10/11, autorizado por Julieta)**: 7 de las 8 facturas de octubre de Just Show Up
+  confirmadas una por una ($87.000; vencen el 10/11, así que desde el 11/11 se ven «Vencidas»); la de Marta Gómez
+  (id 32, $800) queda en borrador para confirmarla en vivo en la defensa. 11 asistencias de noviembre registradas con
+  «Clases terminadas» (motivo de regularización de datos ficticios). Detalle en `docs/PROCEDIMIENTOS_DEFENSA.md` §6.
+- **Pendiente antes de la defensa**: §2–§4 de `docs/PROCEDIMIENTOS_DEFENSA.md` (vencimiento y limpieza del video de prueba, claves
+  legacy, contraseñas de demostración) y los ensayos con `docs/GUIA_DEMOSTRACION.md`.
+- **Para después de la defensa**: notificaciones por correo (facturas, recordatorios), regla de 48 h para asistencias,
+  reasignar horarios de una profesora inactiva, instalador del programa de videos para otras computadoras, estadística
+  comparativa entre empresas.
+
+### Histórico (hasta el 30/10)
 
 ### Terminado
 - Módulo 6 integrado en `main`, desplegado en theta y verificado (§3 y §5).
