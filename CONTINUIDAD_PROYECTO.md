@@ -17,16 +17,31 @@
   **multiempresa** (Just Show Up y Pilates Centro, tres roles, superadministradora, bajas de docentes),
   **Videos On Demand** («Empezar a grabar», PR #45–#46 y #48), **invitaciones por correo** (PR #49: ninguna pantalla
   muestra contraseñas; Magic Link retirado) y pantallas de celular (PR #42, #44, #50).
-- **Base de producción**: 30 migraciones aplicadas, iguales a `supabase/migrations/` (la última, la regla de los 15
-  minutos de Videos, el 10/11 como `20261110163824 videos_regla_15_minutos`, con respaldo previo). Todas las tablas con
+- **Base de producción**: 31 migraciones aplicadas, iguales a `supabase/migrations/` (la última, Mi perfil editable, el
+  10/11 como `20261110230345 perfil_editable`, con respaldo previo). Todas las tablas con
   RLS y sin acceso `anon`.
 - **10/11**: PR #51 integrado (regla de los 15 minutos); 7 facturas de octubre de Just Show Up confirmadas
   (JSU-2026-10-0003…0009) y la de Marta (id 32, $800) **en borrador a propósito** para la defensa; las 11 asistencias
   pendientes de noviembre registradas (7 presentes, 4 ausentes). Detalle en `docs/PROCEDIMIENTOS_DEFENSA.md` §1 y §6.
+- **Mi perfil editable (PR #53, 10/11, `main` = `dfb4a04`)**: cada persona edita nombre, apellido, teléfono, nacimiento
+  y carné; el correo se cambia con doble confirmación (actual y nueva). Verificado en theta con 5 cuentas de
+  demostración (el teléfono de Marta quedó normalizado a `099123456`, mismo número: decisión de Julieta). **Terminado**;
+  quedan dos verificaciones antes de la defensa (ver «Verificaciones pendientes» abajo).
 - **Videos On Demand probado en producción (10/11)**: primera grabación real publicada sola y reproducida por una alumna
   (`docs/PROCEDIMIENTOS_DEFENSA.md` §2). Falta comprobar el vencimiento (11/11 13:57) y la limpieza (12/11 desde las 05:00).
-- **Falta antes de la defensa**: esa comprobación, cambiar contraseñas de demostración, ensayos.
-  Claves legacy: con Pilar o después de la defensa.
+- **Falta antes de la defensa**: las verificaciones de abajo, cambiar contraseñas de demostración (opcional, script listo
+  en la carpeta de notas de Julieta), ensayos. Claves legacy: con Pilar o después de la defensa.
+
+### Verificaciones pendientes antes de la defensa (17/11)
+1. **Videos: vencimiento** (11/11 después de las 13:57): el video 1 deja de verse para las alumnas.
+2. **Videos: limpieza** (12/11 después de las 05:00): `videos-clases/1/1/parte-00.ts` borrado y `video.archivo_eliminado_en`
+   con fecha (`docs/PROCEDIMIENTOS_DEFENSA.md` §2). Solo lectura; nunca correr la limpieza a mano.
+3. **Mi perfil de la superadministradora** (Julieta, que es quien tiene la contraseña): `/admin/login` → Mi perfil muestra
+   nombre, apellido, teléfono y correo, sin fechas ni cédula; guardar con los mismos valores.
+4. **Cambio de correo real**: con una cuenta de prueba que reciba mensajes (por ejemplo «Prueba Magic Links»,
+   `jujualvez1515@gmail.com`) y otra dirección propia: Mi perfil → correo nuevo + contraseña → abrir el enlace de las dos
+   direcciones (mirar Spam) → entra con el nuevo y el anterior ya no sirve → si se quiere, volver al original igual.
+   Nunca con cuentas reales ni `.invalid` (estas no pueden).
 - **Theta es la plataforma de la defensa.** Cualquier push a `main` despliega solo en theta: consultar siempre antes.
 - Entrar al sitio entre semana: Supabase Free se pausa tras ~7 días sin uso.
 
@@ -77,6 +92,12 @@
   `.env.cuentas-prueba` no se puede entrar con las cuentas de prueba. Se puede leer y editar el
   código sin ellos; solo hacen falta para probar.
 - Servidor: `.venv/bin/uvicorn app.main:app --port 8000 --env-file .env`.
+- **Desde la computadora de Pilar (10/11)**: mismo repositorio de GitHub y `main`. Ella ya tiene acceso al repo y al Vercel
+  de theta. Hace falta: clonar (o `git pull` en `main`), crear el `.venv`, recibir `.env` y `.env.cuentas-prueba` por un
+  medio privado y conectar el conector de Supabase en Claude Code. Lo que queda **solo en la Mac de Julieta**: los
+  respaldos (`~/Documents/Just Show Up - respaldos/`), el programa de Videos (launchd `com.justshowup.agente`, su token y
+  `~/.config/jsu/`), la copia aislada del Supabase local y el script de contraseñas de demostración. Para trabajar en
+  notificaciones no hace falta nada de eso. No grabar videos desde otra computadora: solo la Mac de Julieta está autorizada.
 - Supabase se administra con el **conector MCP de Supabase** en Claude Code (hay que tenerlo
   conectado en la sesión nueva para consultar la base; sin él, solo lectura de código).
 - Cuentas de prueba: `profesora@prueba.invalid`, `alumna@prueba.invalid` (con contraseña en
