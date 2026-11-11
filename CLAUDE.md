@@ -895,7 +895,18 @@ Para cada módulo, en este orden:
     otra empresa. Novedades lee `listadeespera` y `clase` con la sesión (RLS por `empresa_activa()`) y además filtra
     `id_empresa` explícitamente en todas las consultas.
   - Cada bloque va en su propio `try`: si uno falla, se muestran los demás con un aviso.
-  - Pruebas: `tests.test_novedades` (21: roles, aislamiento entre empresas, solo lectura, rutas, menú y el script).
+  - Pruebas: `tests.test_novedades` (21: roles, aislamiento entre empresas, solo lectura, rutas, menú y el script) y
+    `tests/supabase_local/prueba_novedades_reales.py` (39, Supabase local recién reiniciado: arma Just Show Up y Pilates
+    Centro con `empresa_demo.py`, genera cada novedad, comprueba los 4 roles, el aislamiento en los dos sentidos, el
+    contador y que 60 pedidos a Novedades dejan las 27 tablas idénticas; 39/39 el 10/11 en la Mac de Pilar).
+  - El lugar ofrecido lleva a **Mis inscripciones** (no al día): el día solo muestra clases de horarios activos, y Mis
+    inscripciones muestra todas las ofertas con «Confirmar lugar» / «No me interesa».
+  - Las invitaciones solo salen desde un host de `auth.SITIOS_PERMITIDOS`: en pruebas con `TestClient`, usar
+    `base_url="http://localhost:8000"` (con `testserver` el alta de administradora falla con «solo desde el sitio»).
+  - Supabase local en la Mac de Pilar (10/11, sin Homebrew, en `~/.local`): Colima 0.10.3, Lima 2.2.1, Docker CLI 29.9.3 y
+    Supabase CLI 2.122.1 (la 3.x cambió de versión mayor: los scripts usan las claves de `supabase status -o json` de la 2).
+    `colima start --cpu 2 --memory 4 --vm-type vz` (la Mac tiene 8 GB) y `supabase start -x studio,imgproxy,edge-runtime,
+    logflare,vector,realtime,supavisor,postgres-meta` en `~/.local/share/jsu-supabase-local`.
   - **Prueba con datos reales sin escribir en la base**: servidor local con el `.env` y
     `scripts/prueba_novedades_real.py` (solo localhost; inicia sesión SIN seguir la redirección, porque la alumna va a
     `/`, que genera clases y procesa listas de espera; pide solo `/novedades`, el contador y `/logout`). Las otras tres

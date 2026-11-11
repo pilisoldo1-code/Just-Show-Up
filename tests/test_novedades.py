@@ -93,7 +93,7 @@ def de(usuario, base, invitacion=lambda _id: False):
 
 
 class Alumna(unittest.TestCase):
-    def test_oferta_vigente_es_urgente_y_lleva_al_dia(self):
+    def test_oferta_vigente_es_urgente_y_lleva_a_mis_inscripciones(self):
         base = BaseFalsa({
             "listadeespera": [{"id_clase": 7, "id_alumna": "a", "estado": "ofrecido", "id_empresa": JSU,
                                "oferta_vence_en": "2026-11-11T13:25:00+00:00"}],
@@ -102,7 +102,7 @@ class Alumna(unittest.TestCase):
         r = de(alumna(), base)
         self.assertEqual(len(r["novedades"]), 1)
         n = r["novedades"][0]
-        self.assertEqual((n["nivel"], n["enlace"]), (novedades.URGENTE, "/dia/2026-11-11"))
+        self.assertEqual((n["nivel"], n["enlace"]), (novedades.URGENTE, "/mis-inscripciones"))
         self.assertIn("10:25", n["detalle"])  # hora de Montevideo
         self.assertIn("Pilates", n["detalle"])
 

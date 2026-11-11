@@ -78,7 +78,7 @@ def ofertas_alumna(sb: Client, alumna_id: str, empresa_id: int | None, ahora: da
         salida.append((clases._inicio_clase(c), _novedad(
             URGENTE, "¡Se liberó un lugar para vos!",
             f"{_clase_txt(c)}. Confirmalo antes de las {vence.strftime('%H:%M')}; si no, pasa a la siguiente de la lista.",
-            f"/dia/{c['fecha']}", "Confirmar el lugar")))
+            "/mis-inscripciones", "Confirmar el lugar")))  # ahí están Confirmar / No me interesa de todas las ofertas
     return [n for _, n in sorted(salida, key=lambda x: x[0])]
 
 
