@@ -964,6 +964,22 @@ Para cada módulo, en este orden:
     descartó un aviso de factura, ese mismo aviso no se repite (el siguiente sí: vencida_2 o el de la factura siguiente).
   - Prueba: `tests/supabase_local/prueba_correos_avisos_reales.py` (45; Just Show Up + Pilates Centro con
     `empresa_demo.py`, Mercado Pago de PRUEBA simulado en la base local con `registrar_pago_mercado_pago`).
+- **Lista de espera automática, fase D (misma rama; migración `20261116000000_lista_espera_automatica.sql` NO aplicada en
+  producción; NO autorizada para activarse en producción)**: con su interruptor propio
+  `notificacion_parametros.lista_espera_automatica` (apagado; `notificaciones_lista_espera_activar`, solo la
+  superadministradora), la tarea de cada minuto llama a `_procesar_ofertas_vencidas()`, que usa la MISMA
+  `_procesar_lista_espera(clase)` de siempre para las clases programadas futuras con una oferta vencida o con lugares
+  libres y alumnas esperando (hasta 200 por vuelta). No cambió ninguna regla de reservas: mismo orden, mismo bloqueo de
+  la fila de la clase (sin sobrecupo ni duplicados), oferta de 30 min o hasta el inicio. Con los correos encendidos, la
+  siguiente recibe «¡Se liberó un lugar para vos!» en la misma vuelta. Al encender los correos se avisan también las
+  ofertas que ya estaban vigentes (siguen pudiendo confirmarse). `notificaciones_tick()` responde «apagado» solo si los
+  dos interruptores están apagados. Prueba: `tests/supabase_local/prueba_lista_espera_automatica_reales.py` (33, con
+  carreras entre la alumna que confirma y la tarea, y pg_cron de punta a punta).
+- **Vuelta atrás de las fases A a D**: `supabase/pendientes/vuelta_atras_notificaciones.sql` (todo o nada; se niega si las
+  tareas de pg_cron siguen creadas; borra la cola, los parámetros, las 15 funciones, `profiles.recibir_correos` y los
+  secretos `notificaciones_*` de Vault; probado en local: las otras 28 tablas quedan idénticas, con y sin pg_cron
+  instalado). Gotcha: en un bloque `do` no se puede nombrar `cron.job` si pg_cron no está instalado (PL/pgSQL analiza la
+  condición entera): consultarlo con `execute` después de `to_regclass('cron.job')`.
   - Supabase local en la Mac de Pilar (10/11, sin Homebrew, en `~/.local`): Colima 0.10.3, Lima 2.2.1, Docker CLI 29.9.3 y
     Supabase CLI 2.122.1 (la 3.x cambió de versión mayor: los scripts usan las claves de `supabase status -o json` de la 2).
     `colima start --cpu 2 --memory 4 --vm-type vz` (la Mac tiene 8 GB) y `supabase start -x studio,imgproxy,edge-runtime,
