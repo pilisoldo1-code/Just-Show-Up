@@ -980,6 +980,17 @@ Para cada módulo, en este orden:
   secretos `notificaciones_*` de Vault; probado en local: las otras 28 tablas quedan idénticas, con y sin pg_cron
   instalado). Gotcha: en un bloque `do` no se puede nombrar `cron.job` si pg_cron no está instalado (PL/pgSQL analiza la
   condición entera): consultarlo con `execute` después de `to_regclass('cron.job')`.
+- **Ensayo de integración (16/11, solo lectura en producción)**: producción tiene las mismas 31 migraciones que el repo
+  hasta `perfil_editable`; las 4 de notificaciones solo agregan objetos (no reemplazan funciones existentes). Sobre una
+  copia local del respaldo del 10/11: se aplican sin errores, las 28 tablas existentes quedan idénticas y el contador de
+  facturas no se mueve; el código de `main` (091590f) con las 4 migraciones pasa el recorrido de pantallas (35/35), así
+  que la migración puede ir antes que el merge. Encender los correos con esos datos encola 13 avisos, todos de cuentas
+  ficticias (omitidos): 0 correos reales. Las únicas alumnas con correo real son 4 cuentas del equipo, sin pendientes.
+  En Supabase alojado, pg_cron se instala `with schema pg_catalog` y con permisos sobre el esquema `cron` para `postgres`
+  (así lo hace `notificaciones_cron_activar.sql`).
+- **`scripts/restaurar_datos.py` no restaura los respaldos actuales**: se niega si `datos.json` trae `video_parametros`
+  (tabla de Videos On Demand) y el respaldo del 10/11 no tiene `conteos_produccion.json`. Para el ensayo se usó una copia
+  sin esa fila y con la secuencia leída de producción.
   - Supabase local en la Mac de Pilar (10/11, sin Homebrew, en `~/.local`): Colima 0.10.3, Lima 2.2.1, Docker CLI 29.9.3 y
     Supabase CLI 2.122.1 (la 3.x cambió de versión mayor: los scripts usan las claves de `supabase status -o json` de la 2).
     `colima start --cpu 2 --memory 4 --vm-type vz` (la Mac tiene 8 GB) y `supabase start -x studio,imgproxy,edge-runtime,

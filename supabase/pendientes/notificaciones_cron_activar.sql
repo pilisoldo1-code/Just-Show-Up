@@ -5,7 +5,11 @@
 --   2) cargar en el servidor las variables NOTIFICACIONES_SECRETO y SMTP_* (ver app/correos.py).
 -- Las tareas no mandan nada mientras los interruptores estén apagados (correo_activo y lista_espera_automatica en
 -- notificacion_parametros). Se deshace con notificaciones_cron_desactivar.sql.
-create extension if not exists pg_cron;
+-- como indica Supabase (Integrations > Cron): pg_cron en pg_catalog y permisos sobre su esquema para postgres
+create extension if not exists pg_cron with schema pg_catalog;
+grant usage on schema cron to postgres;
+grant all privileges on all tables in schema cron to postgres;
+-- pg_net crea su propio esquema «net»
 create extension if not exists pg_net;
 
 -- cada minuto: lista de espera automática (si está encendida), generar avisos y avisar al despachador
