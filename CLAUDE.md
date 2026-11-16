@@ -988,9 +988,15 @@ Para cada módulo, en este orden:
   ficticias (omitidos): 0 correos reales. Las únicas alumnas con correo real son 4 cuentas del equipo, sin pendientes.
   En Supabase alojado, pg_cron se instala `with schema pg_catalog` y con permisos sobre el esquema `cron` para `postgres`
   (así lo hace `notificaciones_cron_activar.sql`).
-- **`scripts/restaurar_datos.py` no restaura los respaldos actuales**: se niega si `datos.json` trae `video_parametros`
-  (tabla de Videos On Demand) y el respaldo del 10/11 no tiene `conteos_produccion.json`. Para el ensayo se usó una copia
-  sin esa fila y con la secuencia leída de producción.
+- **Respaldos (corregido el 16/11)**: `scripts/descargar_datos.py "<carpeta nueva>" --secuencia <last_value>,<is_called>`
+  descarga todo en solo lectura (las tablas de Videos y Notificaciones si existen), guarda `conteos_produccion.json` (el
+  contador global de facturas no se lee por la API: leerlo antes con «select last_value, is_called from
+  public.factura_numero_seq») y un `manifiesto.json` con filas y sha256. `scripts/restaurar_datos.py` restaura también
+  `video_parametros` y las tablas de notificaciones (las de una sola fila de configuración, sin OVERRIDING SYSTEM VALUE)
+  y, si falta el contador, se niega explicando cómo obtenerlo. Verificado: respaldo del 16/11 restaurado en local con
+  todas las filas, cuentas, contadores y estructura iguales a producción. Para comparar estructura, las funciones de
+  producción difieren del repo solo en comentarios: comparar sin `--` ni espacios; y ordenar siempre el `string_agg`
+  (con `order by 1` el orden no es fijo).
   - Supabase local en la Mac de Pilar (10/11, sin Homebrew, en `~/.local`): Colima 0.10.3, Lima 2.2.1, Docker CLI 29.9.3 y
     Supabase CLI 2.122.1 (la 3.x cambió de versión mayor: los scripts usan las claves de `supabase status -o json` de la 2).
     `colima start --cpu 2 --memory 4 --vm-type vz` (la Mac tiene 8 GB) y `supabase start -x studio,imgproxy,edge-runtime,

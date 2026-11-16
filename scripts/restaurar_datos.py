@@ -39,7 +39,11 @@ ORDEN = ["membresia", "tipo_clase", "horario", "clase", "bloqueo", "baja_docente
 NO_SE_CARGAN = {"auth_users", "storage_tipos_clase", "_tres_roles_respaldo"}
 # Videos On Demand: solo si el respaldo las trae (los anteriores a la migración no). video_agente queda afuera a propósito:
 # guarda huellas de tokens, que se vuelven a crear. Las filas no recuperan los archivos de Storage.
-VIDEOS = ["video_programacion", "grabacion_independiente", "video", "video_reproduccion"]
+VIDEOS = ["video_parametros", "video_programacion", "grabacion_independiente", "video", "video_reproduccion"]
+# Notificaciones: solo si el respaldo las trae (los anteriores a su migración no).
+NOTIFICACIONES = ["notificacion_parametros", "notificacion_envio"]
+# Tablas de una sola fila de configuración (id fijo = 1, sin identidad): se cargan sin OVERRIDING SYSTEM VALUE.
+CONFIGURACION = {"video_parametros", "notificacion_parametros"}
 CLAVE = {"pago_anulacion": "id_pago"}
 
 
@@ -48,7 +52,7 @@ def es_local(url: str) -> bool:
 
 
 def tablas_de(datos: dict) -> list:
-    return ORDEN + [t for t in VIDEOS if t in datos]
+    return ORDEN + [t for t in VIDEOS + NOTIFICACIONES if t in datos]
 
 
 def restaurar_cuentas(sb, datos: dict) -> int:
@@ -119,7 +123,8 @@ def generar_sql(datos: dict, contador: dict) -> str:
         elif filas:
             cols = list(filas[0])
             asignaciones = ", ".join(f"{c} = excluded.{c}" for c in cols if c not in ("id", CLAVE.get(t, "id")))
-            partes.append(f"insert into public.{t} ({', '.join(cols)}) overriding system value select {', '.join(cols)} "
+            identidad = "" if t in CONFIGURACION else " overriding system value"
+            partes.append(f"insert into public.{t} ({', '.join(cols)}){identidad} select {', '.join(cols)} "
                           f"from jsonb_populate_recordset(null::public.{t}, {_literal(filas)}) "
                           f"on conflict on constraint {t}_pkey do update set {asignaciones};")
     for t in ANTES + ["profiles"] + tablas_de(datos):
@@ -160,7 +165,12 @@ if __name__ == "__main__":
     sin_restaurar = set(datos) - set(ANTES) - {"profiles"} - set(tablas_de(datos)) - NO_SE_CARGAN
     if sin_restaurar:
         raise SystemExit(f"El respaldo trae tablas que este script no restaura: {sorted(sin_restaurar)}. No se hizo nada.")
-    conteos = json.load(open(os.path.join(carpeta, "conteos_produccion.json")))
+    ruta_conteos = os.path.join(carpeta, "conteos_produccion.json")
+    if not os.path.exists(ruta_conteos):
+        raise SystemExit("Falta conteos_produccion.json (el contador de facturas no se puede leer por la API). Leerlo con "
+                         "«select last_value, is_called from public.factura_numero_seq» (solo lectura) y descargar el "
+                         "respaldo con scripts/descargar_datos.py --secuencia <last_value>,<is_called>. No se hizo nada.")
+    conteos = json.load(open(ruta_conteos))
     sb = create_client(url, clave)
     faltan = empresas_faltantes(sb, datos)
     if faltan:
