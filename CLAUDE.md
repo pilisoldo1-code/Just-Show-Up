@@ -920,6 +920,34 @@ Para cada módulo, en este orden:
     modificó nada de Videos On Demand.
   - Pruebas: `tests.test_novedades` (34) y `tests/supabase_local/prueba_novedades_reales.py` (agrega Clara con una
     situación de cada aviso nuevo, videos de las dos empresas y los permisos de los parámetros; 58/58 el 16/11).
+- **Correos automáticos, fase B (rama `notificaciones-correos`, 16/11; NO desplegada, migración
+  `20261114000000_notificaciones_correos.sql` NO aplicada en producción, tareas programadas NO creadas)**:
+  - Cola `notificacion_envio` (única por tipo + referencia + canal: nunca dos veces el mismo aviso). Estados pendiente →
+    enviando → enviado; error → pendiente con espera 2, 4, 8… min (tope 1 h) hasta `correo_max_intentos` → fallido;
+    descartado (ya no corresponde) y omitido (preferencia o correo ficticio). Nadie la lee con sesión.
+  - **Interruptor general** `notificacion_parametros.correo_activo` (arranca apagado; solo la superadministradora:
+    `notificaciones_correo_activar`). Al encenderlo por primera vez queda `correo_desde`: los hechos anteriores no se avisan.
+    Apagado de emergencia: `supabase/pendientes/notificaciones_cron_desactivar.sql`.
+  - **Topes**: 40 por hora y 200 en 24 h (Gmail personal: 500 en 24 h, compartidos con los correos de Supabase Auth).
+  - **Correos ficticios** (`.invalid`, `.test`, `.example`, `.localhost`) nunca se mandan salvo con
+    `correo_permitir_ficticios` (solo en la base local de pruebas).
+  - **Preferencia** `profiles.recibir_correos` (Mi perfil, solo alumnas: «Recibir notificaciones por correo electrónico»;
+    `cambiar_preferencia_correos`, que además omite lo que estaba en cola). Es por persona, no por empresa. No afecta los
+    correos de Supabase Auth ni los avisos dentro de la app.
+  - Despachador `app/correos.py` + `POST /tareas/notificaciones` (Bearer `NOTIFICACIONES_SECRETO`; 503 sin configurar):
+    toma un lote con `notificaciones_reclamar` (for update skip locked, revalida cada aviso, membresía activa de alumna,
+    preferencia y topes), manda con UNA conexión SMTP y anota con `notificaciones_resultado`. Una dirección rechazada no
+    frena el lote; cualquier otro error del servidor de correo (sin conexión, credenciales, límite diario de Gmail) corta
+    el lote: ese cuenta un intento y el resto vuelve sin contar. Corta a los 8 s (Vercel Hobby: 10 s). Sin cifrar
+    (`SMTP_SEGURIDAD=ninguna`) solo contra localhost (Mailpit).
+  - `notificaciones_tick()` (pg_cron cada minuto, solo el dueño la ejecuta; `pg_try_advisory_xact_lock`: nunca dos a la
+    vez) llama al despachador con pg_net usando `notificaciones_url` y `notificaciones_secreto` de Vault
+    (`scripts/notificaciones_secretos.py`). Las tareas se crean con `supabase/pendientes/notificaciones_cron_activar.sql`
+    (también la limpieza diaria de `cron.job_run_details`), nunca desde una migración.
+  - Pruebas locales: en la copia aislada hay que exponer el SMTP de Mailpit (`smtp_port = 54325` en `[local_smtp]`;
+    `~/JSU-pruebas/notificaciones-fase-a/preparar.sh` y `restaurar.sh`). Desde el contenedor de la base, pg_net llega a
+    este equipo como `host.docker.internal`. `tests/supabase_local/prueba_correos_infra_reales.py` (60) y
+    `tests.test_correos` (20). Piezas comunes en `tests/supabase_local/notif_local.py`.
   - Supabase local en la Mac de Pilar (10/11, sin Homebrew, en `~/.local`): Colima 0.10.3, Lima 2.2.1, Docker CLI 29.9.3 y
     Supabase CLI 2.122.1 (la 3.x cambió de versión mayor: los scripts usan las claves de `supabase status -o json` de la 2).
     `colima start --cpu 2 --memory 4 --vm-type vz` (la Mac tiene 8 GB) y `supabase start -x studio,imgproxy,edge-runtime,

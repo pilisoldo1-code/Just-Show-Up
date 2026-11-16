@@ -72,6 +72,21 @@
             </form>
             {% endif %}
         </section>
+        {% if recibe_correos is not none %}
+        <section class="panel" id="avisos-correo">
+            <h2>Avisos por correo</h2>
+            <form action="/perfil/avisos" method="post" class="horario-form form-plano">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="recibir" value="1" {{ 'checked' if recibe_correos else '' }} />
+                    Recibir notificaciones por correo electrónico
+                </label>
+                <p class="nota">Reservas, recordatorios de clase, clases canceladas, lugares de la lista de espera, facturas y
+                    pagos. Los avisos dentro de la plataforma se ven siempre. Los correos para entrar a tu cuenta (invitación,
+                    recuperar la contraseña, cambio de correo) llegan igual.</p>
+                <button type="submit" class="btn btn-tactil" data-cargando="Guardando…">Guardar preferencia</button>
+            </form>
+        </section>
+        {% endif %}
         <section class="panel">
             <h2>Cambiar contraseña</h2>
             <p class="subtitle">La nueva contraseña debe tener al menos 8 caracteres.</p>
