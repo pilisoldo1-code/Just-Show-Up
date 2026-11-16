@@ -948,6 +948,22 @@ Para cada módulo, en este orden:
     `~/JSU-pruebas/notificaciones-fase-a/preparar.sh` y `restaurar.sh`). Desde el contenedor de la base, pg_net llega a
     este equipo como `host.docker.internal`. `tests/supabase_local/prueba_correos_infra_reales.py` (60) y
     `tests.test_correos` (20). Piezas comunes en `tests/supabase_local/notif_local.py`.
+- **Correos automáticos, fase C (misma rama; migración `20261115000000_notificaciones_correos_avisos.sql` NO aplicada en
+  producción)**: `_notificaciones_generar()` (la llama `notificaciones_tick()`, solo con el interruptor encendido) encola
+  los 9 correos de la alumna y `_notificacion_datos()` los revalida justo antes de mandarlos (si ya no corresponden:
+  «descartado»). Los videos solo se avisan dentro de la app.
+  - clase_cancelada (reserva con `id_bloqueo`, clase futura) · recordatorio_clase (empieza dentro de 60 min) ·
+    reserva_confirmada (reserva de las últimas 2 h de una clase que empieza en más de 1 h; si empieza antes va solo el
+    recordatorio) · lugar_disponible (oferta vigente) · factura_nueva (publicada después de encender los correos y fuera
+    del plazo de próxima) · factura_proxima (de `vence_el` − `factura_aviso_dias` a `vence_el`) · factura_vencida (desde el
+    día siguiente a `vence_el`) · factura_vencida_2 (7 días después del primer aviso de vencida) · pago_registrado (pago
+    vigente; un intento de Mercado Pago rechazado o pendiente no crea pago).
+  - Facturas solo desde `correo_hora_envio` (9:00 Montevideo). Hechos anteriores a `correo_desde` (reservas, pagos,
+    cancelaciones, facturas publicadas antes) no se avisan.
+  - Gotcha: el primer aviso de vencida de una factura queda con su clave única: si se anula un pago DESPUÉS de que se
+    descartó un aviso de factura, ese mismo aviso no se repite (el siguiente sí: vencida_2 o el de la factura siguiente).
+  - Prueba: `tests/supabase_local/prueba_correos_avisos_reales.py` (45; Just Show Up + Pilates Centro con
+    `empresa_demo.py`, Mercado Pago de PRUEBA simulado en la base local con `registrar_pago_mercado_pago`).
   - Supabase local en la Mac de Pilar (10/11, sin Homebrew, en `~/.local`): Colima 0.10.3, Lima 2.2.1, Docker CLI 29.9.3 y
     Supabase CLI 2.122.1 (la 3.x cambió de versión mayor: los scripts usan las claves de `supabase status -o json` de la 2).
     `colima start --cpu 2 --memory 4 --vm-type vz` (la Mac tiene 8 GB) y `supabase start -x studio,imgproxy,edge-runtime,

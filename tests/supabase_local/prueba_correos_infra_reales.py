@@ -36,9 +36,31 @@ admin = auth.cliente_admin()
 ref = iter(range(1000, 100000))
 
 
+PROF = cuenta("profe.correos@prueba.invalid", "Pía", "profesora", JSU)
+TIPO = sql("insert into tipo_clase (nombre, duracion, precio_presencial, cupo_max, id_empresa) values "
+           "('Funcional', 60, 800, 7, %s) returning id", (JSU,), True)["id"]
+DIAS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+
+
+def reserva_real(alumna):
+    """Una reserva confirmada real de una clase futura (desde la fase C, cada aviso se revalida contra la base)."""
+    n = next(ref)
+    fecha = __import__("datetime").date.today() + __import__("datetime").timedelta(days=3 + n % 20)
+    hora = f"{6 + n % 14:02d}:{(n // 14) % 60:02d}"
+    h = sql("insert into horario (dia_semana, hora_inicio, id_tipo_clase, activo, id_profesora, id_empresa) values "
+            "(%s, %s, %s, false, %s, %s) returning id", (DIAS[fecha.weekday()], hora, TIPO, PROF, JSU), True)["id"]
+    c = sql("insert into clase (id_horario, fecha, hora_inicio, estado, duracion, precio, cupo_max, id_tipo_clase, "
+            "id_empresa, id_profesora) values (%s, %s, %s, 'programada', 60, 800, 7, %s, %s, %s) returning id",
+            (h, fecha, hora, TIPO, JSU, PROF), True)["id"]
+    return sql("insert into reserva (id_alumna, id_clase, estado, id_empresa) values (%s, %s, 'confirmada', %s) returning id",
+               (alumna, c, JSU), True)["id"]
+
+
 def encolar(alumna, tipo="reserva_confirmada", prioridad=5):
+    # si la tarea de cada minuto ya lo encoló (pg_cron en el punto 12), se usa ese mismo registro
     return sql("insert into notificacion_envio (id_empresa, id_usuario, tipo, referencia, prioridad) values "
-               "(%s, %s, %s, %s, %s) on conflict do nothing returning id", (JSU, alumna, tipo, next(ref), prioridad), True)
+               "(%s, %s, %s, %s, %s) on conflict (tipo, referencia, canal) do update set actualizado_en = now() "
+               "returning id", (JSU, alumna, tipo, reserva_real(alumna), prioridad), True)
 
 
 def estado(id_):
@@ -46,6 +68,8 @@ def estado(id_):
 
 
 def limpiar_cola():
+    # las reservas de la vuelta anterior se cancelan (como si las cancelara la alumna): la tarea no las vuelve a encolar
+    sql("update reserva set estado = 'cancelada', fecha_cancelacion = now() where estado = 'confirmada'")
     sql("delete from notificacion_envio")
 
 
