@@ -877,6 +877,136 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **Novedades (notificaciones, fase 1; rama `notificaciones-novedades`, 10/11; sin migraciones; NO desplegado)**: campana
+  en el menú de los cuatro roles (`.campana`, antes del menú de cuenta; no aparece sin empresa) y pantalla `/novedades`.
+  Las novedades **se calculan en el momento y son SOLO LECTURA** (`app/novedades.py`): no hay tabla, ni «leída», ni
+  correos; cada una desaparece sola cuando se resuelve. Alumna: ofertas vigentes de la lista de espera (urgente),
+  facturas publicadas vencidas (urgente) o pendientes, y clases futuras canceladas por la profesora (agrupadas).
+  Profesora: clases terminadas sin asistencia (`asistencias_pendientes_resumen`, ya limitada a sus clases).
+  Administradora: eso más borradores de facturación por mes y facturas vencidas sin pagar (con nombres). Superadministradora:
+  administradoras activas con la invitación sin usar (`auth.invitacion_pendiente`, una llamada al admin API por
+  administradora). El número lo pide el menú con `fetch("/novedades/contador")` **después** de cargar la página: si falla,
+  la campana queda sin número y la página no se entera.
+  - **Nunca llamar desde Novedades a funciones que escriben**: `actualizar_listas_espera`, `sincronizar_borradores`,
+    `generar_clases` ni la conciliación de Mercado Pago (las siguen haciendo las pantallas de cada sección). Por eso una
+    oferta recién liberada aparece cuando alguien abrió una pantalla que procesa la lista de espera, y una oferta ya vencida
+    se descarta por `oferta_vence_en`.
+  - **`mi_lista_espera` NO filtra por empresa** (`security definer` por `auth.uid()`): la alumna compartida vería listas de
+    otra empresa. Novedades lee `listadeespera` y `clase` con la sesión (RLS por `empresa_activa()`) y además filtra
+    `id_empresa` explícitamente en todas las consultas.
+  - Cada bloque va en su propio `try`: si uno falla, se muestran los demás con un aviso.
+  - Pruebas: `tests.test_novedades` (21: roles, aislamiento entre empresas, solo lectura, rutas, menú y el script) y
+    `tests/supabase_local/prueba_novedades_reales.py` (39, Supabase local recién reiniciado: arma Just Show Up y Pilates
+    Centro con `empresa_demo.py`, genera cada novedad, comprueba los 4 roles, el aislamiento en los dos sentidos, el
+    contador y que 60 pedidos a Novedades dejan las 27 tablas idénticas; 39/39 el 10/11 en la Mac de Pilar).
+  - El lugar ofrecido lleva a **Mis inscripciones** (no al día): el día solo muestra clases de horarios activos, y Mis
+    inscripciones muestra todas las ofertas con «Confirmar lugar» / «No me interesa».
+  - Las invitaciones solo salen desde un host de `auth.SITIOS_PERMITIDOS`: en pruebas con `TestClient`, usar
+    `base_url="http://localhost:8000"` (con `testserver` el alta de administradora falla con «solo desde el sitio»).
+  - **Fase A (rama `notificaciones-fase-a`, 16/11; NO desplegada, migración NO aplicada en producción)**: las 10
+    notificaciones de la alumna dentro de la app, igual de calculadas y de solo lectura: lugar liberado (urgente),
+    **recordatorio** de una clase que empieza dentro de la próxima hora (urgente, `RECORDATORIO_MINUTOS` = 60 fijo),
+    factura **vencida** (urgente, desde el día siguiente a `vence_el`), **próxima a vencer** (urgente, de `vence_el` − N
+    días a `vence_el` inclusive), **nueva** (el resto de las publicadas y pendientes), **reserva confirmada** (reservas de
+    las últimas N horas para clases que no empezaron; nunca la misma clase que un recordatorio), **pago registrado**
+    (pagos vigentes de los últimos N días, también de Mercado Pago de prueba), **clase cancelada**, **video nuevo** y
+    **video por vencer** (últimas N horas; los dos solo si la alumna no lo empezó a ver). Una factura sale una sola vez
+    (vencidas, después próximas, después nuevas); pagada o anulada, desaparece.
+  - Plazos configurables sin desplegar: tabla `notificacion_parametros` (una fila; nadie la lee directo), lectura con
+    `novedades_parametros()` y cambio solo por la superadministradora con `notificaciones_configurar(clave, valor)`
+    (rangos validados en la base y otra vez en `novedades.parametros`). Si la función no existe o un valor es inválido,
+    se usan los de `novedades.PARAMETROS` (factura 3 días, video 3 h, reserva 24 h, pago 3 días). Los videos que la
+    persona ya empezó salen de `novedades_videos_iniciados()` (`video_reproduccion` no se puede leer directo); no se
+    modificó nada de Videos On Demand.
+  - Pruebas: `tests.test_novedades` (34) y `tests/supabase_local/prueba_novedades_reales.py` (agrega Clara con una
+    situación de cada aviso nuevo, videos de las dos empresas y los permisos de los parámetros; 58/58 el 16/11).
+- **Correos automáticos, fase B (rama `notificaciones-correos`, 16/11; NO desplegada, migración
+  `20261114000000_notificaciones_correos.sql` NO aplicada en producción, tareas programadas NO creadas)**:
+  - Cola `notificacion_envio` (única por tipo + referencia + canal: nunca dos veces el mismo aviso). Estados pendiente →
+    enviando → enviado; error → pendiente con espera 2, 4, 8… min (tope 1 h) hasta `correo_max_intentos` → fallido;
+    descartado (ya no corresponde) y omitido (preferencia o correo ficticio). Nadie la lee con sesión.
+  - **Interruptor general** `notificacion_parametros.correo_activo` (arranca apagado; solo la superadministradora:
+    `notificaciones_correo_activar`). Al encenderlo por primera vez queda `correo_desde`: los hechos anteriores no se avisan.
+    Apagado de emergencia: `supabase/pendientes/notificaciones_cron_desactivar.sql`.
+  - **Topes**: 40 por hora y 200 en 24 h (Gmail personal: 500 en 24 h, compartidos con los correos de Supabase Auth).
+  - **Correos ficticios** (`.invalid`, `.test`, `.example`, `.localhost`) nunca se mandan salvo con
+    `correo_permitir_ficticios` (solo en la base local de pruebas).
+  - **Preferencia** `profiles.recibir_correos` (Mi perfil, solo alumnas: «Recibir notificaciones por correo electrónico»;
+    `cambiar_preferencia_correos`, que además omite lo que estaba en cola). Es por persona, no por empresa. No afecta los
+    correos de Supabase Auth ni los avisos dentro de la app.
+  - Despachador `app/correos.py` + `POST /tareas/notificaciones` (Bearer `NOTIFICACIONES_SECRETO`; 503 sin configurar):
+    toma un lote con `notificaciones_reclamar` (for update skip locked, revalida cada aviso, membresía activa de alumna,
+    preferencia y topes), manda con UNA conexión SMTP y anota con `notificaciones_resultado`. Una dirección rechazada no
+    frena el lote; cualquier otro error del servidor de correo (sin conexión, credenciales, límite diario de Gmail) corta
+    el lote: ese cuenta un intento y el resto vuelve sin contar. Corta a los 8 s (Vercel Hobby: 10 s). Sin cifrar
+    (`SMTP_SEGURIDAD=ninguna`) solo contra localhost (Mailpit).
+  - `notificaciones_tick()` (pg_cron cada minuto, solo el dueño la ejecuta; `pg_try_advisory_xact_lock`: nunca dos a la
+    vez) llama al despachador con pg_net usando `notificaciones_url` y `notificaciones_secreto` de Vault
+    (`scripts/notificaciones_secretos.py`). Las tareas se crean con `supabase/pendientes/notificaciones_cron_activar.sql`
+    (también la limpieza diaria de `cron.job_run_details`), nunca desde una migración.
+  - Pruebas locales: en la copia aislada hay que exponer el SMTP de Mailpit (`smtp_port = 54325` en `[local_smtp]`;
+    `~/JSU-pruebas/notificaciones-fase-a/preparar.sh` y `restaurar.sh`). Desde el contenedor de la base, pg_net llega a
+    este equipo como `host.docker.internal`. `tests/supabase_local/prueba_correos_infra_reales.py` (60) y
+    `tests.test_correos` (20). Piezas comunes en `tests/supabase_local/notif_local.py`.
+- **Correos automáticos, fase C (misma rama; migración `20261115000000_notificaciones_correos_avisos.sql` NO aplicada en
+  producción)**: `_notificaciones_generar()` (la llama `notificaciones_tick()`, solo con el interruptor encendido) encola
+  los 9 correos de la alumna y `_notificacion_datos()` los revalida justo antes de mandarlos (si ya no corresponden:
+  «descartado»). Los videos solo se avisan dentro de la app.
+  - clase_cancelada (reserva con `id_bloqueo`, clase futura) · recordatorio_clase (empieza dentro de 60 min) ·
+    reserva_confirmada (reserva de las últimas 2 h de una clase que empieza en más de 1 h; si empieza antes va solo el
+    recordatorio) · lugar_disponible (oferta vigente) · factura_nueva (publicada después de encender los correos y fuera
+    del plazo de próxima) · factura_proxima (de `vence_el` − `factura_aviso_dias` a `vence_el`) · factura_vencida (desde el
+    día siguiente a `vence_el`) · factura_vencida_2 (7 días después del primer aviso de vencida) · pago_registrado (pago
+    vigente; un intento de Mercado Pago rechazado o pendiente no crea pago).
+  - Facturas solo desde `correo_hora_envio` (9:00 Montevideo). Hechos anteriores a `correo_desde` (reservas, pagos,
+    cancelaciones, facturas publicadas antes) no se avisan.
+  - Gotcha: el primer aviso de vencida de una factura queda con su clave única: si se anula un pago DESPUÉS de que se
+    descartó un aviso de factura, ese mismo aviso no se repite (el siguiente sí: vencida_2 o el de la factura siguiente).
+  - Prueba: `tests/supabase_local/prueba_correos_avisos_reales.py` (45; Just Show Up + Pilates Centro con
+    `empresa_demo.py`, Mercado Pago de PRUEBA simulado en la base local con `registrar_pago_mercado_pago`).
+- **Lista de espera automática, fase D (misma rama; migración `20261116000000_lista_espera_automatica.sql` NO aplicada en
+  producción; NO autorizada para activarse en producción)**: con su interruptor propio
+  `notificacion_parametros.lista_espera_automatica` (apagado; `notificaciones_lista_espera_activar`, solo la
+  superadministradora), la tarea de cada minuto llama a `_procesar_ofertas_vencidas()`, que usa la MISMA
+  `_procesar_lista_espera(clase)` de siempre para las clases programadas futuras con una oferta vencida o con lugares
+  libres y alumnas esperando (hasta 200 por vuelta). No cambió ninguna regla de reservas: mismo orden, mismo bloqueo de
+  la fila de la clase (sin sobrecupo ni duplicados), oferta de 30 min o hasta el inicio. Con los correos encendidos, la
+  siguiente recibe «¡Se liberó un lugar para vos!» en la misma vuelta. Al encender los correos se avisan también las
+  ofertas que ya estaban vigentes (siguen pudiendo confirmarse). `notificaciones_tick()` responde «apagado» solo si los
+  dos interruptores están apagados. Prueba: `tests/supabase_local/prueba_lista_espera_automatica_reales.py` (33, con
+  carreras entre la alumna que confirma y la tarea, y pg_cron de punta a punta).
+- **Vuelta atrás de las fases A a D**: `supabase/pendientes/vuelta_atras_notificaciones.sql` (todo o nada; se niega si las
+  tareas de pg_cron siguen creadas; borra la cola, los parámetros, las 15 funciones, `profiles.recibir_correos` y los
+  secretos `notificaciones_*` de Vault; probado en local: las otras 28 tablas quedan idénticas, con y sin pg_cron
+  instalado). Gotcha: en un bloque `do` no se puede nombrar `cron.job` si pg_cron no está instalado (PL/pgSQL analiza la
+  condición entera): consultarlo con `execute` después de `to_regclass('cron.job')`.
+- **Ensayo de integración (16/11, solo lectura en producción)**: producción tiene las mismas 31 migraciones que el repo
+  hasta `perfil_editable`; las 4 de notificaciones solo agregan objetos (no reemplazan funciones existentes). Sobre una
+  copia local del respaldo del 10/11: se aplican sin errores, las 28 tablas existentes quedan idénticas y el contador de
+  facturas no se mueve; el código de `main` (091590f) con las 4 migraciones pasa el recorrido de pantallas (35/35), así
+  que la migración puede ir antes que el merge. Encender los correos con esos datos encola 13 avisos, todos de cuentas
+  ficticias (omitidos): 0 correos reales. Las únicas alumnas con correo real son 4 cuentas del equipo, sin pendientes.
+  En Supabase alojado, pg_cron se instala `with schema pg_catalog` y con permisos sobre el esquema `cron` para `postgres`
+  (así lo hace `notificaciones_cron_activar.sql`).
+- **Respaldos (corregido el 16/11)**: `scripts/descargar_datos.py "<carpeta nueva>" --secuencia <last_value>,<is_called>`
+  descarga todo en solo lectura (las tablas de Videos y Notificaciones si existen), guarda `conteos_produccion.json` (el
+  contador global de facturas no se lee por la API: leerlo antes con «select last_value, is_called from
+  public.factura_numero_seq») y un `manifiesto.json` con filas y sha256. `scripts/restaurar_datos.py` restaura también
+  `video_parametros` y las tablas de notificaciones (las de una sola fila de configuración, sin OVERRIDING SYSTEM VALUE)
+  y, si falta el contador, se niega explicando cómo obtenerlo. Verificado: respaldo del 16/11 restaurado en local con
+  todas las filas, cuentas, contadores y estructura iguales a producción. Para comparar estructura, las funciones de
+  producción difieren del repo solo en comentarios: comparar sin `--` ni espacios; y ordenar siempre el `string_agg`
+  (con `order by 1` el orden no es fijo).
+  - Supabase local en la Mac de Pilar (10/11, sin Homebrew, en `~/.local`): Colima 0.10.3, Lima 2.2.1, Docker CLI 29.9.3 y
+    Supabase CLI 2.122.1 (la 3.x cambió de versión mayor: los scripts usan las claves de `supabase status -o json` de la 2).
+    `colima start --cpu 2 --memory 4 --vm-type vz` (la Mac tiene 8 GB) y `supabase start -x studio,imgproxy,edge-runtime,
+    logflare,vector,realtime,supavisor,postgres-meta` en `~/.local/share/jsu-supabase-local`.
+  - **Prueba con datos reales sin escribir en la base**: servidor local con el `.env` y
+    `scripts/prueba_novedades_real.py` (solo localhost; inicia sesión SIN seguir la redirección, porque la alumna va a
+    `/`, que genera clases y procesa listas de espera; pide solo `/novedades`, el contador y `/logout`). Las otras tres
+    cuentas pueden usar el navegador: sus pantallas de inicio solo leen. Iniciar sesión cambia `profiles.empresa_activa`
+    y la sesión, como siempre (`verificar_despliegue.py` ya las ignora).
+
 - **Mi perfil editable (PR #53, `main` = `dfb4a04`, desplegado en theta el 10/11; migración `20261112000000_perfil_editable.sql`
   APLICADA el 10/11 como `20261110230345 perfil_editable`, con respaldo previo `2026-11-10 antes de perfil editable`)**:
   cada persona edita su nombre, apellido, teléfono, fecha de nacimiento y carné con `editar_mis_datos` (solo su propia

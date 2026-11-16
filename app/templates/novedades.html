@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Novedades</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    {% include "_menu.html" %}
+    <main>
+        <h1>Novedades</h1>
+        <p class="subtitle">Lo que hoy necesita tu atención{% if usuario.empresa_nombre %} en {{ usuario.empresa_nombre }}{% endif %}.
+            Cada aviso desaparece solo cuando se resuelve.</p>
+
+        {% if aviso %}
+        <div class="aviso {{ 'aviso-ok' if aviso_ok else 'aviso-error' }}">{{ aviso }}</div>
+        {% endif %}
+
+        {% if novedades %}
+        <ul class="novedades-lista">
+            {% for n in novedades %}
+            <li class="novedad novedad-{{ n.nivel }}">
+                <div class="novedad-cabeza">
+                    <span class="badge {{ n.badge }}">{{ n.etiqueta }}</span>
+                    <h2 class="novedad-titulo">{{ n.titulo }}</h2>
+                </div>
+                {% if n.detalle %}<p class="novedad-detalle">{{ n.detalle }}</p>{% endif %}
+                {% if n.lineas %}
+                <ul class="novedad-lineas">
+                    {% for l in n.lineas %}<li>{{ l }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+                <a class="btn btn-chico novedad-accion" href="{{ n.enlace }}">{{ n.accion }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% elif not aviso %}
+        <p class="vacio">No tenés novedades pendientes.</p>
+        {% endif %}
+
+        <p class="nota novedades-nota">Por ahora los avisos se ven solo dentro de la plataforma: no se envían correos.</p>
+    </main>
+</body>
+</html>

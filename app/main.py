@@ -13,7 +13,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from app import auth, clases, entorno, estadisticas, factura_pdf, facturas, mercadopago, personas, validaciones, videos
+from app import (auth, clases, correos, entorno, estadisticas, factura_pdf, facturas, mercadopago, novedades, personas,
+                 validaciones, videos)
 from app.auth import (ErrorAuth, Redirigir, Usuario, requiere_admin, requiere_alumna, requiere_espectadora, requiere_login,
                       requiere_profesora, requiere_superadmin)
 from app.clases import DIAS_ORDEN
@@ -339,13 +340,42 @@ def _datos_perfil(usuario: Usuario) -> dict:
     return datos
 
 
+def _recibe_correos(usuario: Usuario) -> bool | None:
+    """Preferencia de avisos por correo (solo alumnas: son las que los reciben). None = no se muestra."""
+    if not usuario.es_alumna or usuario.es_superadmin:
+        return None
+    try:
+        filas = auth.cliente_con_token(usuario.token).table("profiles").select("recibir_correos") \
+            .eq("id", usuario.id).execute().data
+    except Exception:
+        logging.warning("No se pudo leer la preferencia de correos")
+        return None
+    return bool(filas[0]["recibir_correos"]) if filas else None
+
+
 def _perfil(request: Request, usuario: Usuario, aviso: str = "", aviso_ok: bool = False, errores=None,
             form=None, form_correo=None, status_code: int = 200):
     # La superadministradora no tiene datos de alumna ni de docente: solo nombre, apellido, teléfono y correo.
     return _render(request, "perfil.html", usuario, status_code=status_code, datos=_datos_perfil(usuario), aviso=aviso,
                    aviso_ok=aviso_ok, errores=errores or [], form=form, form_correo=form_correo or {},
                    con_fechas=not usuario.es_superadmin, correo_ficticio=auth.es_mail_ficticio(usuario.mail or ""),
-                   **_fechas_formulario())
+                   recibe_correos=_recibe_correos(usuario), **_fechas_formulario())
+
+
+@app.post("/perfil/avisos")
+def perfil_avisos(recibir: str = Form(""), usuario: Usuario = Depends(requiere_login)):
+    try:
+        r = _sb(usuario).rpc("cambiar_preferencia_correos", {"p_recibir": recibir == "1"}).execute().data
+    except Exception:
+        logging.exception("No se pudo guardar la preferencia de correos")
+        r = None
+    if r != "ok":
+        aviso, ok = "No se pudo guardar tu preferencia. Probá de nuevo.", 0
+    elif recibir == "1":
+        aviso, ok = "Vas a recibir los avisos también por correo.", 1
+    else:
+        aviso, ok = "Listo: no vas a recibir avisos por correo. Los vas a seguir viendo en la plataforma.", 1
+    return RedirectResponse(url="/perfil?" + urlencode({"ok": ok, "aviso": aviso}) + "#avisos-correo", status_code=303)
 
 
 @app.get("/perfil")
@@ -2601,3 +2631,41 @@ def video_limpieza(request: Request):
     if not videos.secreto_valido(request.headers.get("authorization", ""), secreto):
         return Response(status_code=401)
     return videos.limpiar()
+
+
+# ---------- novedades (notificaciones, fase 1: solo lectura) ----------
+
+def _novedades(usuario: Usuario) -> dict:
+    return novedades.de_usuario(_sb(usuario), usuario, _invitacion_pendiente)
+
+
+@app.get("/novedades")
+def novedades_pantalla(request: Request, usuario: Usuario = Depends(requiere_login)):
+    if usuario.sin_empresa:
+        return RedirectResponse(url=_destino(usuario), status_code=303)
+    datos = _novedades(usuario)
+    aviso = "" if datos["completas"] else "No pudimos revisar todas tus novedades. Probá de nuevo en un rato."
+    return _render(request, "novedades.html", usuario, novedades=datos["novedades"], aviso=aviso, aviso_ok=False)
+
+
+@app.get("/novedades/contador")
+def novedades_contador(usuario: Usuario = Depends(requiere_login)):
+    """Lo pide el menú después de cargar la página: si falla, la campana queda sin número y la página no se entera."""
+    if usuario.sin_empresa:
+        return {"total": 0, "urgentes": 0}
+    return novedades.contador(_novedades(usuario)["novedades"])
+
+
+# ---------- correos automáticos (notificaciones, fases B a D) ----------
+
+@app.post("/tareas/notificaciones")
+def tareas_notificaciones(request: Request):
+    """La llama la base (pg_cron + pg_net) cuando hay avisos en cola. Sin configuración no hace nada."""
+    try:
+        config = correos.configuracion()
+    except correos.SinConfigurar as e:
+        logging.warning("Correos sin configurar: %s", e)
+        return Response(status_code=503)
+    if not correos.secreto_valido(request.headers.get("authorization", ""), config.secreto):
+        return Response(status_code=401)
+    return correos.despachar(auth.cliente_admin(), config)
