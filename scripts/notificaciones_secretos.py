@@ -15,14 +15,24 @@ import sys
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 
+from dotenv import load_dotenv  # noqa: E402
+
 from app import auth, entorno  # noqa: E402
+
+PRODUCCION = "nspgafucytcjqkqnmkry"
 
 
 def main() -> int:
+    # sin variables ya definidas, toma el .env de la carpeta principal del proyecto (no pisa lo que esté definido)
+    load_dotenv(os.environ.get("RESPALDO_ENV", "/Users/julietaalvez/Desktop/OBLIGATORIO IET/.env"), override=False)
     url_base = os.environ.get("SUPABASE_URL", "")
     if not entorno.es_local(url_base) and "--produccion" not in sys.argv:
         print("Esto no es un Supabase local: para producción hace falta --produccion (y autorización).")
         return 1
+    if "--produccion" in sys.argv and PRODUCCION not in url_base:
+        print("--produccion pero el .env no apunta al proyecto de producción. No se hizo nada.")
+        return 1
+    print(f"Destino: {'Supabase local' if entorno.es_local(url_base) else 'PRODUCCIÓN (' + PRODUCCION + ')'}")
     url = input("Dirección del despachador (https://<sitio>/tareas/notificaciones): ").strip()
     secreto = getpass.getpass("Secreto (32 caracteres o más; no se muestra): ").strip()
     admin = auth.cliente_admin()
