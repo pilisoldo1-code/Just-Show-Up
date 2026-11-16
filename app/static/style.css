@@ -4866,3 +4866,27 @@ a.video-card-biblioteca:hover .video-play {
         margin-right: 4px;
     }
 }
+
+/* ---------- eliminar alumna ---------- */
+.eliminar-alumna {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #2a2e37;
+}
+
+.eliminaciones-pendientes ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+}
+
+.eliminaciones-pendientes li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.eliminaciones-pendientes form.en-linea {
+    display: inline;
+}

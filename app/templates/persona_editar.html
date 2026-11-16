@@ -109,6 +109,13 @@
                 <button type="submit" class="btn">Reactivar</button>
             </form>
             {% endif %}
+            {% if persona.rol == 'alumna' %}
+            <div class="eliminar-alumna">
+                <p class="nota">«Dejar inactiva» se puede deshacer y conserva su cuenta. «Eliminar alumna» la quita de la lista:
+                    si vuelve, la creás de nuevo con el mismo correo y recibe la invitación como una alumna nueva.</p>
+                <a class="btn btn-peligro" href="/profesora/alumnas/{{ persona.id }}/eliminar">Eliminar alumna</a>
+            </div>
+            {% endif %}
         </section>
 
         <section class="bloque-persona">

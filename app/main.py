@@ -1261,12 +1261,13 @@ def _personas_empresa(usuario: Usuario, seccion: str = "alumnas") -> list[dict]:
         if usuario.es_admin:
             personas.completar(sb, filas)
         return [{**f, "roles": ["Alumna"], "es_alumna": True, "activa": True} for f in filas] if seccion == "alumnas" else []
-    consulta = (sb.table("membresia").select("id_usuario, es_admin, es_profesora, es_alumna, activa")
+    consulta = (sb.table("membresia").select("id_usuario, es_admin, es_profesora, es_alumna, activa, eliminada_en")
                 .eq("id_empresa", usuario.empresa_id))
     if not usuario.es_admin:
         consulta = consulta.eq("activa", True)
     en_seccion = (lambda m: m["es_alumna"]) if seccion == "alumnas" else (lambda m: m["es_profesora"] or m["es_admin"])
-    membresias = {m["id_usuario"]: m for m in consulta.execute().data if en_seccion(m)}
+    # las alumnas eliminadas no aparecen (ni activas ni inactivas): su historial queda archivado
+    membresias = {m["id_usuario"]: m for m in consulta.execute().data if en_seccion(m) and not m.get("eliminada_en")}
     if not membresias:
         return []
     # la lista muestra solo nombre, rol y estado (y contacto, a una profesora): los datos personales van en la ficha
@@ -1281,6 +1282,7 @@ def _personas_empresa(usuario: Usuario, seccion: str = "alumnas") -> list[dict]:
 
 
 def _lista_personas(request: Request, usuario: Usuario, seccion: str, ok: int, aviso: str):
+    pendientes = _eliminaciones_pendientes(usuario) if seccion == "alumnas" else []
     try:
         filas = _personas_empresa(usuario, seccion)
     except Exception:
@@ -1289,7 +1291,8 @@ def _lista_personas(request: Request, usuario: Usuario, seccion: str, ok: int, a
     for a in filas:
         a["cedula_txt"] = validaciones.formatear_cedula(a.get("cedula"))
     return _render(request, "profesora_alumnas.html", usuario, alumnas=filas, seccion=seccion,
-                   textos=SECCIONES_PERSONAS[seccion], aviso=aviso, aviso_ok=bool(ok))
+                   textos=SECCIONES_PERSONAS[seccion], aviso=aviso, aviso_ok=bool(ok),
+                   eliminaciones_pendientes=pendientes)
 
 
 @app.get("/profesora/alumnas")
@@ -1367,9 +1370,12 @@ def alumna_crear(
         else:
             try:
                 # si ya es de esta empresa: un solo rol, así que el alta no lo cambia (se cambia desde «Editar»)
-                actual = (_sb(usuario).table("membresia").select("es_admin, es_profesora, es_alumna")
+                actual = (_sb(usuario).table("membresia").select("es_admin, es_profesora, es_alumna, eliminada_en")
                           .eq("id_usuario", existente["id"]).eq("id_empresa", usuario.empresa_id).execute().data)
-                if actual and _roles_txt(actual[0]) != [ROLES_PERSONA[rol]]:
+                if actual and actual[0].get("eliminada_en"):
+                    r = "eliminada"
+                    errores = [MSG_ELIMINADA_SIN_LIBERAR]
+                elif actual and _roles_txt(actual[0]) != [ROLES_PERSONA[rol]]:
                     r = "otro_rol"
                     errores = [f"{existente['nombre']} {existente['apellido']} ya es {_roles_txt(actual[0])[0].lower()} de "
                                f"{usuario.empresa_nombre or 'tu empresa'}. Cada persona tiene un solo rol: "
@@ -2149,9 +2155,9 @@ def _persona_de_empresa(usuario: Usuario, persona_id: str) -> dict | None:
     except ValueError:
         return None
     sb = _sb(usuario)
-    m = (sb.table("membresia").select("id_usuario, es_admin, es_profesora, es_alumna, activa")
+    m = (sb.table("membresia").select("id_usuario, es_admin, es_profesora, es_alumna, activa, eliminada_en")
          .eq("id_empresa", usuario.empresa_id).eq("id_usuario", persona_id).execute().data)
-    if not m:
+    if not m or m[0].get("eliminada_en"):  # una alumna eliminada no tiene ficha
         return None
     p = sb.table("profiles").select("id, nombre, apellido, mail, telefono").eq("id", persona_id).execute().data
     if not p:
@@ -2669,3 +2675,123 @@ def tareas_notificaciones(request: Request):
     if not correos.secreto_valido(request.headers.get("authorization", ""), config.secreto):
         return Response(status_code=401)
     return correos.despachar(auth.cliente_admin(), config)
+
+
+# ---------- eliminar alumna (distinto de desactivar: si vuelve, es una alumna nueva) ----------
+
+MSG_ELIMINAR = {
+    "no_autorizada": "No tenés permiso para hacer eso.",
+    "no_puede_eliminarse": "No podés eliminar tu propia cuenta.",
+    "no_existe": "No encontramos a esa alumna en tu empresa.",
+    "no_es_alumna": "Solo se pueden eliminar alumnas.",
+    "otra_empresa": ("No se puede eliminar porque también es alumna de otro lugar: eliminarla le quitaría el acceso allá. "
+                     "Podés dejarla inactiva en tu empresa con «Dejar inactiva»."),
+    "cambio": "Algo cambió desde que abriste esta pantalla (una reserva, la lista de espera o una factura). Revisá de nuevo.",
+    "motivo_vacio": "Escribí el motivo de la eliminación.",
+}
+MSG_ELIMINADA_SIN_LIBERAR = ("Esa alumna fue eliminada, pero su correo todavía no quedó libre. En Alumnas, tocá «Reintentar» "
+                             "en «Eliminaciones sin terminar» y después volvé a crearla.")
+MSG_CORREO_SIN_LIBERAR = ("{nombre} ya no está en tu empresa (sus reservas futuras se cancelaron), pero no pudimos liberar su "
+                          "correo. La eliminación NO está terminada: tocá «Reintentar» en «Eliminaciones sin terminar».")
+
+
+def _eliminaciones_pendientes(usuario: Usuario) -> list[dict]:
+    if not usuario.es_admin:
+        return []
+    try:
+        filas = (_sb(usuario).table("alumna_eliminada").select("id, nombre, apellido, eliminada_en, correo_liberado_en")
+                 .eq("id_empresa", usuario.empresa_id).execute().data or [])
+        return [f for f in filas if not f.get("correo_liberado_en")]
+    except Exception:
+        logging.exception("No se pudieron leer las eliminaciones pendientes")
+        return []
+
+
+def _liberar_correo(id_usuario: str, registro: int) -> bool:
+    """Archiva la cuenta en Supabase Auth y lo anota. True solo si el correo original quedó libre."""
+    try:
+        auth.archivar_cuenta(id_usuario)
+        return auth.cliente_admin().rpc("alumna_eliminada_correo_liberado", {"p_id": registro}).execute().data == "ok"
+    except Exception:
+        logging.exception("No se pudo archivar la cuenta eliminada")
+        return False
+
+
+def _vista_eliminar(previa: dict) -> dict:
+    fecha = lambda x: f"{clases.nombre_dia(date.fromisoformat(x['fecha']))} {x['fecha'][8:10]}/{x['fecha'][5:7]}"
+    for clave in ("reservas", "espera"):
+        for x in previa.get(clave) or []:
+            x["dia_txt"] = fecha(x)
+    for f in previa.get("facturas_pendientes") or []:
+        f["mes_txt"], f["total_txt"] = facturas.mes_txt(f["mes"], f["anio"]), facturas.pesos(f["total"])
+    return previa
+
+
+def _pantalla_eliminar(request: Request, usuario: Usuario, persona: dict, previa: dict, aviso: str = "",
+                       motivo: str = "", status_code: int = 200):
+    return _render(request, "eliminar_alumna.html", usuario, status_code=status_code, persona=persona,
+                   previa=_vista_eliminar(previa), aviso=aviso, motivo=motivo)
+
+
+@app.get("/profesora/alumnas/{persona_id}/eliminar")
+def eliminar_alumna_ver(request: Request, persona_id: str, usuario: Usuario = Depends(requiere_admin)):
+    persona = _persona_de_empresa(usuario, persona_id)
+    if persona is None or persona["rol"] != "alumna":
+        return _volver_seccion("alumnas", False, MSG_ELIMINAR["no_existe"])
+    volver = f"/profesora/alumnas/{persona_id}"
+    try:
+        previa = _sb(usuario).rpc("previsualizar_eliminar_alumna", {"p_id_usuario": persona_id}).execute().data
+    except Exception:
+        logging.exception("No se pudo preparar la eliminación")
+        previa = {"resultado": None}
+    if previa.get("resultado") != "ok":
+        return RedirectResponse(url=volver + "?" + urlencode(
+            {"ok": 0, "aviso": MSG_ELIMINAR.get(previa.get("resultado"), auth.MSG_GENERICO)}), status_code=303)
+    return _pantalla_eliminar(request, usuario, persona, previa)
+
+
+@app.post("/profesora/alumnas/{persona_id}/eliminar")
+def eliminar_alumna_confirmar(request: Request, persona_id: str, motivo: str = Form(""), firma: str = Form(""),
+                              usuario: Usuario = Depends(requiere_admin)):
+    persona = _persona_de_empresa(usuario, persona_id)
+    if persona is None or persona["rol"] != "alumna":
+        return _volver_seccion("alumnas", False, MSG_ELIMINAR["no_existe"])
+    volver = f"/profesora/alumnas/{persona_id}"
+    sb = _sb(usuario)
+    try:
+        r = sb.rpc("eliminar_alumna", {"p_id_usuario": persona_id, "p_motivo": motivo, "p_firma": firma}).execute().data
+    except Exception:
+        logging.exception("No se pudo eliminar a la alumna")
+        r = {"resultado": None}
+    if r.get("resultado") in ("cambio", "motivo_vacio"):
+        previa = sb.rpc("previsualizar_eliminar_alumna", {"p_id_usuario": persona_id}).execute().data
+        if previa.get("resultado") == "ok":
+            return _pantalla_eliminar(request, usuario, persona, previa, MSG_ELIMINAR[r["resultado"]], motivo,
+                                      409 if r["resultado"] == "cambio" else 400)
+    if r.get("resultado") != "ok":
+        return RedirectResponse(url=volver + "?" + urlencode(
+            {"ok": 0, "aviso": MSG_ELIMINAR.get(r.get("resultado"), auth.MSG_GENERICO)}), status_code=303)
+    nombre = f"{persona['nombre']} {persona['apellido']}".strip()
+    if not _liberar_correo(persona_id, r["registro"]):
+        return _volver_seccion("alumnas", False, MSG_CORREO_SIN_LIBERAR.format(nombre=nombre))
+    detalle = []
+    if r.get("reservas"):
+        detalle.append(f"{r['reservas']} {'reserva futura cancelada' if r['reservas'] == 1 else 'reservas futuras canceladas'}")
+    if r.get("espera"):
+        detalle.append(f"{r['espera']} {'lugar en lista de espera retirado' if r['espera'] == 1 else 'lugares en lista de espera retirados'}")
+    return _volver_seccion("alumnas", True, f"{nombre} fue eliminada" + (f" ({', '.join(detalle)})" if detalle else "")
+                           + f". Su historial quedó archivado. Si vuelve, creala con {persona['mail']}: va a recibir la "
+                           "invitación como alumna nueva.")
+
+
+@app.post("/profesora/alumnas/eliminadas/{registro}/reintentar")
+def eliminar_alumna_reintentar(registro: int, usuario: Usuario = Depends(requiere_admin)):
+    filas = (_sb(usuario).table("alumna_eliminada").select("id, id_usuario, nombre, apellido, correo_liberado_en")
+             .eq("id", registro).eq("id_empresa", usuario.empresa_id).execute().data)
+    if not filas:
+        return _volver_seccion("alumnas", False, "No encontramos esa eliminación.")
+    f = filas[0]
+    nombre = f"{f['nombre']} {f['apellido']}".strip()
+    if f.get("correo_liberado_en") or _liberar_correo(f["id_usuario"], f["id"]):
+        return _volver_seccion("alumnas", True, f"Listo: la eliminación de {nombre} está terminada y su correo quedó libre.")
+    return _volver_seccion("alumnas", False, MSG_CORREO_SIN_LIBERAR.format(nombre=nombre))

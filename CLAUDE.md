@@ -877,6 +877,25 @@ Para cada módulo, en este orden:
 
 ## Gotchas / lecciones aprendidas
 
+- **«Dejar inactiva» y «Eliminar alumna» son distintas (rama `eliminar-alumna`, 16/11; migración
+  `20261117000000_eliminar_alumna.sql` NO aplicada en producción)**. Dejar inactiva (sin cambios): `membresia.activa =
+  false`, sigue en el listado, se reactiva con la misma cuenta e historial. Eliminar (solo la administradora, solo alumnas):
+  la cuenta anterior NO se borra (reserva, resumen_mensual, mp_intento, listadeespera… impiden borrar a una persona con
+  historial): `eliminar_alumna` (vista previa + firma, todo o nada) cancela sus reservas de clases que no empezaron (sin
+  `id_bloqueo`: no se cobran ni generan aviso), el lugar pasa a la lista de espera (`_procesar_lista_espera`), la retira de
+  las listas de espera, marca `membresia.eliminada_en` (desaparece del listado y de la ficha), pasa la cédula a la
+  auditoría `alumna_eliminada` y después el servidor archiva la cuenta en Supabase Auth (`auth.archivar_cuenta`: correo
+  `eliminada-<id>@cuentas-eliminadas.invalid` por la vía del administrador, sin correos, y `ban_duration` de 100 años; el
+  trigger `_sincronizar_mail_perfil` copia el correo al perfil). Con el correo libre, «Crear alumna» con el mismo correo
+  crea una cuenta NUEVA y Supabase manda la invitación original. Si el archivado en Auth falla: la eliminación se muestra
+  como NO terminada, el alta con ese correo se frena (no reactiva la cuenta vieja) y Alumnas ofrece «Reintentar»
+  (`alumna_eliminada.correo_liberado_en`). Se niega si la alumna pertenece a otra empresa (se usa «Dejar inactiva»).
+  - Gotcha: `membresia` da permiso de SELECT columna por columna (multiempresa 4): toda columna nueva necesita su
+    `grant select (col) on public.membresia to authenticated` o el listado falla con 42501 (lo detectó la prueba real).
+  - Pruebas: `tests.test_eliminar_alumna` (14) y `tests/supabase_local/prueba_eliminar_alumna_reales.py` (40, con
+    Mailpit: invitación original, cuenta nueva, historial intacto, lista de espera y notificaciones). Vuelta atrás:
+    `supabase/pendientes/vuelta_atras_eliminar_alumna.sql` (se niega si ya hay eliminadas).
+
 - **Novedades (notificaciones, fase 1; rama `notificaciones-novedades`, 10/11; sin migraciones; NO desplegado)**: campana
   en el menú de los cuatro roles (`.campana`, antes del menú de cuenta; no aparece sin empresa) y pantalla `/novedades`.
   Las novedades **se calculan en el momento y son SOLO LECTURA** (`app/novedades.py`): no hay tabla, ni «leída», ni

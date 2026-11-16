@@ -555,6 +555,28 @@ def _borrar_si_quedo(admin, mail: str) -> None:
         logging.exception("No se pudo revisar si quedó una cuenta invitada a medias")
 
 
+DOMINIO_ARCHIVO = "cuentas-eliminadas.invalid"
+BLOQUEO_ARCHIVO = "876000h"  # ~100 años: la cuenta archivada no vuelve a iniciar sesión
+
+
+def mail_archivado(usuario_id: str) -> str:
+    """Correo interno de una cuenta eliminada: único, de un dominio reservado que nunca recibe correos."""
+    return f"eliminada-{usuario_id.replace('-', '')}@{DOMINIO_ARCHIVO}"
+
+
+def archivar_cuenta(usuario_id: str) -> str:
+    """«Eliminar alumna»: la cuenta anterior conserva su id y su historial, pero cambia su correo por uno interno y queda
+    bloqueada; así el correo original queda libre para crear una cuenta NUEVA (con la invitación original). Usa la vía
+    del administrador (email_confirm): Supabase no manda correos de cambio de dirección. Repetirla no hace daño."""
+    nuevo = mail_archivado(usuario_id)
+    try:
+        cliente_admin().auth.admin.update_user_by_id(
+            usuario_id, {"email": nuevo, "email_confirm": True, "ban_duration": BLOQUEO_ARCHIVO})
+    except (AuthError, httpx.HTTPError) as e:
+        raise ErrorAuth(traducir_error(e)) from e
+    return nuevo
+
+
 def reenviar_invitacion(usuario_id: str, mail: str, redirect_to: Optional[str]) -> None:
     """Manda un enlace nuevo a una cuenta PENDIENTE (misma cuenta, el anterior deja de servir). Nunca a una activa."""
     if es_mail_ficticio(mail):

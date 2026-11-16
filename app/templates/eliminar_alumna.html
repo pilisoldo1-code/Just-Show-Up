@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Just Show Up - Eliminar a {{ persona.nombre }} {{ persona.apellido }}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    {% include "_menu.html" %}
+    <main class="baja-pagina">
+        <p class="subtitle"><a href="/profesora/alumnas/{{ persona.id }}">← Volver sin hacer cambios</a></p>
+        <h1>Eliminar a {{ persona.nombre }} {{ persona.apellido }}</h1>
+        <p class="subtitle">Deja de ser alumna de {{ usuario.empresa_nombre or 'tu empresa' }} y desaparece de la lista. Si
+            vuelve, la creás de nuevo con {{ persona.mail }} y recibe la invitación como una alumna nueva, sin su historial
+            anterior. Si solo querés que no pueda entrar por un tiempo, usá «Dejar inactiva».</p>
+
+        {% if aviso %}
+        <div class="aviso aviso-error">{{ aviso }}</div>
+        {% endif %}
+
+        <dl class="baja-cifras">
+            <div><dt>Reservas a cancelar</dt><dd>{{ previa.reservas|length }}</dd></div>
+            <div><dt>En lista de espera</dt><dd>{{ previa.espera|length }}</dd></div>
+            <div><dt>Facturas sin pagar</dt><dd>{{ previa.facturas_pendientes|length }}</dd></div>
+        </dl>
+
+        {% if previa.reservas %}
+        <section class="bloque-persona">
+            <h2>Reservas que se cancelan</h2>
+            <ul class="baja-lista">
+                {% for r in previa.reservas %}
+                <li><span class="baja-item-titulo">{{ r.dia_txt }} · {{ r.hora_inicio }}</span>
+                    <span class="baja-detalle">{{ r.tipo or 'Clase' }}</span></li>
+                {% endfor %}
+            </ul>
+            <p class="nota">No se cobran. Si hay alumnas en lista de espera, se les ofrece el lugar en orden.</p>
+        </section>
+        {% endif %}
+
+        {% if previa.espera %}
+        <section class="bloque-persona">
+            <h2>Listas de espera de las que sale</h2>
+            <ul class="baja-lista">
+                {% for e in previa.espera %}
+                <li><span class="baja-item-titulo">{{ e.dia_txt }} · {{ e.hora_inicio }}</span>
+                    <span class="baja-detalle">{{ e.tipo or 'Clase' }}{% if e.estado == 'ofrecido' %} · tenía un lugar ofrecido{% endif %}</span></li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
+        {% if previa.facturas_pendientes %}
+        <section class="bloque-persona">
+            <h2>Facturas sin pagar</h2>
+            <ul class="baja-lista">
+                {% for f in previa.facturas_pendientes %}
+                <li><span class="baja-item-titulo">{{ f.numero }} · {{ f.mes_txt }}</span>
+                    <span class="baja-detalle">{{ f.total_txt }}</span></li>
+                {% endfor %}
+            </ul>
+            <p class="nota">No se anulan: quedan en Facturación, a nombre de la cuenta eliminada, y podés registrar su pago o
+                anularlas como siempre.</p>
+        </section>
+        {% endif %}
+
+        <section class="bloque-persona">
+            <h2>Lo que se conserva</h2>
+            <p class="nota">Su historial queda archivado para la facturación y la auditoría, y no pasa a una cuenta nueva:
+                {{ previa.historial.reservas }} {{ 'reserva' if previa.historial.reservas == 1 else 'reservas' }},
+                {{ previa.historial.asistencias }} {{ 'asistencia registrada' if previa.historial.asistencias == 1 else 'asistencias registradas' }},
+                {{ previa.historial.facturas }} {{ 'factura' if previa.historial.facturas == 1 else 'facturas' }} y
+                {{ previa.historial.pagos }} {{ 'pago' if previa.historial.pagos == 1 else 'pagos' }}.
+                Su cuenta anterior queda bloqueada y su correo, libre.</p>
+        </section>
+
+        <div class="aviso baja-aviso-reactivar" role="note">
+            <strong>No se puede deshacer.</strong>
+            <p>No se puede reactivar: si vuelve, es una alumna nueva.</p>
+        </div>
+
+        <form method="post" action="/profesora/alumnas/{{ persona.id }}/eliminar" class="horario-form baja-form"
+              data-confirmar="¿Eliminar a {{ persona.nombre }} {{ persona.apellido }}? No se puede deshacer: si vuelve, es una alumna nueva.">
+            <input type="hidden" name="firma" value="{{ previa.firma }}" />
+            <label>Motivo de la eliminación (solo lo ve la administración)
+                <input type="text" name="motivo" value="{{ motivo }}" maxlength="200" required
+                       placeholder="Ej.: dejó de venir y pidió que la demos de baja" /></label>
+            <div class="acciones-confirmar">
+                <a class="btn btn-secundario" href="/profesora/alumnas/{{ persona.id }}">Volver</a>
+                <button type="submit" class="btn btn-peligro-solido">Eliminar alumna</button>
+            </div>
+        </form>
+    </main>
+    <script>
+        document.querySelectorAll("form[data-confirmar]").forEach(function (f) {
+            f.addEventListener("submit", function (ev) { if (!confirm(f.dataset.confirmar)) ev.preventDefault(); });
+        });
+    </script>
+</body>
+</html>
