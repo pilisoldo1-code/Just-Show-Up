@@ -9,6 +9,9 @@ situación que produce una novedad y comprueba:
 - el número de la campana (`/novedades/contador`) coincide con la pantalla;
 - solo lectura: abrir `/novedades` y el contador muchas veces no cambia ninguna fila (ni siquiera una oferta ya vencida,
   que la grilla sí procesaría).
+Fase A (16/11): las 10 notificaciones de la alumna (recordatorio de 1 hora, reserva confirmada, factura nueva / próxima a
+vencer / vencida, pago registrado, video nuevo / por vencer, además de lugar liberado y clase cancelada), los plazos
+configurables (`notificacion_parametros`, solo la superadministradora los cambia) y el aislamiento de los videos.
 
 Correr sobre una base recién reiniciada (`supabase db reset` en la copia aislada ~/.local/share/jsu-supabase-local).
 Uso:  python tests/supabase_local/prueba_novedades_reales.py
@@ -76,6 +79,13 @@ def entrar_superadmin(mail, clave):
 
 def api(cliente):
     return auth.cliente_con_token(cliente.cookies.get("sb_acceso"))
+
+
+def _sin_acceso(consulta):
+    try:
+        return consulta().data == []
+    except Exception:
+        return True  # 42501: sin permiso sobre la tabla
 
 
 def novedades_de(cliente):
@@ -201,15 +211,58 @@ sql("insert into listadeespera (id_alumna, id_clase, posicion, estado, oferta_ve
 ok("Pilates Centro: factura vencida de Inés, asistencia pendiente de Carolina y lugar ofrecido a la alumna compartida",
    F_INES and C_CARO and C_PIL_FUT)
 
+# ---------- 2b) fase A: Clara (Just Show Up) con una situación de cada notificación nueva ----------
+CLARA = cuenta("clara.jsu@prueba.invalid", "Clara", "alumna")
+ahora_mvd = clases.ahora().replace(second=0, microsecond=0)
+en_30 = ahora_mvd + timedelta(minutes=30)
+C_RECORD = clase_j(en_30.date(), en_30.strftime("%H:%M"))       # empieza dentro de la hora → recordatorio
+reservar(CLARA, C_RECORD, JSU)
+en_90 = ahora_mvd + timedelta(minutes=90)
+C_LEJOS = clase_j(en_90.date(), en_90.strftime("%H:%M"))        # en hora y media: todavía no hay recordatorio
+r_lejos = reservar(CLARA, C_LEJOS, JSU)
+sql("update reserva set fecha_reserva = now() - interval '2 days' where id = %s", (r_lejos,))  # reservada hace 2 días
+C_NUEVA = clase_j(hoy + timedelta(days=3), "09:00")             # reservada ahora → «Reserva confirmada»
+reservar(CLARA, C_NUEVA, JSU)
+# facturas de Clara: agosto (se paga ahora) y setiembre (vence en 2 días → próxima a vencer)
+for mes in (8, 9):
+    reservar(CLARA, clase_j(date(2026, mes, 14)), JSU, "presente")
+    AJ.get(f"/profesora/resumenes?mes={mes}&anio=2026")
+    f = sql("select id, version from resumen_mensual where id_alumna = %s and mes = %s and id_empresa = %s", (CLARA, mes, JSU), True)
+    AJ.post(f"/profesora/resumenes/{f['id']}/confirmar", data={"version": f["version"]})
+F_AGO = sql("select * from resumen_mensual where id_alumna = %s and mes = 8", (CLARA,), True)
+F_SET = sql("select * from resumen_mensual where id_alumna = %s and mes = 9", (CLARA,), True)
+sql("update resumen_mensual set vence_el = %s where id = %s", (hoy + timedelta(days=2), F_SET["id"]))
+r = api(AJ).rpc("registrar_pago", {"p_id_resumen": F_AGO["id"], "p_monto": str(F_AGO["total"]), "p_medio": "efectivo",
+                                   "p_fecha": hoy.isoformat()}).execute().data
+ok("fase A: facturas de Clara confirmadas (agosto pagada ahora, setiembre pendiente)",
+   F_AGO["estado_factura"] == F_SET["estado_factura"] == "confirmada"
+   and sql("select estado_pago e from resumen_mensual where id = %s", (F_AGO["id"],), True)["e"] == "pagado", r)
+
+
+def video_local(id_clase, empresa, profesora, horas_restantes, sufijo):
+    return sql("insert into video (id_empresa, id_clase, id_profesora, estado, huella_sha256, duracion_seg, tamano_bytes, "
+               "partes, lista_hls, publicado_en, vence_en) values (%s, %s, %s, 'publicado', %s, 3000, 1000, '[]', 'x', "
+               "now() - interval '1 hour', now() + %s * interval '1 hour') returning id",
+               (empresa, id_clase, profesora, (sufijo * 64)[:64], horas_restantes), True)["id"]
+
+
+V_NUEVO = video_local(clase_j(ayer, "08:00"), JSU, PROF_J, 20, "a")
+V_POR_VENCER = video_local(clase_j(ayer, "09:00"), JSU, PROF_J, 2, "b")
+V_VISTO = video_local(clase_j(ayer, "07:00"), JSU, PROF_J, 20, "c")
+sql("insert into video_reproduccion (id_empresa, id_video, id_usuario, segundos_vistos, bytes_estimados) "
+    "values (%s, %s, %s, 60, 1000)", (JSU, V_VISTO, CLARA))   # Clara ya lo empezó a ver: no es novedad para ella
+V_PIL = video_local(C_CARO, PIL, CAROLINA, 20, "d")  # video de Pilates Centro: no debe verse desde Just Show Up
+
 # ---------- 3) sesiones de cada rol ----------
 LU = entrar("Pilates Centro", empresa_demo.ADMIN[0], CL_PIL[empresa_demo.ADMIN[0]])
 CA = entrar("Pilates Centro", empresa_demo.PROFESORA[0], CL_PIL[empresa_demo.PROFESORA[0]])
 ANA = entrar("Just Show Up", "alu.jsu@prueba.invalid", CLAVE)
+CLARA_S = entrar("Just Show Up", "clara.jsu@prueba.invalid", CLAVE)
 BERTA = entrar("Just Show Up", "alu2.jsu@prueba.invalid", CLAVE)
 PIA = entrar("Just Show Up", "profe.jsu@prueba.invalid", CLAVE)
 ALMA_P = entrar("Pilates Centro", "alumna@prueba.invalid", CLAVE)
 INES_S = entrar("Pilates Centro", empresa_demo.INES, CL_PIL[empresa_demo.INES])
-ok("todas las cuentas inician sesión", all([LU, CA, ANA, BERTA, PIA, ALMA_P, INES_S, ALMA_J, AJ, SA]))
+ok("todas las cuentas inician sesión", all([LU, CA, ANA, BERTA, PIA, ALMA_P, INES_S, ALMA_J, AJ, SA, CLARA_S]))
 
 # ---------- 4) solo lectura: huella antes ----------
 TABLAS = [r["table_name"] for r in sql("select table_name from information_schema.tables where table_schema = 'public' "
@@ -230,7 +283,7 @@ ANTES = huella()
 
 # ---------- 5) qué ve cada rol ----------
 res = {n: novedades_de(c) for n, c in
-       {"ana": ANA, "berta": BERTA, "alma_jsu": ALMA_J, "alma_pil": ALMA_P, "pia": PIA, "paula": AJ, "lucia": LU,
+       {"ana": ANA, "berta": BERTA, "clara": CLARA_S, "alma_jsu": ALMA_J, "alma_pil": ALMA_P, "pia": PIA, "paula": AJ, "lucia": LU,
         "carolina": CA, "ines": INES_S, "super": SA}.items()}
 for n, (lista, _, cont, st) in res.items():
     ok(f"{n}: /novedades responde 200 y el contador coincide con la pantalla ({len(lista)})",
@@ -238,22 +291,27 @@ for n, (lista, _, cont, st) in res.items():
     print("      " + "; ".join(f"[{e}] {t}" for e, t in lista) if lista else "      (sin novedades)")
 
 t = lambda n: [x for _, x in res[n][0]]
-ana = t("ana")
+FASE_A = ("Reserva confirmada", "reservas confirmadas", "Tu clase empieza", "Pago registrado", "Nuevo video",
+          "videos nuevos", "Un video está por")
+f1 = lambda n: [x for x in t(n) if not any(m in x for m in FASE_A)]
+ana = f1("ana")
 ok("alumna Ana: lugar liberado (urgente), factura vencida (urgente) y clase cancelada (aviso)",
    ana == ["¡Se liberó un lugar para vos!", "Factura de octubre 2026 vencida",
            "La profesora canceló 1 clase que tenías reservada"], ana)
 ok("alumna Ana: el lugar ofrecido lleva a Mis inscripciones (con Confirmar / No me interesa) y dice la clase",
    'href="/mis-inscripciones">Confirmar el lugar' in res["ana"][1] and f"{manana.day}/{manana.month} 10:00" in res["ana"][1])
-ok("alumna Berta: su factura en borrador no aparece (todavía no está publicada)", t("berta") == [], t("berta"))
+ok("alumna Berta: su factura en borrador no aparece (todavía no está publicada)", f1("berta") == [], t("berta"))
+ok("alumna Berta: «Reserva confirmada» por la clase de mañana que reservó recién", "Reserva confirmada" in t("berta"),
+   t("berta"))
 ok("alumna compartida en Just Show Up: solo su factura de JSU para pagar; la oferta vencida no aparece",
-   t("alma_jsu") == ["Factura de octubre 2026 para pagar"] and "JSU-2026-10-" in res["alma_jsu"][1]
+   f1("alma_jsu") == ["Nueva factura de octubre 2026"] and "JSU-2026-10-" in res["alma_jsu"][1]
    and "PIL-" not in res["alma_jsu"][1], t("alma_jsu"))
 ok("alumna compartida en Pilates Centro: solo el lugar ofrecido en Pilates, nada de Just Show Up",
-   t("alma_pil") == ["¡Se liberó un lugar para vos!"]
+   f1("alma_pil") == ["¡Se liberó un lugar para vos!"]
    and f'{C_PIL_FUT["fecha"].day}/{C_PIL_FUT["fecha"].month}' in res["alma_pil"][1]
    and "JSU-" not in res["alma_pil"][1] and "Factura" not in res["alma_pil"][1], t("alma_pil"))
 ok("alumna compartida en Just Show Up: NO ve el lugar ofrecido en Pilates Centro", "¡Se liberó" not in res["alma_jsu"][1])
-ok("alumna Inés (Pilates Centro): su factura vencida", "Factura de octubre 2026 vencida" in t("ines"), t("ines"))
+ok("alumna Inés (Pilates Centro): su factura vencida", "Factura de octubre 2026 vencida" in f1("ines"), t("ines"))
 ok("profesora Pía: solo sus asistencias pendientes (sin facturación)",
    t("pia") == ["1 clase terminada sin asistencia registrada"], t("pia"))
 ok("administradora Paula: facturas vencidas (urgente), asistencias pendientes y borrador de octubre",
@@ -273,17 +331,71 @@ ok("superadministradora: la invitación pendiente de Pilates Centro (con el nomb
    t("super"))
 ok("superadministradora: no ve datos de alumnas ni facturas", not any(n in res["super"][1] for n in ("Ana Prueba", "factura")))
 
+# ---------- 5b) fase A: las notificaciones nuevas de la alumna, con datos reales ----------
+clara, clara_txt = t("clara"), res["clara"][1]
+ok("Clara: recordatorio de la clase que empieza en 30 minutos (urgente) y no de la que empieza en hora y media",
+   f"Tu clase empieza a las {en_30.strftime('%H:%M')}" in clara and ("Urgente", f"Tu clase empieza a las {en_30.strftime('%H:%M')}") in res["clara"][0]
+   and f"Tu clase empieza a las {en_90.strftime('%H:%M')}" not in clara, clara)
+d3 = hoy + timedelta(days=3)
+ok("Clara: «Reserva confirmada» solo por la reserva reciente (no la de hace 2 días ni la del recordatorio)",
+   "Reserva confirmada" in clara and f"{d3.day}/{d3.month} 09:00" in clara_txt
+   and f"{en_90.day}/{en_90.month} {en_90.strftime('%H:%M')}" not in clara_txt.split("Reserva confirmada")[-1].split("</li>")[0],
+   clara)
+ok("Clara: factura de setiembre próxima a vencer (urgente) y no como «nueva»",
+   any(x.startswith("Tu factura de setiembre 2026 vence") for x in clara) and "Nueva factura de setiembre 2026" not in clara, clara)
+ok("Clara: pago registrado de agosto, sin la factura de agosto como pendiente",
+   "Pago registrado: factura de agosto 2026" in clara and not any("agosto" in x and "Pago" not in x for x in clara), clara)
+ok("Clara: video por vencer (enlace al video) y video nuevo; no el que ya empezó a ver",
+   "Un video está por dejar de estar disponible" in clara and f'href="/videos/{V_POR_VENCER}"' in clara_txt
+   and "Nuevo video disponible" in clara and f'href="/videos/{V_NUEVO}"' in clara_txt
+   and f'href="/videos/{V_VISTO}"' not in clara_txt, clara)
+ok("Ana (no empezó ninguno): ve 2 videos nuevos (incluido el que Clara ya vio) y el por vencer",
+   "2 videos nuevos disponibles" in t("ana") and "Un video está por dejar de estar disponible" in t("ana"), t("ana"))
+ok("aislamiento de videos: la alumna compartida en Just Show Up no ve el de Pilates Centro, y en Pilates solo ve ese",
+   f'/videos/{V_PIL}"' not in res["alma_jsu"][1] and f'href="/videos/{V_PIL}"' in res["alma_pil"][1]
+   and not any(f'/videos/{v}"' in res["alma_pil"][1] for v in (V_NUEVO, V_POR_VENCER, V_VISTO)))
+ok("docentes y superadministradora no reciben avisos de alumna (videos, pagos, reservas)",
+   not any(any(m in x for m in FASE_A) for n in ("pia", "paula", "lucia", "carolina", "super") for x in t(n)))
+ok("Clara: el contador cuenta todo y los urgentes primero",
+   res["clara"][2]["total"] == len(clara) and [e for e, _ in res["clara"][0]] == sorted(
+       [e for e, _ in res["clara"][0]], key=["Urgente", "Pendiente", "Aviso"].index))
+
 # ---------- 6) solo lectura: después de abrir todo varias veces ----------
 for _ in range(3):
-    for c in (ANA, BERTA, ALMA_J, ALMA_P, INES_S, PIA, AJ, LU, CA, SA):
+    for c in (ANA, BERTA, CLARA_S, ALMA_J, ALMA_P, INES_S, PIA, AJ, LU, CA, SA):
         c.get("/novedades")
         c.get("/novedades/contador")
 DESPUES = huella()
 distintas = [tb for tb in TABLAS if ANTES[tb] != DESPUES[tb]]
-ok(f"solo lectura: las {len(TABLAS)} tablas quedaron idénticas después de 60 pedidos a Novedades", not distintas, distintas)
+ok(f"solo lectura: las {len(TABLAS)} tablas quedaron idénticas después de 66 pedidos a Novedades", not distintas, distintas)
 ok("solo lectura: la oferta vencida de Alma sigue «ofrecido» (Novedades no procesa listas de espera)",
    sql("select estado from listadeespera where id_alumna = %s and id_clase = %s", (COMPARTIDA, C_VENCIDA), True)["estado"]
    == "ofrecido")
+
+# ---------- 6b) plazos configurables ----------
+ok("parámetros: la alumna no puede leer la tabla directo ni cambiar plazos",
+   _sin_acceso(lambda: api(CLARA_S).table("notificacion_parametros").select("*").execute())
+   and api(CLARA_S).rpc("notificaciones_configurar", {"p_clave": "factura_aviso_dias", "p_valor": 1}).execute().data == "sin_permiso")
+ok("parámetros: la administradora tampoco los cambia",
+   api(AJ).rpc("notificaciones_configurar", {"p_clave": "factura_aviso_dias", "p_valor": 1}).execute().data == "sin_permiso")
+ok("parámetros: la alumna lee los valores por defecto",
+   api(CLARA_S).rpc("novedades_parametros", {}).execute().data == {"factura_aviso_dias": 3, "video_aviso_horas": 3,
+                                                                     "reserva_aviso_horas": 24, "pago_aviso_dias": 3})
+ok("parámetros: la superadministradora rechaza valores fuera de rango o claves inexistentes",
+   api(SA).rpc("notificaciones_configurar", {"p_clave": "factura_aviso_dias", "p_valor": 0}).execute().data == "valor_invalido"
+   and api(SA).rpc("notificaciones_configurar", {"p_clave": "otra", "p_valor": 2}).execute().data == "clave_invalida")
+ok("parámetros: la superadministradora pone 1 día de aviso de facturas y 1 hora de videos",
+   api(SA).rpc("notificaciones_configurar", {"p_clave": "factura_aviso_dias", "p_valor": 1}).execute().data == "ok"
+   and api(SA).rpc("notificaciones_configurar", {"p_clave": "video_aviso_horas", "p_valor": 1}).execute().data == "ok")
+clara2 = titulos(CLARA_S.get("/novedades").text)
+ok("sin desplegar: con 1 día, la factura que vence en 2 días vuelve a ser «nueva»; con 1 hora, el video de 2 h es «nuevo»",
+   ("Pendiente", "Nueva factura de setiembre 2026") in clara2
+   and not any("por dejar" in x for _, x in clara2) and ("Aviso", "2 videos nuevos disponibles") in clara2, clara2)
+ok("parámetros: queda registrado quién y cuándo los cambió",
+   sql("select actualizado_por::text p from notificacion_parametros", uno=True)["p"]
+   == sql("select id::text from profiles where mail = 'superadmin@prueba.invalid'", uno=True)["id"])
+for clave, valor in (("factura_aviso_dias", 3), ("video_aviso_horas", 3)):
+    api(SA).rpc("notificaciones_configurar", {"p_clave": clave, "p_valor": valor}).execute()
 
 # ---------- 7) sin sesión ----------
 anon = TestClient(main.app, base_url="http://testserver")

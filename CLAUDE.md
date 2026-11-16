@@ -903,6 +903,23 @@ Para cada módulo, en este orden:
     inscripciones muestra todas las ofertas con «Confirmar lugar» / «No me interesa».
   - Las invitaciones solo salen desde un host de `auth.SITIOS_PERMITIDOS`: en pruebas con `TestClient`, usar
     `base_url="http://localhost:8000"` (con `testserver` el alta de administradora falla con «solo desde el sitio»).
+  - **Fase A (rama `notificaciones-fase-a`, 16/11; NO desplegada, migración NO aplicada en producción)**: las 10
+    notificaciones de la alumna dentro de la app, igual de calculadas y de solo lectura: lugar liberado (urgente),
+    **recordatorio** de una clase que empieza dentro de la próxima hora (urgente, `RECORDATORIO_MINUTOS` = 60 fijo),
+    factura **vencida** (urgente, desde el día siguiente a `vence_el`), **próxima a vencer** (urgente, de `vence_el` − N
+    días a `vence_el` inclusive), **nueva** (el resto de las publicadas y pendientes), **reserva confirmada** (reservas de
+    las últimas N horas para clases que no empezaron; nunca la misma clase que un recordatorio), **pago registrado**
+    (pagos vigentes de los últimos N días, también de Mercado Pago de prueba), **clase cancelada**, **video nuevo** y
+    **video por vencer** (últimas N horas; los dos solo si la alumna no lo empezó a ver). Una factura sale una sola vez
+    (vencidas, después próximas, después nuevas); pagada o anulada, desaparece.
+  - Plazos configurables sin desplegar: tabla `notificacion_parametros` (una fila; nadie la lee directo), lectura con
+    `novedades_parametros()` y cambio solo por la superadministradora con `notificaciones_configurar(clave, valor)`
+    (rangos validados en la base y otra vez en `novedades.parametros`). Si la función no existe o un valor es inválido,
+    se usan los de `novedades.PARAMETROS` (factura 3 días, video 3 h, reserva 24 h, pago 3 días). Los videos que la
+    persona ya empezó salen de `novedades_videos_iniciados()` (`video_reproduccion` no se puede leer directo); no se
+    modificó nada de Videos On Demand.
+  - Pruebas: `tests.test_novedades` (34) y `tests/supabase_local/prueba_novedades_reales.py` (agrega Clara con una
+    situación de cada aviso nuevo, videos de las dos empresas y los permisos de los parámetros; 58/58 el 16/11).
   - Supabase local en la Mac de Pilar (10/11, sin Homebrew, en `~/.local`): Colima 0.10.3, Lima 2.2.1, Docker CLI 29.9.3 y
     Supabase CLI 2.122.1 (la 3.x cambió de versión mayor: los scripts usan las claves de `supabase status -o json` de la 2).
     `colima start --cpu 2 --memory 4 --vm-type vz` (la Mac tiene 8 GB) y `supabase start -x studio,imgproxy,edge-runtime,

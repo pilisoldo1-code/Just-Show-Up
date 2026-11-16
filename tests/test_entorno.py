@@ -175,8 +175,8 @@ class Migraciones(unittest.TestCase):
         self.assertEqual(problemas, [])
         self.assertEqual([a.name for a in archivos], sorted(a.name for a in archivos))
         self.assertEqual([a.name for a in archivos[-4:]],
-                         ["20261108000000_videos_miniaturas.sql", "20261110000000_videos_grabaciones_independientes.sql",
-                          "20261111000000_videos_regla_15_minutos.sql", "20261112000000_perfil_editable.sql"])
+                         ["20261110000000_videos_grabaciones_independientes.sql", "20261111000000_videos_regla_15_minutos.sql",
+                          "20261112000000_perfil_editable.sql", "20261113000000_notificaciones_parametros.sql"])
         self.assertEqual(migrar.requisitos(archivos), ["auth", "storage", "vault"])
 
     def test_detecta_dependencia_rota(self):

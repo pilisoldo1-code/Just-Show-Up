@@ -62,9 +62,15 @@ class Consulta:
         raise AssertionError(f"Novedades no debe llamar a {nombre} sobre {self.tabla}")
 
 
+# Funciones de solo lectura que la alumna consulta siempre (videos y plazos): sin datos, por defecto.
+RPCS_ALUMNA = {"videos_disponibles": [], "novedades_videos_iniciados": [], "novedades_parametros": {}}
+# Las únicas funciones que Novedades puede llamar: todas de solo lectura.
+RPCS_SOLO_LECTURA = set(RPCS_ALUMNA) | {"asistencias_pendientes_resumen", "resumen_empresas", "administradoras_empresa"}
+
+
 class BaseFalsa:
     def __init__(self, tablas=None, rpcs=None):
-        self.tablas, self.rpcs, self.escrituras, self.rpcs_llamadas = tablas or {}, rpcs or {}, [], []
+        self.tablas, self.rpcs, self.escrituras, self.rpcs_llamadas = tablas or {}, {**RPCS_ALUMNA, **(rpcs or {})}, [], []
 
     def table(self, nombre):
         return Consulta(self, nombre)
@@ -133,12 +139,13 @@ class Alumna(unittest.TestCase):
         self.assertTrue(n[0]["lineas"][0].startswith("Pilates · Jueves 12/11"))  # en orden de fecha
 
     def test_facturas_vencida_urgente_y_pendiente(self):
-        base = BaseFalsa({"resumen_mensual": [factura(9, "2026-10-10"), factura(10, "2026-11-14"),
+        base = BaseFalsa({"resumen_mensual": [factura(9, "2026-10-10"), factura(10, "2026-11-20"),
                                               factura(8, "2026-09-10", pago="pagado")]})
         n = de(alumna(), base)["novedades"]
         self.assertEqual([x["nivel"] for x in n], [novedades.URGENTE, novedades.PENDIENTE])
         self.assertIn("setiembre", n[0]["titulo"].lower())
-        self.assertIn("14/11/2026", n[1]["detalle"])
+        self.assertIn("Nueva factura", n[1]["titulo"])
+        self.assertIn("20/11/2026", n[1]["detalle"])
 
     def test_no_ve_nada_de_otra_empresa(self):
         """La alumna compartida entra a Just Show Up: lo de Pilates Centro no aparece aunque la base lo devolviera."""
@@ -156,7 +163,168 @@ class Alumna(unittest.TestCase):
     def test_no_ve_avisos_de_docente_ni_de_administradora(self):
         base = BaseFalsa(rpcs={"asistencias_pendientes_resumen": {"clases": 4, "asistencias": 9, "ultima_fecha": "2026-11-10"}})
         self.assertEqual(de(alumna(), base)["novedades"], [])
-        self.assertEqual(base.rpcs_llamadas, [])
+        self.assertNotIn("asistencias_pendientes_resumen", base.rpcs_llamadas)
+
+
+def reserva(clase_, reservada="2026-11-01T12:00:00+00:00", empresa=JSU, alumna_id="a", estado="confirmada"):
+    return {"id_alumna": alumna_id, "estado": estado, "id_empresa": empresa, "fecha_reserva": reservada,
+            "id_bloqueo": None, "clase": {**clase_, "estado": clase_.get("estado", "programada")}}
+
+
+def video(id_, restante_seg, clase_txt="Pilates", fecha="2026-11-10", hora="18:00:00"):
+    return {"id": id_, "clase": clase_txt, "fecha": fecha, "hora_inicio": hora, "segundos_restantes": restante_seg}
+
+
+class AlumnaFaseA(unittest.TestCase):
+    """Las 10 notificaciones de la alumna dentro de la app (fase A). AHORA = miércoles 11/11/2026 10:00 (Montevideo)."""
+
+    def test_recordatorio_dentro_de_la_hora(self):
+        base = BaseFalsa({"reserva": [reserva(clase(1, "2026-11-11", hora="10:45:00")),
+                                      reserva(clase(2, "2026-11-11", hora="11:00:00")),   # justo 60 min: sí
+                                      reserva(clase(3, "2026-11-11", hora="11:01:00")),   # 61 min: todavía no
+                                      reserva(clase(4, "2026-11-11", hora="09:30:00"))]})  # ya empezó
+        n = [x for x in de(alumna(), base)["novedades"] if x["titulo"].startswith("Tu clase empieza")]
+        self.assertEqual([x["titulo"] for x in n], ["Tu clase empieza a las 10:45", "Tu clase empieza a las 11:00"])
+        self.assertIn("45 minutos", n[0]["detalle"])
+        self.assertEqual(n[0]["enlace"], "/dia/2026-11-11")
+
+    def test_recordatorio_no_aparece_si_la_clase_se_cancelo_o_la_reserva_no_esta_confirmada(self):
+        base = BaseFalsa({"reserva": [reserva({**clase(1, "2026-11-11", hora="10:30:00"), "estado": "cancelada"}),
+                                      reserva(clase(2, "2026-11-11", hora="10:30:00"), estado="cancelada")]})
+        self.assertFalse([x for x in de(alumna(), base)["novedades"] if "empieza" in x["titulo"]])
+
+    def test_reserva_confirmada_reciente_y_sin_duplicar_con_el_recordatorio(self):
+        hace_una_hora = "2026-11-11T12:00:00+00:00"
+        base = BaseFalsa({"reserva": [
+            reserva(clase(1, "2026-11-12"), reservada=hace_una_hora),
+            reserva(clase(2, "2026-11-13"), reservada="2026-11-09T12:00:00+00:00"),  # hace 2 días: ya no
+            reserva(clase(3, "2026-11-11", hora="10:30:00"), reservada=hace_una_hora),  # sale como recordatorio
+        ]})
+        n = de(alumna(), base)["novedades"]
+        confirmadas = [x for x in n if "eserva confirmada" in x["titulo"]]
+        self.assertEqual(len(confirmadas), 1)
+        self.assertEqual(confirmadas[0]["titulo"], "Reserva confirmada")
+        self.assertEqual(confirmadas[0]["lineas"], ["Pilates · Jueves 12/11 18:00"])
+        self.assertEqual(sum("empieza" in x["titulo"] for x in n), 1)
+
+    def test_factura_proxima_a_vencer_hoy_y_dentro_del_plazo(self):
+        base = BaseFalsa({"resumen_mensual": [factura(9, "2026-11-11"), factura(8, "2026-11-14"), factura(7, "2026-11-15")]})
+        n = de(alumna(), base)["novedades"]
+        titulos = [x["titulo"] for x in n]
+        self.assertIn("Tu factura de setiembre 2026 vence hoy", titulos)
+        self.assertIn("Tu factura de agosto 2026 vence el 14/11/2026", titulos)
+        self.assertIn("Nueva factura de julio 2026", titulos)  # vence en 4 días: todavía no es «próxima»
+
+    def test_factura_vencida_desde_el_dia_siguiente_y_no_si_esta_pagada_o_anulada(self):
+        base = BaseFalsa({"resumen_mensual": [factura(9, "2026-11-10"), factura(8, "2026-11-01", pago="pagado"),
+                                              factura(7, "2026-11-01", estado="anulada")]})
+        n = de(alumna(), base)["novedades"]
+        self.assertEqual([x["titulo"] for x in n], ["Factura de setiembre 2026 vencida"])
+
+    def test_facturas_vencidas_antes_que_las_proximas_a_vencer(self):
+        base = BaseFalsa({"resumen_mensual": [factura(8, "2026-11-12"), factura(9, "2026-11-01"), factura(10, "2026-11-30")]})
+        self.assertEqual([x["titulo"] for x in de(alumna(), base)["novedades"]],
+                         ["Factura de setiembre 2026 vencida", "Tu factura de agosto 2026 vence mañana",
+                          "Nueva factura de octubre 2026"])
+
+    def test_plazo_de_factura_configurable(self):
+        base = BaseFalsa({"resumen_mensual": [factura(9, "2026-11-15")]}, {"novedades_parametros": {"factura_aviso_dias": 5}})
+        self.assertIn("vence el 15/11/2026", de(alumna(), base)["novedades"][0]["titulo"])
+
+    def test_parametros_invalidos_o_ausentes_usan_los_de_por_defecto(self):
+        for leidos in ({"factura_aviso_dias": 0}, {"factura_aviso_dias": "5"}, {"factura_aviso_dias": True},
+                       {"video_aviso_horas": 99}, None):
+            with self.subTest(leidos=leidos):
+                base = BaseFalsa(rpcs={"novedades_parametros": leidos})
+                self.assertEqual(novedades.parametros(base), novedades.PARAMETROS)
+        base = BaseFalsa()
+        del base.rpcs["novedades_parametros"]  # la función todavía no existe en la base
+        with self.assertLogs(level="WARNING"):
+            self.assertEqual(novedades.parametros(base), novedades.PARAMETROS)
+
+    def test_pago_registrado_reciente_vigente_y_propio(self):
+        base = BaseFalsa({
+            "pago": [{"id_resumen_mensual": 91, "monto": "800.00", "medio_pago": "mercado_pago", "estado": "vigente",
+                      "creado_en": "2026-11-10T15:00:00+00:00", "id_empresa": JSU},
+                     {"id_resumen_mensual": 81, "monto": "800.00", "medio_pago": "efectivo", "estado": "vigente",
+                      "creado_en": "2026-11-01T15:00:00+00:00", "id_empresa": JSU},   # hace 10 días
+                     {"id_resumen_mensual": 71, "monto": "800.00", "medio_pago": "efectivo", "estado": "anulado",
+                      "creado_en": "2026-11-11T12:00:00+00:00", "id_empresa": JSU},   # anulado
+                     {"id_resumen_mensual": 61, "monto": "800.00", "medio_pago": "efectivo", "estado": "vigente",
+                      "creado_en": "2026-11-11T12:00:00+00:00", "id_empresa": JSU}],  # factura de otra alumna
+            "resumen_mensual": [{**factura(9, "2026-10-10", pago="pagado"), "id": 91},
+                                {**factura(8, "2026-09-10", pago="pagado"), "id": 81},
+                                {**factura(7, "2026-08-10"), "id": 71},
+                                {**factura(6, "2026-07-10", pago="pagado", alumna_id="otra"), "id": 61}],
+        })
+        n = [x for x in de(alumna(), base)["novedades"] if x["titulo"].startswith("Pago registrado")]
+        self.assertEqual(len(n), 1)
+        self.assertIn("setiembre", n[0]["titulo"])
+        self.assertIn("Mercado Pago", n[0]["detalle"])
+
+    def test_videos_nuevos_y_por_vencer_sin_los_ya_iniciados(self):
+        base = BaseFalsa(rpcs={"videos_disponibles": [video(1, 20 * 3600), video(2, 2 * 3600), video(3, 10 * 3600),
+                                                      video(4, 3600)],
+                               "novedades_videos_iniciados": [3, 4]})
+        n = de(alumna(), base)["novedades"]
+        por_vencer = [x for x in n if "por dejar" in x["titulo"]]
+        nuevos = [x for x in n if "Nuevo video" in x["titulo"]]
+        self.assertEqual(len(por_vencer), 1)
+        self.assertEqual(por_vencer[0]["enlace"], "/videos/2")
+        self.assertIn("12:00", por_vencer[0]["detalle"])  # 10:00 + 2 h
+        self.assertEqual((len(nuevos), nuevos[0]["enlace"]), (1, "/videos/1"))
+
+    def test_plazo_de_video_configurable(self):
+        base = BaseFalsa(rpcs={"videos_disponibles": [video(1, 5 * 3600)], "novedades_parametros": {"video_aviso_horas": 6}})
+        self.assertIn("por dejar", de(alumna(), base)["novedades"][0]["titulo"])
+
+    def test_las_diez_juntas_y_el_orden_por_urgencia(self):
+        base = BaseFalsa({
+            "listadeespera": [{"id_clase": 9, "id_alumna": "a", "estado": "ofrecido", "id_empresa": JSU,
+                               "oferta_vence_en": "2026-11-11T13:25:00+00:00"}],
+            "clase": [clase(9, "2026-11-11", hora="18:00:00")],
+            "reserva": [reserva(clase(1, "2026-11-11", hora="10:30:00")),
+                        reserva(clase(2, "2026-11-12"), reservada="2026-11-11T12:30:00+00:00"),
+                        {"id_alumna": "a", "estado": "cancelada", "id_bloqueo": 4, "id_empresa": JSU,
+                         "clase": clase(5, "2026-11-13")}],
+            "resumen_mensual": [factura(9, "2026-11-01"), factura(8, "2026-11-12"), factura(7, "2026-11-30"),
+                                {**factura(6, "2026-07-10", pago="pagado"), "id": 61}],
+            "pago": [{"id_resumen_mensual": 61, "monto": "800.00", "medio_pago": "efectivo", "estado": "vigente",
+                      "creado_en": "2026-11-11T12:00:00+00:00", "id_empresa": JSU}],
+        }, {"videos_disponibles": [video(1, 20 * 3600), video(2, 3600)]})
+        n = de(alumna(), base)["novedades"]
+        self.assertEqual(len(n), 10)
+        niveles = [x["nivel"] for x in n]
+        self.assertEqual(niveles, sorted(niveles, key=novedades.ORDEN.get))
+        self.assertEqual(novedades.contador(n), {"total": 10, "urgentes": 4})
+
+    def test_aislamiento_en_los_dos_sentidos(self):
+        """La alumna compartida: con Just Show Up no ve nada de Pilates Centro y con Pilates Centro nada de Just Show Up."""
+        sigla = {JSU: "JSU", PIL: "PIL"}
+
+        def datos(empresa):
+            tipo = f"Clase{sigla[empresa]}"
+            return {
+                "reserva": [reserva(clase(10 + empresa, "2026-11-11", hora="10:30:00", empresa=empresa, tipo=tipo),
+                                    empresa=empresa),
+                            reserva(clase(20 + empresa, "2026-11-12", empresa=empresa, tipo=tipo),
+                                    reservada="2026-11-11T12:30:00+00:00", empresa=empresa)],
+                "resumen_mensual": [{**factura(9, "2026-11-12", empresa=empresa), "numero": f"{sigla[empresa]}-2026-09-0001"},
+                                    {**factura(6, "2026-07-10", empresa=empresa, pago="pagado"), "id": 600 + empresa,
+                                     "numero": f"{sigla[empresa]}-2026-06-0001"}],
+                "pago": [{"id_resumen_mensual": 600 + empresa, "monto": "800.00", "medio_pago": "efectivo",
+                          "estado": "vigente", "creado_en": "2026-11-11T12:00:00+00:00", "id_empresa": empresa}],
+            }
+        jsu, pil = datos(JSU), datos(PIL)
+        base = BaseFalsa({t: jsu[t] + pil[t] for t in jsu})
+        for empresa in (JSU, PIL):
+            with self.subTest(empresa=empresa):
+                n = de(alumna(empresa), base)["novedades"]
+                self.assertEqual(len(n), 4)
+                otra = sigla[PIL if empresa == JSU else JSU]
+                texto = " ".join(x["titulo"] + x["detalle"] + " ".join(x["lineas"]) for x in n)
+                self.assertIn(sigla[empresa], texto)
+                self.assertNotIn(otra, texto)
 
 
 class Docentes(unittest.TestCase):
@@ -210,7 +378,7 @@ class SoloLecturaYErrores(unittest.TestCase):
         for u in (alumna(), profesora(), administradora()):
             de(u, base)
         self.assertEqual(base.escrituras, [])
-        self.assertEqual(set(base.rpcs_llamadas), {"asistencias_pendientes_resumen"})
+        self.assertLessEqual(set(base.rpcs_llamadas), RPCS_SOLO_LECTURA)
 
     def test_un_bloque_que_falla_no_tapa_los_demas(self):
         base = BaseFalsa({"resumen_mensual": [factura(10, "2026-11-10")]})  # sin la función de asistencias
