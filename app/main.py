@@ -1332,6 +1332,18 @@ def _cuenta_existente(mail: str) -> dict | None:
     return filas[0] if filas else None
 
 
+def _la_persona(rol: str) -> str:
+    return "la profesora" if rol == "profesora" else "la alumna"
+
+
+def _mensaje_cuenta_existente(rol: str, mail: str, pendiente: bool) -> str:
+    """Alta de un mail que ya tiene cuenta: nunca se manda correo, así que el aviso nunca dice que se mandó uno."""
+    if pendiente:
+        return f"Ya se envió una invitación a {mail}. {_la_persona(rol).capitalize()} todavía no configuró su contraseña."
+    return (f"{_la_persona(rol).capitalize()} ya tiene una cuenta activa y quedó registrada correctamente. "
+            "Puede ingresar con su correo y contraseña.")
+
+
 @app.post("/profesora/alumnas")
 def alumna_crear(
     request: Request,
@@ -1389,10 +1401,7 @@ def alumna_crear(
             if r == "ok":
                 nota = _guardar_cedula(usuario, existente["id"], datos["cedula"])
                 return _volver_seccion(_seccion(rol), not nota,
-                                       f"{existente['nombre']} {existente['apellido']} ya tenía cuenta en Just Show Up: "
-                                       f"quedó como {ROLES_PERSONA[rol].lower()} en {usuario.empresa_nombre or 'tu empresa'} "
-                                       "con su misma contraseña (lo que tenga en otros lugares no cambia). No se le envió "
-                                       "ningún correo: avisale que ya puede entrar con su mail y su contraseña de siempre."
+                                       _mensaje_cuenta_existente(rol, datos["mail"], _invitacion_pendiente(existente["id"]))
                                        + (f" {nota}" if nota else ""))
             if not errores:
                 errores = [_mensaje_rol(r) or "No se pudo agregar a esa persona. Probá de nuevo."]
@@ -1415,9 +1424,9 @@ def alumna_crear(
         return _form_nueva(request, usuario, _seccion(rol), {**{k: v.strip() for k, v in ingresados.items()}, "rol": rol},
                            errores, 400)
     return _volver_seccion(_seccion(rol), not nota,
-                           f"Listo: le enviamos a {datos['mail']} una invitación para que configure su contraseña. El enlace "
-                           "vence en 1 hora; si no le llega o vence, podés reenviarla desde su ficha."
-                           + (f" {nota}" if nota else ""))
+                           f"Se envió un correo de invitación a {datos['mail']} para que {_la_persona(rol)} configure su "
+                           "contraseña y acceda a Just Show Up. El enlace vence en 1 hora; si no le llega, podés "
+                           "reenviarla desde su ficha." + (f" {nota}" if nota else ""))
 
 
 MSG_CEDULA_REPETIDA = "Ya hay otra persona de tu empresa con esa cédula."
