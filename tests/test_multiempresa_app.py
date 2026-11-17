@@ -427,8 +427,8 @@ class AltaPersonas(Base):
             r = self.post("/profesora/alumnas", {**self.ALTA, "rol": "alumna"})
         cc.assert_not_called()  # nunca se invita (ni se toca la contraseña de) una cuenta que ya existe
         self.assertEqual(r.status_code, 303)
-        self.assertIn("misma+contrase", r.headers["location"])
-        self.assertIn("No+se+le+envi%C3%B3+ning%C3%BAn+correo", r.headers["location"])
+        self.assertIn("ya+tiene+una+cuenta+activa", r.headers["location"])
+        self.assertNotIn("Se+envi%C3%B3+un+correo", r.headers["location"])
         self.sb.rpc.assert_called_once_with("asignar_membresia", {"p_id_usuario": "x", "p_es_admin": False,
                                                                  "p_es_profesora": False, "p_es_alumna": True})
 

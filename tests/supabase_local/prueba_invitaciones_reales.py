@@ -246,7 +246,7 @@ try:
                  follow_redirects=False)
     time.sleep(2)
     ok("una alumna de otra empresa se suma con su misma contraseña y sin correo",
-       r.status_code == 303 and "misma contraseña" in aviso(r) and "No se le envió ningún correo" in aviso(r)
+       r.status_code == 303 and "ya tiene una cuenta activa" in aviso(r) and "Se envió un correo" not in aviso(r)
        and len(mails_para(M["deb"])) == antes, aviso(r))
     ok("su contraseña no cambió", cuenta(M["deb"])["encrypted_password"] == hash_deb)
     ok("entra a las dos empresas con sus credenciales de siempre",

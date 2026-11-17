@@ -71,8 +71,9 @@
             </label>
             <p class="nota">Si la cuenta es nueva, le enviamos un correo para que configure su propia contraseña (el enlace vence en
                 1 hora y se puede reenviar desde su ficha). Nadie más ve su contraseña.</p>
-            <button type="submit" class="btn">Crear cuenta</button>
+            <button type="submit" class="btn" data-cargando="Enviando invitación…">Crear cuenta</button>
         </form>
     </main>
+    {% include "_envio_unico.html" %}
 </body>
 </html>
