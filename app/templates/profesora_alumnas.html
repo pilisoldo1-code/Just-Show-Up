@@ -31,6 +31,22 @@
             todos sus datos y podés editarlos.</p>
         {% endif %}
 
+        {% if eliminaciones_pendientes %}
+        <section class="aviso aviso-error eliminaciones-pendientes" role="note">
+            <strong>Eliminaciones sin terminar</strong>
+            <p>Estas alumnas ya no están en tu empresa, pero su correo todavía no quedó libre para volver a crearlas.</p>
+            <ul>
+                {% for e in eliminaciones_pendientes %}
+                <li>{{ e.nombre }} {{ e.apellido }}
+                    <form method="post" action="/profesora/alumnas/eliminadas/{{ e.id }}/reintentar" class="en-linea">
+                        <button type="submit" class="btn btn-chico">Reintentar</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
         {% if not alumnas %}
         <p class="empty personas-vacio">{{ textos.vacia }}</p>
         {% elif usuario.es_admin %}
